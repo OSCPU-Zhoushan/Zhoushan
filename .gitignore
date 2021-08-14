@@ -6,3 +6,5 @@ out/
 test_run_dir/
 
 build/
+obj_dir/
+logs/
