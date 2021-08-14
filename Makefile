@@ -1,5 +1,6 @@
 BUILD_DIR = ./build
-ZHOUSHAN_HOME = /home/riscv/lishi/Zhoushan
+# Change this directory before make
+ZHOUSHAN_HOME = /home/lishi/Zhoushan
 
 VERILATOR_FLAGS = -cc --exe -Os -x-assign 0 \
 	--assert --trace
@@ -10,7 +11,7 @@ default: run
 
 verilog:
 	mkdir -p $(BUILD_DIR)
-	mill -i Zhoushan.runMain TopMain -td $(BUILD_DIR)
+	mill -i Zhoushan.runMain zhoushan.TopMain -td $(BUILD_DIR)
 
 run: verilog
 	@echo

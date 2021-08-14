@@ -36,13 +36,10 @@ int main(int argc, char** argv, char** env) {
     top->clock = !top->clock;
     top->reset = contextp->time() < 4 ? 1 : 0;
 
-    top->io_a = contextp->time();
-    top->io_b = contextp->time() + 1;
-
     top->eval();
     tfp->dump(contextp->time());
-    VL_PRINTF("[%" VL_PRI64 "d] clock=%x reset=%x io_a=%x io_b=%x io_c=%x\n",
-              contextp->time(), top->clock, top->reset, top->io_a, top->io_b, top->io_c);
+    // VL_PRINTF("[%" VL_PRI64 "d] clock=%x reset=%x io_a=%x io_b=%x io_c=%x\n",
+    //           contextp->time(), top->clock, top->reset, top->io_a, top->io_b, top->io_c);
   }
 
   tfp->close();
