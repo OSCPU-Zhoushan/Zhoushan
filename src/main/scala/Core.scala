@@ -28,7 +28,7 @@ class Core extends Module {
   
   val execution = Module(new Execution())
   execution.io.uop := uop
-  execution.io.in1_data := regFile.io.rs1_data
-  execution.io.in2_data := regFile.io.rs2_data
+  execution.io.rs1_data := regFile.io.rs1_data
+  execution.io.rs2_data := regFile.io.rs2_data
   regFile.io.rd_data := execution.io.out_data
 }

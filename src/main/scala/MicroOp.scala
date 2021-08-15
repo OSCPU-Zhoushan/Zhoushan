@@ -1,7 +1,45 @@
 package zhoushan
 
 import chisel3._
-import zhoushan.Constant._
+
+trait Constant {
+  val Y = true.B
+  val N = false.B
+
+  val RS_X          = 0.asUInt(3.W)
+  val RS_FROM_RF    = 1.asUInt(3.W)
+  val RS_FROM_IMM   = 2.asUInt(3.W)
+  val RS_FROM_ZERO  = 3.asUInt(3.W)
+  val RS_FROM_PC    = 4.asUInt(3.W)
+  val RS_FROM_NPC   = 5.asUInt(3.W)
+
+  val IMM_X     = 0.asUInt(3.W)
+  val IMM_I     = 1.asUInt(3.W)
+  val IMM_S     = 2.asUInt(3.W)
+  val IMM_B     = 3.asUInt(3.W)
+  val IMM_U     = 4.asUInt(3.W)
+  val IMM_J     = 5.asUInt(3.W)
+  val IMM_SHAMT = 6.asUInt(3.W)
+
+  val FU_X      = 0.asUInt(2.W)
+  val FU_ALU    = 1.asUInt(2.W)
+  val FU_JMP    = 2.asUInt(2.W)
+  val FU_MEM    = 3.asUInt(2.W)
+
+  val ALU_X     = 0.asUInt(4.W)
+  val ALU_ADD   = 1.asUInt(4.W)
+  val ALU_SUB   = 2.asUInt(4.W)
+  val ALU_SLT   = 3.asUInt(4.W)
+  val ALU_SLTU  = 4.asUInt(4.W)
+  val ALU_XOR   = 5.asUInt(4.W)
+  val ALU_OR    = 6.asUInt(4.W)
+  val ALU_AND   = 7.asUInt(4.W)
+  val ALU_SLL   = 8.asUInt(4.W)
+  val ALU_SRL   = 9.asUInt(4.W)
+  val ALU_SRA   = 10.asUInt(4.W)
+}
+
+object Constant extends Constant { }
 
 // class CtrlSig() extends Bundle {
   
@@ -43,5 +81,5 @@ class MicroOp extends Bundle {
   val rd_addr   = UInt(5.W)
   val rd_en     = Bool()
 
-  val imm       = UInt(64.W)
+  val imm       = UInt(32.W)
 }

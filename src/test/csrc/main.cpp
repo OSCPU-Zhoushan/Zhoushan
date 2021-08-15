@@ -1,8 +1,12 @@
 
 #include <memory>
+
 #include <verilated.h>
 #include <verilated_vcd_c.h>
 #include "VTop.h"
+
+#include "imem.h"
+
 
 double sc_time_stamp() { return 0; }
 
@@ -29,12 +33,19 @@ int main(int argc, char** argv, char** env) {
   top->trace(tfp.get(), 99);  // Trace 99 levels of hierarchy
   tfp->open("logs/dump.vcd");
 
+  // Create IMem object (only for debug purpose)
+  const std::unique_ptr<IMem> imem(new IMem());
+
   // Simulate until $finish
-  while (contextp->time() < 10) {
+  while (contextp->time() < 30) {
     contextp->timeInc(1);
 
     top->clock = !top->clock;
     top->reset = contextp->time() < 4 ? 1 : 0;
+
+    if (top->clock == 0) {
+      top->io_inst = imem->GetInst(top->io_pc);
+    }
 
     top->eval();
     tfp->dump(contextp->time());

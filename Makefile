@@ -5,7 +5,8 @@ ZHOUSHAN_HOME = /home/lishi/Zhoushan
 VERILATOR_FLAGS = -cc --exe -Os -x-assign 0 \
 	--assert --trace
 
-VERILATOR_INPUT = $(ZHOUSHAN_HOME)/build/Top.v $(ZHOUSHAN_HOME)/src/test/csrc/main.cpp
+CSRC_DIR = $(ZHOUSHAN_HOME)/src/test/csrc
+VERILATOR_INPUT = $(ZHOUSHAN_HOME)/build/Top.v $(CSRC_DIR)/imem.cpp $(CSRC_DIR)/main.cpp
 
 default: run
 
