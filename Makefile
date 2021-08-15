@@ -1,6 +1,6 @@
 BUILD_DIR = ./build
 # Change this directory before make
-ZHOUSHAN_HOME = /home/lishi/Zhoushan
+ZHOUSHAN_HOME = $(shell pwd)
 
 VERILATOR_FLAGS = -cc --exe -Os -x-assign 0 \
 	--assert --trace

@@ -77,7 +77,7 @@ class Execution extends Module {
     JMP_BLT  -> Mux(jmp_out, uop.pc + uop.imm, uop.npc),
     JMP_BGE  -> Mux(jmp_out, uop.pc + uop.imm, uop.npc),
     JMP_BLTU -> Mux(jmp_out, uop.pc + uop.imm, uop.npc),
-    JMP_BGEU -> Mux(jmp_out, uop.pc + uop.imm, uop.npc),
+    JMP_BGEU -> Mux(jmp_out, uop.pc + uop.imm, uop.npc)
   ))
 
   npc_to_rd := MuxLookup(uop.jmp_code, 0.U, Array(
