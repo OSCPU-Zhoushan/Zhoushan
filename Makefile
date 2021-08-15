@@ -8,7 +8,7 @@ VERILATOR_FLAGS = -cc --exe -Os -x-assign 0 \
 CSRC_DIR = $(ZHOUSHAN_HOME)/src/test/csrc
 VERILATOR_INPUT = $(ZHOUSHAN_HOME)/build/SimTop.v $(CSRC_DIR)/imem.cpp $(CSRC_DIR)/main.cpp
 
-default: run
+default: verilog
 
 verilog:
 	mkdir -p $(BUILD_DIR)
@@ -31,20 +31,11 @@ run: verilog
 	@echo
 	
 	@echo "-- DONE --------------------"
-	@echo "To see waveforms, open vlt_dump.vcd in a waveform viewer"
+	@echo "To see waveforms, open dump.vcd in a waveform viewer"
 	@echo
 
 help:
-	mill -i Zhoushan.runMain TopMain --help
-
-compile:
-	mill -i __.compile
-
-reformat:
-	mill -i __.reformat
-
-checkformat:
-	mill -i __.checkFormat
+	mill -i Zhoushan.runMain zhoushan.TopMain --help
 
 clean:
 	-rm -rf $(BUILD_DIR)
