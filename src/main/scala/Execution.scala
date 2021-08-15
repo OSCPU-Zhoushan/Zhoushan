@@ -23,16 +23,16 @@ class Execution extends Module {
   val in2 = Wire(UInt(64.W))
 
   in1 := MuxLookup(uop.rs1_src, 0.U, Array(
-    RS_FROM_RF -> io.rs1_data,
+    RS_FROM_RF  -> io.rs1_data,
     RS_FROM_IMM -> Cat(Fill(32, uop.imm(31)), uop.imm),
-    RS_FROM_PC -> Cat(Fill(32, uop.pc(31)), uop.pc),
+    RS_FROM_PC  -> Cat(Fill(32, uop.pc(31)), uop.pc),
     RS_FROM_NPC -> Cat(Fill(32, uop.npc(31)), uop.npc)
   )).asUInt()
 
   in2 := MuxLookup(uop.rs2_src, 0.U, Array(
-    RS_FROM_RF -> io.rs2_data,
+    RS_FROM_RF  -> io.rs2_data,
     RS_FROM_IMM -> Cat(Fill(32, uop.imm(31)), uop.imm),
-    RS_FROM_PC -> Cat(Fill(32, uop.pc(31)), uop.pc),
+    RS_FROM_PC  -> Cat(Fill(32, uop.pc(31)), uop.pc),
     RS_FROM_NPC -> Cat(Fill(32, uop.npc(31)), uop.npc)
   )).asUInt()
 
@@ -77,7 +77,7 @@ class Execution extends Module {
     JMP_BLT  -> Mux(jmp_out, uop.pc + uop.imm, uop.npc),
     JMP_BGE  -> Mux(jmp_out, uop.pc + uop.imm, uop.npc),
     JMP_BLTU -> Mux(jmp_out, uop.pc + uop.imm, uop.npc),
-    JMP_BGEU -> Mux(jmp_out, uop.pc + uop.imm, uop.npc),
+    JMP_BGEU -> Mux(jmp_out, uop.pc + uop.imm, uop.npc)
   ))
 
   npc_to_rd := MuxLookup(uop.jmp_code, 0.U, Array(
@@ -85,7 +85,62 @@ class Execution extends Module {
     JMP_JALR -> Cat(Fill(32, uop.npc(31)), uop.npc)
   ))
 
-  io.out := alu_out | npc_to_rd
+  val ls_addr = in1 + uop.imm
+
+  val load_data = Cat(dmem(ls_addr + 7.U), dmem(ls_addr + 6.U), dmem(ls_addr + 5.U), dmem(ls_addr + 4.U),
+                      dmem(ls_addr + 3.U), dmem(ls_addr + 2.U), dmem(ls_addr + 1.U), dmem(ls_addr))
+  val ld_out = Wire(UInt(64.W))
+  val ldu_out = Wire(UInt(64.W))
+  val load_out = Wire(UInt(64.W))
+
+  ld_out := Mux(uop.mem_code === MEM_LD, MuxLookup(uop.mem_size, 0.U, Array(
+    MEM_BYTE  -> Cat(Fill(56, load_data(7)), load_data(7, 0)),
+    MEM_HALF  -> Cat(Fill(48, load_data(15)), load_data(15, 0)),
+    MEM_WORD  -> Cat(Fill(32, load_data(31)), load_data(31, 0)),
+    MEM_DWORD -> load_data
+  )), 0.U)
+
+  ldu_out := Mux(uop.mem_code === MEM_LDU, MuxLookup(uop.mem_size, 0.U, Array(
+    MEM_BYTE  -> Cat(Fill(56, 0.U), load_data(7, 0)),
+    MEM_HALF  -> Cat(Fill(48, 0.U), load_data(15, 0)),
+    MEM_WORD  -> Cat(Fill(32, 0.U), load_data(31, 0)),
+    MEM_DWORD -> load_data
+  )), 0.U)
+
+  load_out := MuxLookup(uop.mem_code, 0.U, Array(
+    MEM_LD  -> ld_out,
+    MEM_LDU -> ldu_out
+  ))
+
+  when (uop.mem_code === MEM_ST) {
+    switch (uop.mem_size) {
+      is (MEM_BYTE) { 
+        dmem(ls_addr) := in2(7, 0)
+      }
+      is (MEM_HALF) { 
+        dmem(ls_addr + 1.U) := in2(15, 8)
+        dmem(ls_addr) := in2(7, 0)
+      }
+      is (MEM_WORD) {
+        dmem(ls_addr + 3.U) := in2(31, 24)
+        dmem(ls_addr + 2.U) := in2(23, 16)
+        dmem(ls_addr + 1.U) := in2(15, 8)
+        dmem(ls_addr) := in2(7, 0)
+      }
+      is (MEM_DWORD) {
+        dmem(ls_addr + 7.U) := in2(63, 56)
+        dmem(ls_addr + 6.U) := in2(55, 48)
+        dmem(ls_addr + 5.U) := in2(47, 40)
+        dmem(ls_addr + 4.U) := in2(39, 32)
+        dmem(ls_addr + 3.U) := in2(31, 24)
+        dmem(ls_addr + 2.U) := in2(23, 16)
+        dmem(ls_addr + 1.U) := in2(15, 8)
+        dmem(ls_addr) := in2(7, 0)
+      }
+    }
+  }
+
+  io.out := alu_out | npc_to_rd | load_out
   io.jmp := jmp_out
   io.next_pc := Mux(jmp_out, jmp_addr, uop.npc)
 

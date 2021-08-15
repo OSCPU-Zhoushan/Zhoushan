@@ -30,47 +30,47 @@ class Decode extends Module {
   uop.rd_addr := inst(11, 7)
   
   val ctrl = ListLookup(inst,
-                //   v  fu_code alu_code  jmp_code  rs1_src     rs2_src  rd_en  imm_type  
-                List(N, FU_X,   ALU_X,    JMP_X,    RS_X,       RS_X,        N, IMM_X     ), 
+                //   v  fu_code alu_code  jmp_code  mem_code mem_size   rs1_src     rs2_src  rd_en  imm_type  
+                List(N, FU_X,   ALU_X,    JMP_X,    MEM_X,   MEM_X,     RS_X,       RS_X,        N, IMM_X     ), 
     Array(
       // RV32I
-      LUI   ->  List(Y, FU_ALU, ALU_ADD,  JMP_X,    RS_FROM_ZERO, RS_FROM_IMM, Y, IMM_U     ),
-      AUIPC ->  List(Y, FU_ALU, ALU_ADD,  JMP_X,    RS_FROM_PC,   RS_FROM_IMM, Y, IMM_U     ),
-      JAL   ->  List(Y, FU_JMP, ALU_X,    JMP_JAL,  RS_FROM_PC,   RS_FROM_IMM, Y, IMM_J     ),
-      JALR  ->  List(Y, FU_JMP, ALU_X,    JMP_JALR, RS_FROM_RF,   RS_FROM_RF,  Y, IMM_I     ),
-      BEQ   ->  List(Y, FU_JMP, ALU_X,    JMP_BEQ,  RS_FROM_RF,   RS_FROM_RF,  N, IMM_B     ),
-      BNE   ->  List(Y, FU_JMP, ALU_X,    JMP_BNE,  RS_FROM_RF,   RS_FROM_RF,  N, IMM_B     ),
-      BLT   ->  List(Y, FU_JMP, ALU_X,    JMP_BLT,  RS_FROM_RF,   RS_FROM_RF,  N, IMM_B     ),
-      BGE   ->  List(Y, FU_JMP, ALU_X,    JMP_BGE,  RS_FROM_RF,   RS_FROM_RF,  N, IMM_B     ),
-      BLTU  ->  List(Y, FU_JMP, ALU_X,    JMP_BLTU, RS_FROM_RF,   RS_FROM_RF,  N, IMM_B     ),
-      BGEU  ->  List(Y, FU_JMP, ALU_X,    JMP_BGEU, RS_FROM_RF,   RS_FROM_RF,  N, IMM_B     ),
-      // LB
-      // LH
-      // LW
-      // LBU
-      // LHU
-      // SB
-      // SH
-      // SW
-      ADDI  ->  List(Y, FU_ALU, ALU_ADD,  JMP_X,    RS_FROM_RF,   RS_FROM_IMM, Y, IMM_I     ),
-      SLTI  ->  List(Y, FU_ALU, ALU_SLT,  JMP_X,    RS_FROM_RF,   RS_FROM_IMM, Y, IMM_I     ),
-      SLTIU ->  List(Y, FU_ALU, ALU_SLTU, JMP_X,    RS_FROM_RF,   RS_FROM_IMM, Y, IMM_I     ),
-      XORI  ->  List(Y, FU_ALU, ALU_XOR,  JMP_X,    RS_FROM_RF,   RS_FROM_IMM, Y, IMM_I     ),
-      ORI   ->  List(Y, FU_ALU, ALU_OR,   JMP_X,    RS_FROM_RF,   RS_FROM_IMM, Y, IMM_I     ),
-      ANDI  ->  List(Y, FU_ALU, ALU_AND,  JMP_X,    RS_FROM_RF,   RS_FROM_IMM, Y, IMM_I     ),
-      SLLI  ->  List(Y, FU_ALU, ALU_SLL,  JMP_X,    RS_FROM_RF,   RS_FROM_IMM, Y, IMM_SHAMT ),
-      SRLI  ->  List(Y, FU_ALU, ALU_SRL,  JMP_X,    RS_FROM_RF,   RS_FROM_IMM, Y, IMM_SHAMT ),
-      SRAI  ->  List(Y, FU_ALU, ALU_SRA,  JMP_X,    RS_FROM_RF,   RS_FROM_IMM, Y, IMM_SHAMT ),
-      ADD   ->  List(Y, FU_ALU, ALU_ADD,  JMP_X,    RS_FROM_RF,   RS_FROM_RF,  Y, IMM_X     ),
-      SUB   ->  List(Y, FU_ALU, ALU_SUB,  JMP_X,    RS_FROM_RF,   RS_FROM_RF,  Y, IMM_X     ),
-      SLL   ->  List(Y, FU_ALU, ALU_SLL,  JMP_X,    RS_FROM_RF,   RS_FROM_RF,  Y, IMM_X     ),
-      SLT   ->  List(Y, FU_ALU, ALU_SLT,  JMP_X,    RS_FROM_RF,   RS_FROM_RF,  Y, IMM_X     ),
-      SLTU  ->  List(Y, FU_ALU, ALU_SLTU, JMP_X,    RS_FROM_RF,   RS_FROM_RF,  Y, IMM_X     ),
-      XOR   ->  List(Y, FU_ALU, ALU_XOR,  JMP_X,    RS_FROM_RF,   RS_FROM_RF,  Y, IMM_X     ),
-      SRL   ->  List(Y, FU_ALU, ALU_SRL,  JMP_X,    RS_FROM_RF,   RS_FROM_RF,  Y, IMM_X     ),
-      SRA   ->  List(Y, FU_ALU, ALU_SRA,  JMP_X,    RS_FROM_RF,   RS_FROM_RF,  Y, IMM_X     ),
-      OR    ->  List(Y, FU_ALU, ALU_OR,   JMP_X,    RS_FROM_RF,   RS_FROM_RF,  Y, IMM_X     ),
-      AND   ->  List(Y, FU_ALU, ALU_AND,  JMP_X,    RS_FROM_RF,   RS_FROM_RF,  Y, IMM_X     )
+      LUI   ->  List(Y, FU_ALU, ALU_ADD,  JMP_X,    MEM_X,   MEM_X,     RS_FROM_ZERO, RS_FROM_IMM, Y, IMM_U     ),
+      AUIPC ->  List(Y, FU_ALU, ALU_ADD,  JMP_X,    MEM_X,   MEM_X,     RS_FROM_PC,   RS_FROM_IMM, Y, IMM_U     ),
+      JAL   ->  List(Y, FU_JMP, ALU_X,    JMP_JAL,  MEM_X,   MEM_X,     RS_FROM_PC,   RS_FROM_IMM, Y, IMM_J     ),
+      JALR  ->  List(Y, FU_JMP, ALU_X,    JMP_JALR, MEM_X,   MEM_X,     RS_FROM_RF,   RS_FROM_RF,  Y, IMM_I     ),
+      BEQ   ->  List(Y, FU_JMP, ALU_X,    JMP_BEQ,  MEM_X,   MEM_X,     RS_FROM_RF,   RS_FROM_RF,  N, IMM_B     ),
+      BNE   ->  List(Y, FU_JMP, ALU_X,    JMP_BNE,  MEM_X,   MEM_X,     RS_FROM_RF,   RS_FROM_RF,  N, IMM_B     ),
+      BLT   ->  List(Y, FU_JMP, ALU_X,    JMP_BLT,  MEM_X,   MEM_X,     RS_FROM_RF,   RS_FROM_RF,  N, IMM_B     ),
+      BGE   ->  List(Y, FU_JMP, ALU_X,    JMP_BGE,  MEM_X,   MEM_X,     RS_FROM_RF,   RS_FROM_RF,  N, IMM_B     ),
+      BLTU  ->  List(Y, FU_JMP, ALU_X,    JMP_BLTU, MEM_X,   MEM_X,     RS_FROM_RF,   RS_FROM_RF,  N, IMM_B     ),
+      BGEU  ->  List(Y, FU_JMP, ALU_X,    JMP_BGEU, MEM_X,   MEM_X,     RS_FROM_RF,   RS_FROM_RF,  N, IMM_B     ),
+      LB    ->  List(Y, FU_MEM, ALU_X,    JMP_X,    MEM_LD,  MEM_BYTE,  RS_FROM_RF,   RS_FROM_IMM, Y, IMM_I     ),
+      LH    ->  List(Y, FU_MEM, ALU_X,    JMP_X,    MEM_LD,  MEM_HALF,  RS_FROM_RF,   RS_FROM_IMM, Y, IMM_I     ),
+      LW    ->  List(Y, FU_MEM, ALU_X,    JMP_X,    MEM_LD,  MEM_WORD,  RS_FROM_RF,   RS_FROM_IMM, Y, IMM_I     ),
+      LBU   ->  List(Y, FU_MEM, ALU_X,    JMP_X,    MEM_LDU, MEM_BYTE,  RS_FROM_RF,   RS_FROM_IMM, Y, IMM_I     ),
+      LHU   ->  List(Y, FU_MEM, ALU_X,    JMP_X,    MEM_LDU, MEM_HALF,  RS_FROM_RF,   RS_FROM_IMM, Y, IMM_I     ),
+      SB    ->  List(Y, FU_MEM, ALU_X,    JMP_X,    MEM_ST,  MEM_BYTE,  RS_FROM_RF,   RS_FROM_RF,  N, IMM_S     ),
+      SH    ->  List(Y, FU_MEM, ALU_X,    JMP_X,    MEM_ST,  MEM_HALF,  RS_FROM_RF,   RS_FROM_RF,  N, IMM_S     ),
+      SW    ->  List(Y, FU_MEM, ALU_X,    JMP_X,    MEM_ST,  MEM_WORD,  RS_FROM_RF,   RS_FROM_RF,  N, IMM_S     ),
+      ADDI  ->  List(Y, FU_ALU, ALU_ADD,  JMP_X,    MEM_X,   MEM_X,     RS_FROM_RF,   RS_FROM_IMM, Y, IMM_I     ),
+      SLTI  ->  List(Y, FU_ALU, ALU_SLT,  JMP_X,    MEM_X,   MEM_X,     RS_FROM_RF,   RS_FROM_IMM, Y, IMM_I     ),
+      SLTIU ->  List(Y, FU_ALU, ALU_SLTU, JMP_X,    MEM_X,   MEM_X,     RS_FROM_RF,   RS_FROM_IMM, Y, IMM_I     ),
+      XORI  ->  List(Y, FU_ALU, ALU_XOR,  JMP_X,    MEM_X,   MEM_X,     RS_FROM_RF,   RS_FROM_IMM, Y, IMM_I     ),
+      ORI   ->  List(Y, FU_ALU, ALU_OR,   JMP_X,    MEM_X,   MEM_X,     RS_FROM_RF,   RS_FROM_IMM, Y, IMM_I     ),
+      ANDI  ->  List(Y, FU_ALU, ALU_AND,  JMP_X,    MEM_X,   MEM_X,     RS_FROM_RF,   RS_FROM_IMM, Y, IMM_I     ),
+      SLLI  ->  List(Y, FU_ALU, ALU_SLL,  JMP_X,    MEM_X,   MEM_X,     RS_FROM_RF,   RS_FROM_IMM, Y, IMM_SHAMT ),
+      SRLI  ->  List(Y, FU_ALU, ALU_SRL,  JMP_X,    MEM_X,   MEM_X,     RS_FROM_RF,   RS_FROM_IMM, Y, IMM_SHAMT ),
+      SRAI  ->  List(Y, FU_ALU, ALU_SRA,  JMP_X,    MEM_X,   MEM_X,     RS_FROM_RF,   RS_FROM_IMM, Y, IMM_SHAMT ),
+      ADD   ->  List(Y, FU_ALU, ALU_ADD,  JMP_X,    MEM_X,   MEM_X,     RS_FROM_RF,   RS_FROM_RF,  Y, IMM_X     ),
+      SUB   ->  List(Y, FU_ALU, ALU_SUB,  JMP_X,    MEM_X,   MEM_X,     RS_FROM_RF,   RS_FROM_RF,  Y, IMM_X     ),
+      SLL   ->  List(Y, FU_ALU, ALU_SLL,  JMP_X,    MEM_X,   MEM_X,     RS_FROM_RF,   RS_FROM_RF,  Y, IMM_X     ),
+      SLT   ->  List(Y, FU_ALU, ALU_SLT,  JMP_X,    MEM_X,   MEM_X,     RS_FROM_RF,   RS_FROM_RF,  Y, IMM_X     ),
+      SLTU  ->  List(Y, FU_ALU, ALU_SLTU, JMP_X,    MEM_X,   MEM_X,     RS_FROM_RF,   RS_FROM_RF,  Y, IMM_X     ),
+      XOR   ->  List(Y, FU_ALU, ALU_XOR,  JMP_X,    MEM_X,   MEM_X,     RS_FROM_RF,   RS_FROM_RF,  Y, IMM_X     ),
+      SRL   ->  List(Y, FU_ALU, ALU_SRL,  JMP_X,    MEM_X,   MEM_X,     RS_FROM_RF,   RS_FROM_RF,  Y, IMM_X     ),
+      SRA   ->  List(Y, FU_ALU, ALU_SRA,  JMP_X,    MEM_X,   MEM_X,     RS_FROM_RF,   RS_FROM_RF,  Y, IMM_X     ),
+      OR    ->  List(Y, FU_ALU, ALU_OR,   JMP_X,    MEM_X,   MEM_X,     RS_FROM_RF,   RS_FROM_RF,  Y, IMM_X     ),
+      AND   ->  List(Y, FU_ALU, ALU_AND,  JMP_X,    MEM_X,   MEM_X,     RS_FROM_RF,   RS_FROM_RF,  Y, IMM_X     )
       // FENCE
       // ECALL
       // EBREAK
@@ -89,11 +89,13 @@ class Decode extends Module {
       // SRAW
     )
   )
-  val (valid : Bool) :: fu_code :: alu_code :: jmp_code :: rs1_src :: rs2_src :: (rd_en : Bool) :: imm_type :: Nil = ctrl
+  val (valid : Bool) :: fu_code :: alu_code :: jmp_code :: mem_code :: mem_size :: rs1_src :: rs2_src :: (rd_en : Bool) :: imm_type :: Nil = ctrl
   uop.valid := valid
   uop.fu_code := fu_code
   uop.alu_code := alu_code
   uop.jmp_code := jmp_code
+  uop.mem_code := mem_code
+  uop.mem_size := mem_size
   uop.rs1_src := rs1_src
   uop.rs2_src := rs2_src
   uop.rd_en := rd_en

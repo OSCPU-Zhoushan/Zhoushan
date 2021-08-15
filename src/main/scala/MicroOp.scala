@@ -47,6 +47,16 @@ trait Constant {
   val JMP_BGE   = 6.asUInt(4.W)
   val JMP_BLTU  = 7.asUInt(4.W)
   val JMP_BGEU  = 8.asUInt(4.W)
+
+  val MEM_X     = 0.asUInt(2.W)
+  val MEM_LD    = 1.asUInt(2.W)
+  val MEM_LDU   = 2.asUInt(2.W)
+  val MEM_ST    = 3.asUInt(2.W)
+
+  val MEM_BYTE  = 0.asUInt(2.W)
+  val MEM_HALF  = 1.asUInt(2.W)
+  val MEM_WORD  = 2.asUInt(2.W)
+  val MEM_DWORD = 3.asUInt(2.W)
 }
 
 object Constant extends Constant { }
@@ -61,6 +71,8 @@ class MicroOp extends Bundle {
   val fu_code   = UInt(2.W)
   val alu_code  = UInt(4.W)
   val jmp_code  = UInt(4.W)
+  val mem_code  = UInt(2.W)
+  val mem_size  = UInt(2.W)
 
   val rs1_src   = UInt(3.W)
   val rs2_src   = UInt(3.W)
