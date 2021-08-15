@@ -13,6 +13,7 @@ class Core extends Module {
   io.pc := pc
 
   val decode = Module(new Decode())
+  decode.io.pc := pc
   decode.io.inst := io.inst
 
   val uop = decode.io.uop
@@ -24,6 +25,7 @@ class Core extends Module {
   regFile.io.rd_en := uop.rd_en
   
   val execution = Module(new Execution())
+  execution.io.uop := uop
   execution.io.in1_data := regFile.io.rs1_data
   execution.io.in2_data := regFile.io.rs2_data
   regFile.io.rd_data := execution.io.out_data
