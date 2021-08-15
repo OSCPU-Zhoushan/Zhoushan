@@ -30,8 +30,8 @@ class Decode extends Module {
   uop.rd_addr := inst(11, 7)
   
   val ctrl = ListLookup(inst,
-                //   v  fu_code alu_code  jmp_code  mem_code mem_size   rs1_src     rs2_src  rd_en  imm_type  
-                List(N, FU_X,   ALU_X,    JMP_X,    MEM_X,   MEM_X,     RS_X,       RS_X,        N, IMM_X     ), 
+                //   v  fu_code alu_code  jmp_code  mem_code mem_size   rs1_src       rs2_src  rd_en  imm_type  
+                List(N, FU_X,   ALU_X,    JMP_X,    MEM_X,   MEM_X,     RS_X,         RS_X,        N, IMM_X     ), 
     Array(
       // RV32I
       LUI   ->  List(Y, FU_ALU, ALU_ADD,  JMP_X,    MEM_X,   MEM_X,     RS_FROM_ZERO, RS_FROM_IMM, Y, IMM_U     ),

@@ -37,7 +37,7 @@ int main(int argc, char** argv, char** env) {
   const std::unique_ptr<IMem> imem(new IMem());
 
   // Simulate until $finish
-  while (contextp->time() < 30) {
+  while (contextp->time() < 500) {
     contextp->timeInc(1);
 
     top->clock = !top->clock;
