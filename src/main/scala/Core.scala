@@ -6,6 +6,7 @@ class Core extends Module {
   val io = IO(new Bundle {
     val pc = Output(UInt(32.W))
     val inst = Input(UInt(32.W))
+    val rf_debug = Output(Vec(32, UInt(64.W)))
   })
 
   val pc = RegInit(0.U(64.W))
@@ -23,6 +24,7 @@ class Core extends Module {
   regFile.io.rs2_addr := uop.rs2_addr
   regFile.io.rd_addr := uop.rd_addr
   regFile.io.rd_en := uop.rd_en
+  io.rf_debug := regFile.io.rf_debug
   
   val execution = Module(new Execution())
   execution.io.uop := uop

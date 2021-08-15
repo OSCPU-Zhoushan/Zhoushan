@@ -23,9 +23,9 @@ class Decode extends Module {
   uop.pc := io.pc
   uop.inst := io.inst
   
-  uop.rs1_addr := 0.U(5.W)
-  uop.rs2_addr := 0.U(5.W)
-  uop.rd_addr := 0.U(5.W)
+  uop.rs1_addr := io.inst(19, 15)
+  uop.rs2_addr := io.inst(24, 20)
+  uop.rd_addr := io.inst(11, 7)
   uop.imm := 0.U(64.W)
   
   val ctrl = ListLookup(io.inst,
