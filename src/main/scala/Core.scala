@@ -9,7 +9,7 @@ class Core extends Module {
     val inst = Input(UInt(32.W))
   })
 
-  val pc = RegInit(0.U(64.W))
+  val pc = RegInit(0.U(32.W))
   io.pc := pc
 
   val decode = Module(new Decode)

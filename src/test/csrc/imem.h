@@ -18,7 +18,7 @@ public:
     imem[8] = 0x00600593;   // 20          addi  a1, x0, 6     # second parameter in the multiplication
     imem[9] = 0xfe1fffef;   // 24          jal   ra, intmul
     imem[10] = 0x0000006f;  // 28 exit:    jal   x0, exit  
-}
+  }
 
   uint32_t GetInst(uint32_t pc);
 
