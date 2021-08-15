@@ -1,6 +1,7 @@
 package zhoushan
 
 import chisel3._
+import difftest._
 
 class RegFile extends Module {
   val io = IO(new Bundle {
@@ -11,11 +12,11 @@ class RegFile extends Module {
     val rd_addr = Input(UInt(5.W))
     val rd_data = Input(UInt(64.W))
     val rd_en = Input(Bool())
-    // val rf_debug = Output(Vec(32, UInt(64.W)))
   })
 
-  val rf = Mem(32, UInt(64.W))
-  // val rf = RegInit(VecInit(Seq.fill(32)(0.U(64.W))))
+  // todo: Don't use Mem type for ASIC
+  // val rf = Mem(32, UInt(64.W))
+  val rf = RegInit(VecInit(Seq.fill(32)(0.U(64.W))))
 
   when (io.rd_en && (io.rd_addr =/= 0.U)) {
     rf(io.rd_addr) := io.rd_data;
@@ -24,5 +25,6 @@ class RegFile extends Module {
   io.rs1_data := Mux((io.rs1_addr =/= 0.U), rf(io.rs1_addr), 0.U)
   io.rs2_data := Mux((io.rs2_addr =/= 0.U), rf(io.rs2_addr), 0.U)
 
-  // io.rf_debug := rf
+  val difftest = Module(new DifftestArchIntRegState)
+  difftest.io.gpr := RegNext(rf)
 }
