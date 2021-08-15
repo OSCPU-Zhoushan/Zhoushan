@@ -1,7 +1,7 @@
 package zhoushan
 
 import chisel3._
-// import difftest._
+import difftest._
 
 class SimTop extends Module {
   val io = IO(new Bundle {
