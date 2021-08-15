@@ -37,41 +37,30 @@ trait Constant {
   val ALU_SLL   = 8.asUInt(4.W)
   val ALU_SRL   = 9.asUInt(4.W)
   val ALU_SRA   = 10.asUInt(4.W)
+
+  val JMP_X     = 0.asUInt(4.W)
+  val JMP_JAL   = 1.asUInt(4.W)
+  val JMP_JALR  = 2.asUInt(4.W)
+  val JMP_BEQ   = 3.asUInt(4.W)
+  val JMP_BNE   = 4.asUInt(4.W)
+  val JMP_BLT   = 5.asUInt(4.W)
+  val JMP_BGE   = 6.asUInt(4.W)
+  val JMP_BLTU  = 7.asUInt(4.W)
+  val JMP_BGEU  = 8.asUInt(4.W)
 }
 
 object Constant extends Constant { }
-
-// class CtrlSig() extends Bundle {
-  
-
-//   def apply() = {
-
-//   }
-
-//   def apply(ctrl_list: List[Bits]) = {
-//     val (cs_valid : Bool) :: (cs_rd_en : Bool) :: cs_rs1_src :: cs_rs2_src :: cs_fu_code :: cs_alu_code :: Nil = ctrl_list
-//     valid := cs_valid
-//     rd_en := cs_rd_en
-//     rs1_src := cs_rs1_src
-//     rs2_src := cs_rs2_src
-//     fu_code := cs_fu_code
-//     alu_code := cs_alu_code
-//   }
-// }
-
-// object CtrlSig {
-//   def apply() = new CtrlSig()
-//   def apply(ctrl_list: List[Bits]) = new CtrlSig(ctrl_list)
-// }
 
 class MicroOp extends Bundle {
   val valid     = Bool()
 
   val pc        = UInt(32.W)
+  val npc       = UInt(32.W)
   val inst      = UInt(32.W)
 
   val fu_code   = UInt(2.W)
   val alu_code  = UInt(4.W)
+  val jmp_code  = UInt(4.W)
 
   val rs1_src   = UInt(3.W)
   val rs2_src   = UInt(3.W)

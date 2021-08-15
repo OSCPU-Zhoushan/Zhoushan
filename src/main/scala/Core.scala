@@ -10,7 +10,6 @@ class Core extends Module {
   })
 
   val pc = RegInit(0.U(64.W))
-  pc := pc + 4.U
   io.pc := pc
 
   val decode = Module(new Decode())
@@ -30,5 +29,6 @@ class Core extends Module {
   execution.io.uop := uop
   execution.io.rs1_data := regFile.io.rs1_data
   execution.io.rs2_data := regFile.io.rs2_data
-  regFile.io.rd_data := execution.io.out_data
+  regFile.io.rd_data := execution.io.out
+  pc := execution.io.next_pc
 }

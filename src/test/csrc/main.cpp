@@ -3,7 +3,7 @@
 
 #include <verilated.h>
 #include <verilated_vcd_c.h>
-#include "VTop.h"
+#include "VSimTop.h"
 
 #include "imem.h"
 
@@ -23,7 +23,7 @@ int main(int argc, char** argv, char** env) {
   contextp->traceEverOn(true);
   contextp->commandArgs(argc, argv);
 
-  const std::unique_ptr<VTop> top(new VTop(contextp.get(), "TOP"));
+  const std::unique_ptr<VSimTop> top(new VSimTop(contextp.get(), "TOP"));
 
   top->clock = 0;
   top->reset = 1;

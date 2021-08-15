@@ -6,7 +6,7 @@ VERILATOR_FLAGS = -cc --exe -Os -x-assign 0 \
 	--assert --trace
 
 CSRC_DIR = $(ZHOUSHAN_HOME)/src/test/csrc
-VERILATOR_INPUT = $(ZHOUSHAN_HOME)/build/Top.v $(CSRC_DIR)/imem.cpp $(CSRC_DIR)/main.cpp
+VERILATOR_INPUT = $(ZHOUSHAN_HOME)/build/SimTop.v $(CSRC_DIR)/imem.cpp $(CSRC_DIR)/main.cpp
 
 default: run
 
@@ -21,13 +21,13 @@ run: verilog
 	@echo
 
 	@echo "-- BUILD -------------------"
-	$(MAKE) -j -C obj_dir -f VTop.mk
+	$(MAKE) -j -C obj_dir -f VSimTop.mk
 	@echo
 
 	@echo "-- RUN ---------------------"
 	@rm -rf logs
 	@mkdir -p logs
-	obj_dir/VTop +trace
+	obj_dir/VSimTop +trace
 	@echo
 	
 	@echo "-- DONE --------------------"
