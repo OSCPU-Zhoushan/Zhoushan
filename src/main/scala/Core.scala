@@ -18,31 +18,67 @@ class Core extends Module {
 
   val uop = decode.io.uop
 
-  val regFile = Module(new RegFile)
-  regFile.io.rs1_addr := uop.rs1_addr
-  regFile.io.rs2_addr := uop.rs2_addr
-  regFile.io.rd_addr := uop.rd_addr
-  regFile.io.rd_en := uop.rd_en
+  val rf = Module(new RegFile)
+  rf.io.rs1_addr := uop.rs1_addr
+  rf.io.rs2_addr := uop.rs2_addr
+  rf.io.rd_addr := uop.rd_addr
+  rf.io.rd_en := uop.rd_en
   
   val execution = Module(new Execution)
   execution.io.uop := uop
-  execution.io.rs1_data := regFile.io.rs1_data
-  execution.io.rs2_data := regFile.io.rs2_data
-  regFile.io.rd_data := execution.io.out
+  execution.io.rs1_data := rf.io.rs1_data
+  execution.io.rs2_data := rf.io.rs2_data
+  rf.io.rd_data := execution.io.out
 
   val pc_zero_reset = RegInit(true.B) // todo: fix pc reset
   pc_zero_reset := false.B
   pc := Mux(pc_zero_reset, 0.U, execution.io.next_pc)
 
   val uop_commit = RegNext(uop)
-  val difftest = Module(new DifftestInstrCommit)
-  difftest.io.valid    := uop_commit.valid
-  difftest.io.pc       := uop_commit.pc
-  difftest.io.instr    := uop_commit.inst
-  difftest.io.skip     := false.B
-  difftest.io.isRVC    := false.B
-  difftest.io.scFailed := false.B
-  difftest.io.wen      := uop_commit.rd_en
-  difftest.io.wdata    := RegNext(execution.io.out)
-  difftest.io.wdest    := uop_commit.rd_addr
+  val dt_ic = Module(new DifftestInstrCommit)
+  dt_ic.io.valid    := uop_commit.valid
+  dt_ic.io.pc       := uop_commit.pc
+  dt_ic.io.instr    := uop_commit.inst
+  dt_ic.io.skip     := false.B
+  dt_ic.io.isRVC    := false.B
+  dt_ic.io.scFailed := false.B
+  dt_ic.io.wen      := uop_commit.rd_en
+  dt_ic.io.wdata    := RegNext(execution.io.out)
+  dt_ic.io.wdest    := uop_commit.rd_addr
+
+  // printf("valid = %x, pc = %x, inst = %x, wen = %x, wdata = %x, wdest = %x\n",
+  //        dt_ic.io.valid, dt_ic.io.pc, dt_ic.io.instr, dt_ic.io.wen, dt_ic.io.wdata, dt_ic.io.wdest)
+
+  val dt_cs = Module(new DifftestCSRState)
+  dt_cs.io.priviledgeMode := 0.U
+  dt_cs.io.mstatus        := 0.U
+  dt_cs.io.sstatus        := 0.U
+  dt_cs.io.mepc           := 0.U
+  dt_cs.io.sepc           := 0.U
+  dt_cs.io.mtval          := 0.U
+  dt_cs.io.stval          := 0.U
+  dt_cs.io.mtvec          := 0.U
+  dt_cs.io.stvec          := 0.U
+  dt_cs.io.mcause         := 0.U
+  dt_cs.io.scause         := 0.U
+  dt_cs.io.satp           := 0.U
+  dt_cs.io.mip            := 0.U
+  dt_cs.io.mie            := 0.U
+  dt_cs.io.mscratch       := 0.U
+  dt_cs.io.sscratch       := 0.U
+  dt_cs.io.mideleg        := 0.U
+  dt_cs.io.medeleg        := 0.U
+
+  val dt_ae = Module(new DifftestArchEvent)
+  dt_ae.io.intrNO       := 0.U
+  dt_ae.io.cause        := 0.U
+  dt_ae.io.exceptionPC  := 0.U
+
+  val dt_te = Module(new DifftestTrapEvent)
+  dt_te.io.valid    := false.B
+  dt_te.io.code     := 0.U
+  dt_te.io.pc       := 0.U
+  dt_te.io.cycleCnt := 0.U
+  dt_te.io.instrCnt := 0.U
+
 }
