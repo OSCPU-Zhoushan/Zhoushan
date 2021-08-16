@@ -88,12 +88,13 @@ class Core extends Module {
   dt_ae.io.cause        := 0.U
   dt_ae.io.exceptionPC  := 0.U
 
+  // ref: https://github.com/OSCPU/ysyx/issues/8
   val dt_te = Module(new DifftestTrapEvent)
   dt_te.io.clock    := clock
   dt_te.io.coreid   := 0.U
-  dt_te.io.valid    := false.B
+  dt_te.io.valid    := (uop_commit.inst === "h0000006b".U)
   dt_te.io.code     := 0.U
-  dt_te.io.pc       := 0.U
+  dt_te.io.pc       := uop_commit.pc
   dt_te.io.cycleCnt := 0.U
   dt_te.io.instrCnt := 0.U
 

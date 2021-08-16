@@ -86,7 +86,9 @@ class Decode extends Module {
       SUBW  ->  List(Y, FU_ALU, ALU_SUB,  JMP_X,    MEM_X,   MEM_X,     Y, RS_FROM_RF,   RS_FROM_RF,  Y, IMM_X     ),
       SLLW  ->  List(Y, FU_ALU, ALU_SLL,  JMP_X,    MEM_X,   MEM_X,     Y, RS_FROM_RF,   RS_FROM_RF,  Y, IMM_X     ),
       SRLW  ->  List(Y, FU_ALU, ALU_SRL,  JMP_X,    MEM_X,   MEM_X,     Y, RS_FROM_RF,   RS_FROM_RF,  Y, IMM_X     ),
-      SRAW  ->  List(Y, FU_ALU, ALU_SRA,  JMP_X,    MEM_X,   MEM_X,     Y, RS_FROM_RF,   RS_FROM_RF,  Y, IMM_X     )
+      SRAW  ->  List(Y, FU_ALU, ALU_SRA,  JMP_X,    MEM_X,   MEM_X,     Y, RS_FROM_RF,   RS_FROM_RF,  Y, IMM_X     ),
+      // nemu
+      HALT  ->  List(Y, FU_X,   ALU_X,    JMP_X,    MEM_X,   MEM_X,     N, RS_X,         RS_X,        N, IMM_X     )
     )
   )
   val (valid : Bool)  :: fu_code :: alu_code :: jmp_code       :: mem_code :: mem_size :: c0 = ctrl
