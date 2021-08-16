@@ -16,22 +16,24 @@ class Execution extends Module {
 
   val uop = io.uop
 
-  val in1 = Wire(UInt(64.W))
-  val in2 = Wire(UInt(64.W))
+  val in1_0, in1, in2_0, in2 = Wire(UInt(64.W))
 
-  in1 := MuxLookup(uop.rs1_src, 0.U, Array(
+  in1_0 := MuxLookup(uop.rs1_src, 0.U, Array(
     RS_FROM_RF  -> io.rs1_data,
     RS_FROM_IMM -> Cat(Fill(32, uop.imm(31)), uop.imm),
     RS_FROM_PC  -> Cat(Fill(32, 0.U), uop.pc),
     RS_FROM_NPC -> Cat(Fill(32, 0.U), uop.npc)
   )).asUInt()
 
-  in2 := MuxLookup(uop.rs2_src, 0.U, Array(
+  in2_0 := MuxLookup(uop.rs2_src, 0.U, Array(
     RS_FROM_RF  -> io.rs2_data,
     RS_FROM_IMM -> Cat(Fill(32, uop.imm(31)), uop.imm),
     RS_FROM_PC  -> Cat(Fill(32, 0.U), uop.pc),
     RS_FROM_NPC -> Cat(Fill(32, 0.U), uop.npc)
   )).asUInt()
+
+  in1 := Mux(uop.w_type, Cat(Fill(32, Mux(uop.alu_code === ALU_SRL, 0.U, in1_0(31))), in1_0(31, 0)), in1_0)
+  in2 := Mux(uop.w_type, Cat(Fill(32, in1_0(31)), in2_0(31, 0)), in2_0)
 
   val shamt = Wire(UInt(6.W))
   shamt := Mux(uop.w_type, in2(4, 0).asUInt(), in2(5, 0)) 
