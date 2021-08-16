@@ -73,6 +73,7 @@ class MicroOp extends Bundle {
   val jmp_code  = UInt(4.W)
   val mem_code  = UInt(2.W)
   val mem_size  = UInt(2.W)
+  val w_type    = Bool()
 
   val rs1_src   = UInt(3.W)
   val rs2_src   = UInt(3.W)

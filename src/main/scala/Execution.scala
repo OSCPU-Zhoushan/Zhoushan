@@ -35,12 +35,12 @@ class Execution extends Module {
 
   val shamt = in2(4, 0).asUInt()
 
-  val alu_out = Wire(UInt(64.W))
+  val alu_out_0, alu_out = Wire(UInt(64.W))
   val jmp_out = Wire(Bool())
   val jmp_addr = Wire(UInt(32.W))
   val npc_to_rd = Wire(UInt(64.W))
 
-  alu_out := MuxLookup(uop.alu_code, 0.U, Array(
+  alu_out_0 := MuxLookup(uop.alu_code, 0.U, Array(
     ALU_ADD  -> (in1 + in2).asUInt(),
     ALU_SUB  -> (in1 - in2).asUInt(),
     ALU_SLT  -> (in1.asSInt() < in2.asSInt()).asUInt(),
@@ -53,6 +53,7 @@ class Execution extends Module {
     ALU_SRA  -> (in1.asUInt() >> shamt).asUInt()
   ))
 
+  alu_out := Mux(uop.w_type, Cat(Fill(32, alu_out_0(31)), alu_out_0(31, 0)), alu_out_0)
   jmp_out := MuxLookup(uop.jmp_code, false.B, Array(
     JMP_JAL  -> true.B,
     JMP_JALR -> true.B,
