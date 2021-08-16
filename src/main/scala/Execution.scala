@@ -50,8 +50,8 @@ class Execution extends Module {
     ALU_OR   -> (in1 | in2).asUInt(),
     ALU_AND  -> (in1 & in2).asUInt(),
     ALU_SLL  -> ((in1 << shamt)(63, 0)).asUInt(),
-    ALU_SRL  -> (in1.asSInt() >> shamt).asUInt(),
-    ALU_SRA  -> (in1.asUInt() >> shamt).asUInt()
+    ALU_SRL  -> (in1.asUInt() >> shamt).asUInt(),
+    ALU_SRA  -> (in1.asSInt() >> shamt).asUInt()
   ))
 
   alu_out := Mux(uop.w_type, Cat(Fill(32, alu_out_0(31)), alu_out_0(31, 0)), alu_out_0)
@@ -173,6 +173,8 @@ class Execution extends Module {
   io.out := alu_out | npc_to_rd | load_out
   io.out_valid := !stall
   io.next_pc := Mux(jmp_out, jmp_addr, Mux(stall, uop.pc, uop.npc))
+
+  // printf("pc=%x, in1=%x, in2=%x, shamt=%x, alu_out_0=%x, alu_out=%x\n", uop.pc, in1, in2, shamt, alu_out_0, alu_out)
 
   // printf("pc=%x, mem_c=%x, size=%x, addr=%x, offset=%x, stall=%x, dmem.r/wIdx=%x, rdata=%x, wmask=%x, wdata=%x, wen=%x\n", 
   //         uop.pc, uop.mem_code, uop.mem_size, ls_addr, ls_addr_offset, stall, dmem.io.rIdx, dmem.io.rdata, dmem.io.wmask, dmem.io.wdata, dmem.io.wen)
