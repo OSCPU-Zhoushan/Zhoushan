@@ -28,6 +28,4 @@ class SimTop extends Module {
   io.uart.out.ch := 0.U
   io.uart.in.valid := false.B
 
-  // printf("pc = %x, inst = %x, mem.rIdx = %x, mem.rdata = %x\n", 
-  //         core.io.pc, core.io.inst, mem.io.rIdx, mem.io.rdata)
 }

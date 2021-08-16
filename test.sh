@@ -1,7 +1,7 @@
 #!/bin/bash
 
 examples=`cat test_list.txt`
-#examples=(load-store)
+#examples=(select-sort)
 
 for example in ${examples[@]}
 do

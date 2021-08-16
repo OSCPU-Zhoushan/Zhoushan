@@ -16,19 +16,19 @@ class Execution extends Module {
   })
 
   val uop = io.uop
-
+  val imm_sign_ext = Cat(Fill(32, uop.imm(31)), uop.imm)
   val in1_0, in1, in2_0, in2 = Wire(UInt(64.W))
 
   in1_0 := MuxLookup(uop.rs1_src, 0.U, Array(
     RS_FROM_RF  -> io.rs1_data,
-    RS_FROM_IMM -> Cat(Fill(32, uop.imm(31)), uop.imm),
+    RS_FROM_IMM -> imm_sign_ext,
     RS_FROM_PC  -> Cat(Fill(32, 0.U), uop.pc),
     RS_FROM_NPC -> Cat(Fill(32, 0.U), uop.npc)
   )).asUInt()
 
   in2_0 := MuxLookup(uop.rs2_src, 0.U, Array(
     RS_FROM_RF  -> io.rs2_data,
-    RS_FROM_IMM -> Cat(Fill(32, uop.imm(31)), uop.imm),
+    RS_FROM_IMM -> imm_sign_ext,
     RS_FROM_PC  -> Cat(Fill(32, 0.U), uop.pc),
     RS_FROM_NPC -> Cat(Fill(32, 0.U), uop.npc)
   )).asUInt()
@@ -86,7 +86,7 @@ class Execution extends Module {
     JMP_JALR -> Cat(Fill(32, 0.U), uop.npc)
   ))
 
-  val ls_addr = in1 + uop.imm
+  val ls_addr = in1 + imm_sign_ext
   val ls_addr_offset = ls_addr(2, 0)
   val ls_addr_nextline = ls_addr + "b1000".U
   val ls_addr_offset_nextline = (~ls_addr_offset) + 1.U;
@@ -172,8 +172,6 @@ class Execution extends Module {
   io.out_valid := !stall
   io.next_pc := Mux(jmp_out, jmp_addr, Mux(stall, uop.pc, uop.npc))
 
-  // printf("pc=%x, in1=%x, in2=%x, shamt=%x, alu_out_0=%x, alu_out=%x\n", uop.pc, in1, in2, shamt, alu_out_0, alu_out)
-
-  // printf("pc=%x, mem_c=%x, size=%x, addr=%x, offset=%x, stall=%x, dmem.r/wIdx=%x, rdata=%x, wmask=%x, wdata=%x, wen=%x\n", 
-  //         uop.pc, uop.mem_code, uop.mem_size, ls_addr, ls_addr_offset, stall, dmem.io.rIdx, dmem.io.rdata, dmem.io.wmask, dmem.io.wdata, dmem.io.wen)
+  // printf("pc=%x, mem_c=%x, addr=%x, stall=%x, rdata=%x, wmask=%x, wdata=%x, wen=%x\n", 
+  //         uop.pc, uop.mem_code, ls_addr, stall, io.dmem.rdata, io.dmem.wmask, io.dmem.wdata, io.dmem.wen)
 }
