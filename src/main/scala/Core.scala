@@ -5,18 +5,19 @@ import difftest._
 
 class Core extends Module {
   val io = IO(new Bundle {
-    val pc = Output(UInt(32.W))
-    val inst = Input(UInt(32.W))
+    val imem = Flipped(new RomIO)
+    val dmem = Flipped(new RamIO)
   })
 
   val pc_init = "h80000000".U(32.W)
-
   val pc = RegInit(pc_init)
-  io.pc := pc
+  val inst = io.imem.rdata(31, 0)
+  io.imem.en := true.B
+  io.imem.addr := pc.asUInt()
 
   val decode = Module(new Decode)
   decode.io.pc := pc
-  decode.io.inst := io.inst
+  decode.io.inst := inst
 
   val uop = decode.io.uop
 
@@ -31,6 +32,7 @@ class Core extends Module {
   execution.io.rs1_data := rf.io.rs1_data
   execution.io.rs2_data := rf.io.rs2_data
   rf.io.rd_data := execution.io.out
+  execution.io.dmem <> io.dmem
 
   val pc_zero_reset = RegInit(true.B) // todo: fix pc reset
   pc_zero_reset := false.B

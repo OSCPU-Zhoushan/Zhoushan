@@ -12,6 +12,7 @@ class Execution extends Module {
     val out = Output(UInt(64.W))
     val out_valid = Output(Bool())
     val next_pc = Output(UInt(32.W))
+    val dmem = Flipped(new RamIO)
   })
 
   val uop = io.uop
@@ -111,10 +112,6 @@ class Execution extends Module {
   val load_data = Wire(UInt(64.W))
   val load_data_reg = RegNext(load_data)
 
-  val dmem = Module(new RAMHelper)
-  dmem.io.clk := clock
-  dmem.io.en := (uop.fu_code === FU_MEM)
-
   // may need to read/write memory in 2 lines
   val stall = RegInit(false.B)
   // half  -> offset = 111
@@ -134,20 +131,19 @@ class Execution extends Module {
   val dmem_state = RegInit(0.U(1.W))
   when (dmem_state === 0.U) {
     when (stall) { dmem_state := 1.U }
-    dmem.io.rIdx := Cat(Fill(36, 0.U), ls_addr(30, 3))
-    load_data := dmem.io.rdata >> (ls_addr_offset << 3)
-    dmem.io.wIdx := Cat(Fill(36, 0.U), ls_addr(30, 3))
-    dmem.io.wmask := ls_mask & ((wmask << (ls_addr_offset << 3))(63, 0))
-    dmem.io.wdata := (in2 << (ls_addr_offset << 3))(63, 0)
+    io.dmem.addr := ls_addr
+    load_data := io.dmem.rdata >> (ls_addr_offset << 3)
+    io.dmem.wmask := ls_mask & ((wmask << (ls_addr_offset << 3))(63, 0))
+    io.dmem.wdata := (in2 << (ls_addr_offset << 3))(63, 0)
   } .otherwise {
-    dmem.io.rIdx := Cat(Fill(36, 0.U), ls_addr_nextline(30, 3))
-    load_data := load_data_reg | (dmem.io.rdata << (ls_addr_offset_nextline << 3))
-    dmem.io.wIdx := Cat(Fill(36, 0.U), ls_addr_nextline(30, 3))
-    dmem.io.wmask := ls_mask_nextline & (wmask >> (ls_addr_offset_nextline << 3)).asUInt()
-    dmem.io.wdata := (in2 >> (ls_addr_offset_nextline << 3)).asUInt()
+    io.dmem.addr := ls_addr_nextline
+    load_data := load_data_reg | (io.dmem.rdata << (ls_addr_offset_nextline << 3))
+    io.dmem.wmask := ls_mask_nextline & (wmask >> (ls_addr_offset_nextline << 3)).asUInt()
+    io.dmem.wdata := (in2 >> (ls_addr_offset_nextline << 3)).asUInt()
   }
 
-  dmem.io.wen := (uop.mem_code === MEM_ST)
+  io.dmem.en := (uop.fu_code === FU_MEM)
+  io.dmem.wen := (uop.mem_code === MEM_ST)
 
   val ld_out = Wire(UInt(64.W))
   val ldu_out = Wire(UInt(64.W))
