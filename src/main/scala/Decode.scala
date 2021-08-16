@@ -70,14 +70,14 @@ class Decode extends Module {
       SRL   ->  List(Y, FU_ALU, ALU_SRL,  JMP_X,    MEM_X,   MEM_X,     RS_FROM_RF,   RS_FROM_RF,  Y, IMM_X     ),
       SRA   ->  List(Y, FU_ALU, ALU_SRA,  JMP_X,    MEM_X,   MEM_X,     RS_FROM_RF,   RS_FROM_RF,  Y, IMM_X     ),
       OR    ->  List(Y, FU_ALU, ALU_OR,   JMP_X,    MEM_X,   MEM_X,     RS_FROM_RF,   RS_FROM_RF,  Y, IMM_X     ),
-      AND   ->  List(Y, FU_ALU, ALU_AND,  JMP_X,    MEM_X,   MEM_X,     RS_FROM_RF,   RS_FROM_RF,  Y, IMM_X     )
+      AND   ->  List(Y, FU_ALU, ALU_AND,  JMP_X,    MEM_X,   MEM_X,     RS_FROM_RF,   RS_FROM_RF,  Y, IMM_X     ),
       // FENCE
       // ECALL
       // EBREAK
       // RV64I
-      // LWU
-      // LD
-      // SD
+      LWU   ->  List(Y, FU_MEM, ALU_X,    JMP_X,    MEM_LDU, MEM_WORD,  RS_FROM_RF,   RS_FROM_IMM, Y, IMM_I     ),
+      LD    ->  List(Y, FU_MEM, ALU_X,    JMP_X,    MEM_LDU, MEM_DWORD, RS_FROM_RF,   RS_FROM_IMM, Y, IMM_I     ),
+      SD    ->  List(Y, FU_MEM, ALU_X,    JMP_X,    MEM_ST,  MEM_DWORD, RS_FROM_RF,   RS_FROM_RF,  N, IMM_S     )
       // ADDIW
       // SLLIW
       // SRLIW
