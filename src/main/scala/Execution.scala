@@ -33,7 +33,8 @@ class Execution extends Module {
     RS_FROM_NPC -> Cat(Fill(32, 0.U), uop.npc)
   )).asUInt()
 
-  val shamt = in2(4, 0).asUInt()
+  val shamt = Wire(UInt(6.W))
+  shamt := Mux(uop.w_type, in2(4, 0).asUInt(), in2(5, 0)) 
 
   val alu_out_0, alu_out = Wire(UInt(64.W))
   val jmp_out = Wire(Bool())

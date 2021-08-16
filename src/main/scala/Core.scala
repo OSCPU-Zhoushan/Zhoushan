@@ -55,9 +55,9 @@ class Core extends Module {
   // printf("valid = %x, pc = %x, inst = %x, wen = %x, wdata = %x, wdest = %x\n",
   //        dt_ic.io.valid, dt_ic.io.pc, dt_ic.io.instr, dt_ic.io.wen, dt_ic.io.wdata, dt_ic.io.wdest)
 
-  printf("valid=%x, pc=%x, inst=%x, fu_code=%x, rs1=%x, rs2=%x, rd=%x, imm=%x\n",
-         uop_commit.valid, uop_commit.pc, uop_commit.inst, uop_commit.fu_code,
-         uop_commit.rs1_addr, uop_commit.rs2_addr, uop_commit.rd_addr, uop_commit.imm)
+  // printf("valid=%x, pc=%x, inst=%x, fu_code=%x, rs1=%x, rs2=%x, rd=%x, imm=%x\n",
+  //        uop_commit.valid, uop_commit.pc, uop_commit.inst, uop_commit.fu_code,
+  //        uop_commit.rs1_addr, uop_commit.rs2_addr, uop_commit.rd_addr, uop_commit.imm)
 
   val dt_cs = Module(new DifftestCSRState)
   dt_cs.io.clock          := clock
