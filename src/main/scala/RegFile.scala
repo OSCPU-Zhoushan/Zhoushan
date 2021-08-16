@@ -25,6 +25,8 @@ class RegFile extends Module {
   io.rs1_data := Mux((io.rs1_addr =/= 0.U), rf(io.rs1_addr), 0.U)
   io.rs2_data := Mux((io.rs2_addr =/= 0.U), rf(io.rs2_addr), 0.U)
 
-  val difftest = Module(new DifftestArchIntRegState)
-  difftest.io.gpr := RegNext(rf)
+  val dt_ar = Module(new DifftestArchIntRegState)
+  dt_ar.io.clock  := clock
+  dt_ar.io.coreid := 0.U
+  dt_ar.io.gpr    := rf
 }

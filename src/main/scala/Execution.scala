@@ -22,15 +22,15 @@ class Execution extends Module {
   in1 := MuxLookup(uop.rs1_src, 0.U, Array(
     RS_FROM_RF  -> io.rs1_data,
     RS_FROM_IMM -> Cat(Fill(32, uop.imm(31)), uop.imm),
-    RS_FROM_PC  -> Cat(Fill(32, uop.pc(31)), uop.pc),
-    RS_FROM_NPC -> Cat(Fill(32, uop.npc(31)), uop.npc)
+    RS_FROM_PC  -> Cat(Fill(32, 0.U), uop.pc),
+    RS_FROM_NPC -> Cat(Fill(32, 0.U), uop.npc)
   )).asUInt()
 
   in2 := MuxLookup(uop.rs2_src, 0.U, Array(
     RS_FROM_RF  -> io.rs2_data,
     RS_FROM_IMM -> Cat(Fill(32, uop.imm(31)), uop.imm),
-    RS_FROM_PC  -> Cat(Fill(32, uop.pc(31)), uop.pc),
-    RS_FROM_NPC -> Cat(Fill(32, uop.npc(31)), uop.npc)
+    RS_FROM_PC  -> Cat(Fill(32, 0.U), uop.pc),
+    RS_FROM_NPC -> Cat(Fill(32, 0.U), uop.npc)
   )).asUInt()
 
   val shamt = in2(4, 0).asUInt()
@@ -76,8 +76,8 @@ class Execution extends Module {
   ))
 
   npc_to_rd := MuxLookup(uop.jmp_code, 0.U, Array(
-    JMP_JAL  -> Cat(Fill(32, uop.npc(31)), uop.npc),
-    JMP_JALR -> Cat(Fill(32, uop.npc(31)), uop.npc)
+    JMP_JAL  -> Cat(Fill(32, 0.U), uop.npc),
+    JMP_JALR -> Cat(Fill(32, 0.U), uop.npc)
   ))
 
   val ls_addr = in1 + uop.imm

@@ -16,7 +16,7 @@ class SimTop extends Module {
   val imem = Module(new RAMHelper)
   imem.io.clk := clock
   imem.io.en := true.B
-  imem.io.rIdx := Cat(Fill(35, 0.U), core.io.pc(31, 3))
+  imem.io.rIdx := Cat(Fill(36, 0.U), core.io.pc(30, 3))
   core.io.inst := Mux(core.io.pc(2), imem.io.rdata(63, 32), imem.io.rdata(31, 0))
   imem.io.wIdx := 0.U
   imem.io.wdata := 0.U
