@@ -10,7 +10,7 @@ class Execution extends Module {
     val rs1_data = Input(UInt(64.W))
     val rs2_data = Input(UInt(64.W))
     val out = Output(UInt(64.W))
-    val jmp = Output(Bool())
+    val out_valid = Output(Bool())
     val next_pc = Output(UInt(32.W))
   })
 
@@ -54,6 +54,7 @@ class Execution extends Module {
   ))
 
   alu_out := Mux(uop.w_type, Cat(Fill(32, alu_out_0(31)), alu_out_0(31, 0)), alu_out_0)
+
   jmp_out := MuxLookup(uop.jmp_code, false.B, Array(
     JMP_JAL  -> true.B,
     JMP_JALR -> true.B,
@@ -82,13 +83,62 @@ class Execution extends Module {
   ))
 
   val ls_addr = in1 + uop.imm
+  val ls_addr_offset = ls_addr(2, 0)
+  val ls_addr_nextline = ls_addr + "b1000".U
+  val ls_addr_offset_nextline = (~ls_addr_offset) + 1.U;
+
+  val ls_mask = MuxLookup(ls_addr_offset, 0.U, Array(
+    "b000".U -> "hffffffff".U,
+    "b001".U -> "hfffffff0".U,
+    "b010".U -> "hffffff00".U,
+    "b011".U -> "hfffff000".U,
+    "b100".U -> "hffff0000".U,
+    "b101".U -> "hfff00000".U,
+    "b110".U -> "hff000000".U,
+    "b111".U -> "hf0000000".U
+  ))
+  val ls_mask_nextline = ~ls_mask;
+
   val load_data = Wire(UInt(64.W))
+  val load_data_reg = RegNext(load_data)
 
   val dmem = Module(new RAMHelper)
   dmem.io.clk := clock
   dmem.io.en := (uop.fu_code === FU_MEM)
-  dmem.io.rIdx := Cat(Fill(35, 0.U), ls_addr(31, 3))
-  load_data := Mux(ls_addr(2), dmem.io.rdata(63, 32), dmem.io.rdata(31, 0))
+
+  // may need to read/write memory in 2 lines
+  val stall = RegInit(false.B)
+  // half  -> offset = 111
+  // word  -> offset = 101/110/111
+  // dword -> offset != 000
+  stall := Mux(uop.fu_code === FU_MEM, MuxLookup(uop.mem_size, false.B, Array(
+    MEM_HALF  -> (ls_addr_offset === "b111".U),
+    MEM_WORD  -> (ls_addr_offset.asUInt() > "b100".U),
+    MEM_DWORD -> (ls_addr_offset =/= "b000".U)
+  )), false.B)
+
+  when (stall) {
+    stall := false.B
+  }
+
+  // 0 = normal / read line 1, 1 = read line 2
+  val dmem_state = RegInit(0.U(1.W))
+  when (dmem_state === 0.U) {
+    when (stall) { dmem_state := 1.U }
+    dmem.io.rIdx := Cat(Fill(36, 0.U), ls_addr(30, 3))
+    load_data := dmem.io.rdata >> (ls_addr_offset << 3)
+    dmem.io.wIdx := Cat(Fill(36, 0.U), ls_addr(30, 3))
+    dmem.io.wmask := ls_mask
+    dmem.io.wdata := (in2 << (ls_addr_offset << 3))(63, 0)
+  } .otherwise {
+    dmem.io.rIdx := Cat(Fill(36, 0.U), ls_addr_nextline(30, 3))
+    load_data := load_data_reg | (dmem.io.rdata << (ls_addr_offset_nextline << 3))
+    dmem.io.wIdx := Cat(Fill(36, 0.U), ls_addr_nextline(30, 3))
+    dmem.io.wmask := ls_mask_nextline
+    dmem.io.wdata := in2 >> (ls_addr_offset_nextline << 3)
+  }
+
+  dmem.io.wen := (uop.mem_code === MEM_ST)
 
   val ld_out = Wire(UInt(64.W))
   val ldu_out = Wire(UInt(64.W))
@@ -113,20 +163,10 @@ class Execution extends Module {
     MEM_LDU -> ldu_out
   ))
 
-  dmem.io.wIdx := Cat(Fill(35, 0.U), ls_addr(31, 3))
-  dmem.io.wdata := in2
-  dmem.io.wmask := MuxLookup(uop.mem_size, 0.U, Array(
-    MEM_BYTE  -> Cat(Fill(56, 0.U), Fill(8, 1.U)),
-    MEM_HALF  -> Cat(Fill(48, 0.U), Fill(16, 1.U)),
-    MEM_WORD  -> Cat(Fill(32, 0.U), Fill(32, 1.U)),
-    MEM_DWORD -> Fill(64, 1.U)
-  ))
-  dmem.io.wen := (uop.mem_code === MEM_ST)
-
   io.out := alu_out | npc_to_rd | load_out
-  io.jmp := jmp_out
-  io.next_pc := Mux(jmp_out, jmp_addr, uop.npc)
+  io.out_valid := !stall
+  io.next_pc := Mux(jmp_out, jmp_addr, Mux(stall, uop.pc, uop.npc))
 
-  // printf("mem_code = %x, mem_size = %x, dmem.r/wIdx = %x, dmem.rdata = %x, dmem.wmask = %x, dmem.wen = %x\n", 
-  //         uop.mem_code, uop.mem_size, dmem.io.rIdx, dmem.io.rdata, dmem.io.wmask, dmem.io.wen)
+  // printf("mem_code = %x, mem_size = %x, ls_addr = %x, dmem.r/wIdx = %x, dmem.rdata = %x, dmem.wmask = %x, dmem.wen = %x\n", 
+  //         uop.mem_code, uop.mem_size, ls_addr, dmem.io.rIdx, dmem.io.rdata, dmem.io.wmask, dmem.io.wen)
 }

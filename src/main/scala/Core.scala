@@ -37,11 +37,12 @@ class Core extends Module {
   pc := Mux(pc_zero_reset, pc_init, execution.io.next_pc)
 
   val uop_commit = RegNext(uop)
+  val uop_out_valid = RegNext(execution.io.out_valid)
   val dt_ic = Module(new DifftestInstrCommit)
   dt_ic.io.clock    := clock
   dt_ic.io.coreid   := 0.U
   dt_ic.io.index    := 0.U
-  dt_ic.io.valid    := uop_commit.valid
+  dt_ic.io.valid    := uop_commit.valid & uop_out_valid
   dt_ic.io.pc       := uop_commit.pc
   dt_ic.io.instr    := uop_commit.inst
   dt_ic.io.skip     := false.B
