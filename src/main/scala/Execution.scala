@@ -14,9 +14,6 @@ class Execution extends Module {
     val next_pc = Output(UInt(32.W))
   })
 
-  // temporary data memory
-  val dmem = Mem(4096, UInt(8.W))
-
   val uop = io.uop
 
   val in1 = Wire(UInt(64.W))
@@ -84,9 +81,14 @@ class Execution extends Module {
   ))
 
   val ls_addr = in1 + uop.imm
+  val load_data = Wire(UInt(64.W))
 
-  val load_data = Cat(dmem(ls_addr + 7.U), dmem(ls_addr + 6.U), dmem(ls_addr + 5.U), dmem(ls_addr + 4.U),
-                      dmem(ls_addr + 3.U), dmem(ls_addr + 2.U), dmem(ls_addr + 1.U), dmem(ls_addr))
+  val dmem = Module(new RAMHelper)
+  dmem.io.clk := clock
+  dmem.io.en := (uop.fu_code === FU_MEM)
+  dmem.io.rIdx := Cat(Fill(35, 0.U), ls_addr(31, 3))
+  load_data := Mux(ls_addr(2), dmem.io.rdata(63, 32), dmem.io.rdata(31, 0))
+
   val ld_out = Wire(UInt(64.W))
   val ldu_out = Wire(UInt(64.W))
   val load_out = Wire(UInt(64.W))
@@ -110,36 +112,20 @@ class Execution extends Module {
     MEM_LDU -> ldu_out
   ))
 
-  when (uop.mem_code === MEM_ST) {
-    switch (uop.mem_size) {
-      is (MEM_BYTE) { 
-        dmem(ls_addr) := in2(7, 0)
-      }
-      is (MEM_HALF) { 
-        dmem(ls_addr + 1.U) := in2(15, 8)
-        dmem(ls_addr) := in2(7, 0)
-      }
-      is (MEM_WORD) {
-        dmem(ls_addr + 3.U) := in2(31, 24)
-        dmem(ls_addr + 2.U) := in2(23, 16)
-        dmem(ls_addr + 1.U) := in2(15, 8)
-        dmem(ls_addr) := in2(7, 0)
-      }
-      is (MEM_DWORD) {
-        dmem(ls_addr + 7.U) := in2(63, 56)
-        dmem(ls_addr + 6.U) := in2(55, 48)
-        dmem(ls_addr + 5.U) := in2(47, 40)
-        dmem(ls_addr + 4.U) := in2(39, 32)
-        dmem(ls_addr + 3.U) := in2(31, 24)
-        dmem(ls_addr + 2.U) := in2(23, 16)
-        dmem(ls_addr + 1.U) := in2(15, 8)
-        dmem(ls_addr) := in2(7, 0)
-      }
-    }
-  }
+  dmem.io.wIdx := Cat(Fill(35, 0.U), ls_addr(31, 3))
+  dmem.io.wdata := in2
+  dmem.io.wmask := MuxLookup(uop.mem_size, 0.U, Array(
+    MEM_BYTE  -> Cat(Fill(56, 0.U), Fill(8, 1.U)),
+    MEM_HALF  -> Cat(Fill(48, 0.U), Fill(16, 1.U)),
+    MEM_WORD  -> Cat(Fill(32, 0.U), Fill(32, 1.U)),
+    MEM_DWORD -> Fill(64, 1.U)
+  ))
+  dmem.io.wen := (uop.mem_code === MEM_ST)
 
   io.out := alu_out | npc_to_rd | load_out
   io.jmp := jmp_out
   io.next_pc := Mux(jmp_out, jmp_addr, uop.npc)
 
+  // printf("mem_code = %x, mem_size = %x, dmem.r/wIdx = %x, dmem.rdata = %x, dmem.wmask = %x, dmem.wen = %x\n", 
+  //         uop.mem_code, uop.mem_size, dmem.io.rIdx, dmem.io.rdata, dmem.io.wmask, dmem.io.wen)
 }

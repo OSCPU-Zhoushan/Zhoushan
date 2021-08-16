@@ -5,6 +5,7 @@ out/
 .idea_modules/
 test_run_dir/
 
+*.out
 .vscode/
 build/
 obj_dir/

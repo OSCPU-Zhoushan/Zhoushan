@@ -9,7 +9,7 @@ class Core extends Module {
     val inst = Input(UInt(32.W))
   })
 
-  val pc = RegInit(0.U(32.W))
+  val pc = RegInit("h00000000".U(32.W))
   io.pc := pc
 
   val decode = Module(new Decode)
@@ -29,7 +29,10 @@ class Core extends Module {
   execution.io.rs1_data := regFile.io.rs1_data
   execution.io.rs2_data := regFile.io.rs2_data
   regFile.io.rd_data := execution.io.out
-  pc := execution.io.next_pc
+
+  val pc_zero_reset = RegInit(true.B) // todo: fix pc reset
+  pc_zero_reset := false.B
+  pc := Mux(pc_zero_reset, 0.U, execution.io.next_pc)
 
   val uop_commit = RegNext(uop)
   val difftest = Module(new DifftestInstrCommit)

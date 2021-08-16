@@ -14,6 +14,9 @@ verilog:
 	mkdir -p $(BUILD_DIR)
 	mill -i Zhoushan.runMain zhoushan.TopMain -td $(BUILD_DIR)
 
+emu: verilog
+	cd $(ZHOUSHAN_HOME)/difftest && $(MAKE) emu
+
 run: verilog
 	@echo
 	@echo "-- VERILATE ----------------"
