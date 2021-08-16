@@ -89,16 +89,22 @@ class Execution extends Module {
   val ls_addr_offset_nextline = (~ls_addr_offset) + 1.U;
 
   val ls_mask = MuxLookup(ls_addr_offset, 0.U, Array(
-    "b000".U -> "hffffffff".U,
-    "b001".U -> "hfffffff0".U,
-    "b010".U -> "hffffff00".U,
-    "b011".U -> "hfffff000".U,
-    "b100".U -> "hffff0000".U,
-    "b101".U -> "hfff00000".U,
-    "b110".U -> "hff000000".U,
-    "b111".U -> "hf0000000".U
+    "b000".U -> "hffffffffffffffff".U,
+    "b001".U -> "hffffffffffffff00".U,
+    "b010".U -> "hffffffffffff0000".U,
+    "b011".U -> "hffffffffff000000".U,
+    "b100".U -> "hffffffff00000000".U,
+    "b101".U -> "hffffff0000000000".U,
+    "b110".U -> "hffff000000000000".U,
+    "b111".U -> "hff00000000000000".U
   ))
   val ls_mask_nextline = ~ls_mask;
+  val wmask = MuxLookup(uop.mem_size, 0.U, Array(
+    MEM_BYTE  -> "h00000000000000ff".U,
+    MEM_HALF  -> "h000000000000ffff".U,
+    MEM_WORD  -> "h00000000ffffffff".U,
+    MEM_DWORD -> "hffffffffffffffff".U
+  ))
 
   val load_data = Wire(UInt(64.W))
   val load_data_reg = RegNext(load_data)
@@ -129,14 +135,14 @@ class Execution extends Module {
     dmem.io.rIdx := Cat(Fill(36, 0.U), ls_addr(30, 3))
     load_data := dmem.io.rdata >> (ls_addr_offset << 3)
     dmem.io.wIdx := Cat(Fill(36, 0.U), ls_addr(30, 3))
-    dmem.io.wmask := ls_mask
+    dmem.io.wmask := ls_mask & ((wmask << (ls_addr_offset << 3))(63, 0))
     dmem.io.wdata := (in2 << (ls_addr_offset << 3))(63, 0)
   } .otherwise {
     dmem.io.rIdx := Cat(Fill(36, 0.U), ls_addr_nextline(30, 3))
     load_data := load_data_reg | (dmem.io.rdata << (ls_addr_offset_nextline << 3))
     dmem.io.wIdx := Cat(Fill(36, 0.U), ls_addr_nextline(30, 3))
-    dmem.io.wmask := ls_mask_nextline
-    dmem.io.wdata := in2 >> (ls_addr_offset_nextline << 3)
+    dmem.io.wmask := ls_mask_nextline & (wmask >> (ls_addr_offset_nextline << 3)).asUInt()
+    dmem.io.wdata := (in2 >> (ls_addr_offset_nextline << 3)).asUInt()
   }
 
   dmem.io.wen := (uop.mem_code === MEM_ST)
@@ -168,6 +174,6 @@ class Execution extends Module {
   io.out_valid := !stall
   io.next_pc := Mux(jmp_out, jmp_addr, Mux(stall, uop.pc, uop.npc))
 
-  // printf("mem_code = %x, mem_size = %x, ls_addr = %x, dmem.r/wIdx = %x, dmem.rdata = %x, dmem.wmask = %x, dmem.wen = %x\n", 
-  //         uop.mem_code, uop.mem_size, ls_addr, dmem.io.rIdx, dmem.io.rdata, dmem.io.wmask, dmem.io.wen)
+  // printf("pc=%x, mem_c=%x, size=%x, addr=%x, offset=%x, stall=%x, dmem.r/wIdx=%x, rdata=%x, wmask=%x, wdata=%x, wen=%x\n", 
+  //         uop.pc, uop.mem_code, uop.mem_size, ls_addr, ls_addr_offset, stall, dmem.io.rIdx, dmem.io.rdata, dmem.io.wmask, dmem.io.wdata, dmem.io.wen)
 }
