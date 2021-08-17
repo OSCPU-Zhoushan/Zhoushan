@@ -66,5 +66,5 @@ object Instructions {
 }
 
 object Csrs {
-  val mcycle  = 0xb00
+  val mcycle  = "hb00".U
 }

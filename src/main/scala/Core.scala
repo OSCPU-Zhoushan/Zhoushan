@@ -1,6 +1,7 @@
 package zhoushan
 
 import chisel3._
+import chisel3.util.experimental._
 import difftest._
 
 class Core extends Module {
@@ -87,10 +88,10 @@ class Core extends Module {
   dt_ae.io.cause        := 0.U
   dt_ae.io.exceptionPC  := 0.U
 
-  val cycle_cnt = RegInit(0.U(64.W))
+  val cycle_cnt = WireInit(0.U(64.W))
   val instr_cnt = RegInit(0.U(64.W))
 
-  cycle_cnt := cycle_cnt + 1.U
+  BoringUtils.addSink(cycle_cnt, "csr_mcycle")
   instr_cnt := instr_cnt + Mux(uop_commit.valid & uop_out_valid, 1.U, 0.U)
 
   // ref: https://github.com/OSCPU/ysyx/issues/8
