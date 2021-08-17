@@ -94,8 +94,9 @@ class Decode extends Module {
       CSRRWI  ->  List(Y, FU_CSR, ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_RW,  Y, RS_FROM_IMM,  RS_X,        Y, IMM_CSR  ),
       CSRRSI  ->  List(Y, FU_CSR, ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_RS,  Y, RS_FROM_IMM,  RS_X,        Y, IMM_CSR  ),
       CSRRCI  ->  List(Y, FU_CSR, ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_RC,  Y, RS_FROM_IMM,  RS_X,        Y, IMM_CSR  ),
-      // nemu
-      HALT    ->  List(Y, FU_X,   ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_X,   N, RS_X,         RS_X,        N, IMM_X    )
+      // am
+      HALT    ->  List(Y, FU_X,   ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_X,   N, RS_X,         RS_X,        N, IMM_X    ),
+      PUTCH   ->  List(Y, FU_X,   ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_X,   N, RS_X,         RS_X,        N, IMM_X    )
     )
   )
   val (valid : Bool)  :: fu_code :: alu_code :: jmp_code       :: mem_code :: mem_size :: csr_code :: c0 = ctrl

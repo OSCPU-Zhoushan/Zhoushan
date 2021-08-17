@@ -94,13 +94,20 @@ class Core extends Module {
   cycle_cnt := cycle_cnt + 1.U
   instr_cnt := instr_cnt + Mux(uop_commit.valid & uop_out_valid, 1.U, 0.U)
 
+  val rf_a0 = WireInit(0.U(64.W))
+  BoringUtils.addSink(rf_a0, "rf_a0")
+
+  when (uop.inst === Instructions.PUTCH) {
+    printf("%c", rf_a0(7, 0))
+  }
+
   // ref: https://github.com/OSCPU/ysyx/issues/8
   // ref: https://github.com/OSCPU/ysyx/issues/11
   val dt_te = Module(new DifftestTrapEvent)
   dt_te.io.clock    := clock
   dt_te.io.coreid   := 0.U
   dt_te.io.valid    := (uop_commit.inst === "h0000006b".U)
-  dt_te.io.code     := rf.io.trap_code
+  dt_te.io.code     := rf_a0(2, 0)
   dt_te.io.pc       := uop_commit.pc
   dt_te.io.cycleCnt := cycle_cnt
   dt_te.io.instrCnt := instr_cnt
