@@ -12,6 +12,7 @@ class RegFile extends Module {
     val rd_addr = Input(UInt(5.W))
     val rd_data = Input(UInt(64.W))
     val rd_en = Input(Bool())
+    val trap_code = Output(UInt(3.W))
   })
 
   // todo: Don't use Mem type for ASIC
@@ -29,4 +30,6 @@ class RegFile extends Module {
   dt_ar.io.clock  := clock
   dt_ar.io.coreid := 0.U
   dt_ar.io.gpr    := rf
+
+  io.trap_code := rf(10)(2, 0)  // result in a0
 }
