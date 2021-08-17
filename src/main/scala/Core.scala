@@ -9,15 +9,12 @@ class Core extends Module {
     val dmem = Flipped(new RamIO)
   })
 
-  val pc_init = "h80000000".U(32.W)
-  val pc = RegInit(pc_init)
-  val inst = io.imem.rdata(31, 0)
-  io.imem.en := true.B
-  io.imem.addr := pc.asUInt()
+  val fetch = Module(new InstFetch)
+  io.imem <> fetch.io.imem
 
   val decode = Module(new Decode)
-  decode.io.pc := pc
-  decode.io.inst := inst
+  decode.io.pc := fetch.io.pc
+  decode.io.inst := fetch.io.inst
 
   val uop = decode.io.uop
 
@@ -34,9 +31,9 @@ class Core extends Module {
   rf.io.rd_data := execution.io.out
   execution.io.dmem <> io.dmem
 
-  val pc_zero_reset = RegInit(true.B) // todo: fix pc reset
-  pc_zero_reset := false.B
-  pc := Mux(pc_zero_reset, pc_init, execution.io.next_pc)
+  fetch.io.jmp := execution.io.jmp
+  fetch.io.jmp_pc := execution.io.jmp_pc
+  fetch.io.stall := !execution.io.out_valid
 
   val uop_commit = RegNext(uop)
   val uop_out_valid = RegNext(execution.io.out_valid)

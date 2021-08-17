@@ -4,44 +4,31 @@ import chisel3._
 import chisel3.util._
 import zhoushan.Constant._
 
-class Execution extends Module {
+trait Ext {
+  def SignExt32_64(x: UInt) : UInt = Cat(Fill(32, x(31)), x)
+  def ZeroExt32_64(x: UInt) : UInt = Cat(Fill(32, 0.U), x)
+}
+
+class Alu extends Module with Ext {
   val io = IO(new Bundle {
     val uop = Input(new MicroOp())
-    val rs1_data = Input(UInt(64.W))
-    val rs2_data = Input(UInt(64.W))
+    val in1 = Input(UInt(64.W))
+    val in2 = Input(UInt(64.W))
     val out = Output(UInt(64.W))
-    val out_valid = Output(Bool())
-    val next_pc = Output(UInt(32.W))
-    val dmem = Flipped(new RamIO)
+    val jmp = Output(Bool())
+    val jmp_pc = Output(UInt(32.W))
   })
 
   val uop = io.uop
-  val imm_sign_ext = Cat(Fill(32, uop.imm(31)), uop.imm)
-  val in1_0, in1, in2_0, in2 = Wire(UInt(64.W))
-
-  in1_0 := MuxLookup(uop.rs1_src, 0.U, Array(
-    RS_FROM_RF  -> io.rs1_data,
-    RS_FROM_IMM -> imm_sign_ext,
-    RS_FROM_PC  -> Cat(Fill(32, 0.U), uop.pc),
-    RS_FROM_NPC -> Cat(Fill(32, 0.U), uop.npc)
-  )).asUInt()
-
-  in2_0 := MuxLookup(uop.rs2_src, 0.U, Array(
-    RS_FROM_RF  -> io.rs2_data,
-    RS_FROM_IMM -> imm_sign_ext,
-    RS_FROM_PC  -> Cat(Fill(32, 0.U), uop.pc),
-    RS_FROM_NPC -> Cat(Fill(32, 0.U), uop.npc)
-  )).asUInt()
-
-  in1 := Mux(uop.w_type, Cat(Fill(32, Mux(uop.alu_code === ALU_SRL, 0.U, in1_0(31))), in1_0(31, 0)), in1_0)
-  in2 := Mux(uop.w_type, Cat(Fill(32, in1_0(31)), in2_0(31, 0)), in2_0)
+  val in1 = io.in1
+  val in2 = io.in2
 
   val shamt = Wire(UInt(6.W))
-  shamt := Mux(uop.w_type, in2(4, 0).asUInt(), in2(5, 0)) 
+  shamt := Mux(uop.w_type, in2(4, 0).asUInt(), in2(5, 0))
 
   val alu_out_0, alu_out = Wire(UInt(64.W))
-  val jmp_out = Wire(Bool())
-  val jmp_addr = Wire(UInt(32.W))
+  val jmp = Wire(Bool())
+  val jmp_pc = Wire(UInt(32.W))
   val npc_to_rd = Wire(UInt(64.W))
 
   alu_out_0 := MuxLookup(uop.alu_code, 0.U, Array(
@@ -57,9 +44,9 @@ class Execution extends Module {
     ALU_SRA  -> (in1.asSInt() >> shamt).asUInt()
   ))
 
-  alu_out := Mux(uop.w_type, Cat(Fill(32, alu_out_0(31)), alu_out_0(31, 0)), alu_out_0)
+  alu_out := Mux(uop.w_type, SignExt32_64(alu_out_0(31, 0)), alu_out_0)
 
-  jmp_out := MuxLookup(uop.jmp_code, false.B, Array(
+  jmp := MuxLookup(uop.jmp_code, false.B, Array(
     JMP_JAL  -> true.B,
     JMP_JALR -> true.B,
     JMP_BEQ  -> (in1 === in2),
@@ -70,28 +57,38 @@ class Execution extends Module {
     JMP_BGEU -> (in1.asUInt() >= in2.asUInt())
   ))
 
-  jmp_addr := MuxLookup(uop.jmp_code, uop.npc, Array(
-    JMP_JAL  -> (uop.pc + uop.imm),
-    JMP_JALR -> (in1(31, 0) + uop.imm),
-    JMP_BEQ  -> Mux(jmp_out, uop.pc + uop.imm, uop.npc),
-    JMP_BNE  -> Mux(jmp_out, uop.pc + uop.imm, uop.npc),
-    JMP_BLT  -> Mux(jmp_out, uop.pc + uop.imm, uop.npc),
-    JMP_BGE  -> Mux(jmp_out, uop.pc + uop.imm, uop.npc),
-    JMP_BLTU -> Mux(jmp_out, uop.pc + uop.imm, uop.npc),
-    JMP_BGEU -> Mux(jmp_out, uop.pc + uop.imm, uop.npc)
-  ))
+  jmp_pc := Mux(uop.jmp_code === JMP_JALR, in1(31, 0), uop.pc) + uop.imm
 
   npc_to_rd := MuxLookup(uop.jmp_code, 0.U, Array(
-    JMP_JAL  -> Cat(Fill(32, 0.U), uop.npc),
-    JMP_JALR -> Cat(Fill(32, 0.U), uop.npc)
+    JMP_JAL  -> ZeroExt32_64(uop.npc),
+    JMP_JALR -> ZeroExt32_64(uop.npc)
   ))
 
-  val ls_addr = in1 + imm_sign_ext
-  val ls_addr_offset = ls_addr(2, 0)
-  val ls_addr_nextline = ls_addr + "b1000".U
-  val ls_addr_offset_nextline = (~ls_addr_offset) + 1.U;
+  io.out := alu_out | npc_to_rd
+  io.jmp := jmp
+  io.jmp_pc := jmp_pc
+}
 
-  val ls_mask = MuxLookup(ls_addr_offset, 0.U, Array(
+class Lsu extends Module with Ext {
+  val io = IO(new Bundle {
+    val uop = Input(new MicroOp())
+    val in1 = Input(UInt(64.W))
+    val in2 = Input(UInt(64.W))
+    val out = Output(UInt(64.W))
+    val out_valid = Output(Bool())
+    val dmem = Flipped(new RamIO)
+  })
+
+  val uop = io.uop
+  val in1 = io.in1
+  val in2 = io.in2
+
+  val addr = in1 + SignExt32_64(uop.imm)
+  val addr_offset = addr(2, 0)
+  val addr_nextline = addr + "b1000".U
+  val addr_offset_nextline = (~addr_offset) + 1.U;
+
+  val mask = MuxLookup(addr_offset, 0.U, Array(
     "b000".U -> "hffffffffffffffff".U,
     "b001".U -> "hffffffffffffff00".U,
     "b010".U -> "hffffffffffff0000".U,
@@ -101,7 +98,7 @@ class Execution extends Module {
     "b110".U -> "hffff000000000000".U,
     "b111".U -> "hff00000000000000".U
   ))
-  val ls_mask_nextline = ~ls_mask;
+  val mask_nextline = ~mask;
   val wmask = MuxLookup(uop.mem_size, 0.U, Array(
     MEM_BYTE  -> "h00000000000000ff".U,
     MEM_HALF  -> "h000000000000ffff".U,
@@ -118,9 +115,9 @@ class Execution extends Module {
   // word  -> offset = 101/110/111
   // dword -> offset != 000
   stall := Mux(uop.fu_code === FU_MEM, MuxLookup(uop.mem_size, false.B, Array(
-    MEM_HALF  -> (ls_addr_offset === "b111".U),
-    MEM_WORD  -> (ls_addr_offset.asUInt() > "b100".U),
-    MEM_DWORD -> (ls_addr_offset =/= "b000".U)
+    MEM_HALF  -> (addr_offset === "b111".U),
+    MEM_WORD  -> (addr_offset.asUInt() > "b100".U),
+    MEM_DWORD -> (addr_offset =/= "b000".U)
   )), false.B)
 
   when (stall) {
@@ -131,15 +128,15 @@ class Execution extends Module {
   val dmem_state = RegInit(0.U(1.W))
   when (dmem_state === 0.U) {
     when (stall) { dmem_state := 1.U }
-    io.dmem.addr := ls_addr
-    load_data := io.dmem.rdata >> (ls_addr_offset << 3)
-    io.dmem.wmask := ls_mask & ((wmask << (ls_addr_offset << 3))(63, 0))
-    io.dmem.wdata := (in2 << (ls_addr_offset << 3))(63, 0)
+    io.dmem.addr := addr
+    load_data := io.dmem.rdata >> (addr_offset << 3)
+    io.dmem.wmask := mask & ((wmask << (addr_offset << 3))(63, 0))
+    io.dmem.wdata := (in2 << (addr_offset << 3))(63, 0)
   } .otherwise {
-    io.dmem.addr := ls_addr_nextline
-    load_data := load_data_reg | (io.dmem.rdata << (ls_addr_offset_nextline << 3))
-    io.dmem.wmask := ls_mask_nextline & (wmask >> (ls_addr_offset_nextline << 3)).asUInt()
-    io.dmem.wdata := (in2 >> (ls_addr_offset_nextline << 3)).asUInt()
+    io.dmem.addr := addr_nextline
+    load_data := load_data_reg | (io.dmem.rdata << (addr_offset_nextline << 3))
+    io.dmem.wmask := mask_nextline & (wmask >> (addr_offset_nextline << 3)).asUInt()
+    io.dmem.wdata := (in2 >> (addr_offset_nextline << 3)).asUInt()
   }
 
   io.dmem.en := (uop.fu_code === FU_MEM)
@@ -168,10 +165,55 @@ class Execution extends Module {
     MEM_LDU -> ldu_out
   ))
 
-  io.out := alu_out | npc_to_rd | load_out
+  io.out := load_out
   io.out_valid := !stall
-  io.next_pc := Mux(jmp_out, jmp_addr, Mux(stall, uop.pc, uop.npc))
+}
 
-  // printf("pc=%x, mem_c=%x, addr=%x, stall=%x, rdata=%x, wmask=%x, wdata=%x, wen=%x\n", 
-  //         uop.pc, uop.mem_code, ls_addr, stall, io.dmem.rdata, io.dmem.wmask, io.dmem.wdata, io.dmem.wen)
+class Execution extends Module with Ext {
+  val io = IO(new Bundle {
+    val uop = Input(new MicroOp())
+    val rs1_data = Input(UInt(64.W))
+    val rs2_data = Input(UInt(64.W))
+    val out = Output(UInt(64.W))
+    val out_valid = Output(Bool())
+    val jmp = Output(Bool())
+    val jmp_pc = Output(UInt(32.W))
+    val dmem = Flipped(new RamIO)
+  })
+
+  val uop = io.uop
+  val in1_0, in1, in2_0, in2 = Wire(UInt(64.W))
+
+  in1_0 := MuxLookup(uop.rs1_src, 0.U, Array(
+    RS_FROM_RF  -> io.rs1_data,
+    RS_FROM_IMM -> SignExt32_64(uop.imm),
+    RS_FROM_PC  -> ZeroExt32_64(uop.pc),
+    RS_FROM_NPC -> ZeroExt32_64(uop.npc)
+  )).asUInt()
+
+  in2_0 := MuxLookup(uop.rs2_src, 0.U, Array(
+    RS_FROM_RF  -> io.rs2_data,
+    RS_FROM_IMM -> SignExt32_64(uop.imm),
+    RS_FROM_PC  -> ZeroExt32_64(uop.pc),
+    RS_FROM_NPC -> ZeroExt32_64(uop.npc)
+  )).asUInt()
+
+  in1 := Mux(uop.w_type, Mux(uop.alu_code === ALU_SRL, ZeroExt32_64(in1_0(31, 0)), SignExt32_64(in1_0(31, 0))), in1_0)
+  in2 := Mux(uop.w_type, SignExt32_64(in2_0(31, 0)), in2_0)
+
+  val alu = Module(new Alu)
+  alu.io.uop := uop
+  alu.io.in1 := in1
+  alu.io.in2 := in2
+
+  val lsu = Module(new Lsu)
+  lsu.io.uop := uop
+  lsu.io.in1 := in1
+  lsu.io.in2 := in2
+  lsu.io.dmem <> io.dmem
+
+  io.out := alu.io.out | lsu.io.out
+  io.out_valid := lsu.io.out_valid
+  io.jmp := alu.io.jmp
+  io.jmp_pc := alu.io.jmp_pc
 }
