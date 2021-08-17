@@ -193,12 +193,15 @@ class Csr extends Module {
     CSR_RC -> (rdata & ~in1)
   ))
 
-  val mcycle = RegInit(0.U(64.W))
-  mcycle := mcycle + 1.U
-  BoringUtils.addSource(mcycle, "csr_mcycle")
+  val mcycle = WireInit(0.U(64.W))
+  BoringUtils.addSink(mcycle, "csr_mcycle")
+
+  val minstret = WireInit(0.U(64.W))
+  BoringUtils.addSink(minstret, "csr_minstret")
 
   val csr_map = Map(
-    RegMap(Csrs.mcycle, mcycle)
+    RegMap(Csrs.mcycle, mcycle),
+    RegMap(Csrs.minstret, minstret)
   )
 
   RegMap.access(csr_map, addr, rdata, ren, wdata, wen)

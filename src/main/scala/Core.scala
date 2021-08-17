@@ -88,10 +88,10 @@ class Core extends Module {
   dt_ae.io.cause        := 0.U
   dt_ae.io.exceptionPC  := 0.U
 
-  val cycle_cnt = WireInit(0.U(64.W))
+  val cycle_cnt = RegInit(0.U(64.W))
   val instr_cnt = RegInit(0.U(64.W))
 
-  BoringUtils.addSink(cycle_cnt, "csr_mcycle")
+  cycle_cnt := cycle_cnt + 1.U
   instr_cnt := instr_cnt + Mux(uop_commit.valid & uop_out_valid, 1.U, 0.U)
 
   // ref: https://github.com/OSCPU/ysyx/issues/8
@@ -105,4 +105,6 @@ class Core extends Module {
   dt_te.io.cycleCnt := cycle_cnt
   dt_te.io.instrCnt := instr_cnt
 
+  BoringUtils.addSource(cycle_cnt, "csr_mcycle")
+  BoringUtils.addSource(instr_cnt, "csr_minstret")
 }
