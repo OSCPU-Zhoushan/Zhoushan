@@ -14,13 +14,13 @@ class Csr extends Module {
 
   val uop = io.uop
   val in1 = io.in1
-  val is_csr = (uop.csr_code =/= CSR_X)
+  val csr_rw = (uop.csr_code === CSR_RW) || (uop.csr_code === CSR_RS) || (uop.csr_code === CSR_RC)
 
   val addr = uop.inst(31, 20)
   val rdata = Wire(UInt(64.W))
-  val ren = is_csr
+  val ren = csr_rw
   val wdata = Wire(UInt(64.W))
-  val wen = is_csr && (in1 =/= 0.U)
+  val wen = csr_rw && (in1 =/= 0.U)
 
   wdata := MuxLookup(uop.csr_code, 0.U, Array(
     CSR_RW -> in1,

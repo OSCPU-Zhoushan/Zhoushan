@@ -64,7 +64,8 @@ trait Constant {
   val CSR_RW    = 1.asUInt(3.W)
   val CSR_RS    = 2.asUInt(3.W)
   val CSR_RC    = 3.asUInt(3.W)
-  val CSR_J     = 4.asUInt(3.W)
+  val CSR_ECALL = 4.asUInt(3.W)
+  val CSR_MRET  = 5.asUInt(3.W)
 }
 
 object Constant extends Constant { }
