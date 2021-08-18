@@ -15,7 +15,7 @@ verilog:
 	mill -i Zhoushan.runMain zhoushan.TopMain -td $(BUILD_DIR)
 
 emu: verilog
-	cd $(ZHOUSHAN_HOME)/difftest && $(MAKE) emu
+	cd $(ZHOUSHAN_HOME)/difftest && $(MAKE) $1 emu
 
 run: verilog
 	@echo
