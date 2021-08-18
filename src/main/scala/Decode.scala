@@ -73,10 +73,10 @@ class Decode extends Module {
       AND     ->  List(Y, FU_ALU, ALU_AND,  JMP_X,    MEM_X,   MEM_X,     CSR_X,   N, RS_FROM_RF,   RS_FROM_RF,  Y, IMM_X    ),
       // FENCE
       // FENCE_I
-      ECALL   ->  List(Y, FU_CSR, ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_J,   N, RS_FROM_X,    RS_FROM_X,   N, IMM_X    ),
+      ECALL   ->  List(Y, FU_CSR, ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_J,   N, RS_X,         RS_X,   N, IMM_X    ),
       // EBREAK
-      MRET    ->  List(Y, FU_CSR, ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_J,   N, RS_FROM_X,    RS_FROM_X,   N, IMM_X    ),
-      WFI     ->  List(Y, FU_ALU, ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_X,   N, RS_FROM_X,    RS_FROM_X,   N, IMM_X    ),
+      MRET    ->  List(Y, FU_CSR, ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_J,   N, RS_X,         RS_X,   N, IMM_X    ),
+      WFI     ->  List(Y, FU_ALU, ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_X,   N, RS_X,         RS_X,   N, IMM_X    ),
       // RV64I
       LWU     ->  List(Y, FU_MEM, ALU_X,    JMP_X,    MEM_LDU, MEM_WORD,  CSR_X,   N, RS_FROM_RF,   RS_FROM_IMM, Y, IMM_I    ),
       LD      ->  List(Y, FU_MEM, ALU_X,    JMP_X,    MEM_LDU, MEM_DWORD, CSR_X,   N, RS_FROM_RF,   RS_FROM_IMM, Y, IMM_I    ),
