@@ -91,12 +91,12 @@ class Decode extends Module {
       SRLW    ->  List(Y, FU_ALU, ALU_SRL,  JMP_X,    MEM_X,   MEM_X,     CSR_X,     Y, RS_FROM_RF,   RS_FROM_RF,  Y, IMM_X    ),
       SRAW    ->  List(Y, FU_ALU, ALU_SRA,  JMP_X,    MEM_X,   MEM_X,     CSR_X,     Y, RS_FROM_RF,   RS_FROM_RF,  Y, IMM_X    ),
       // CSR
-      CSRRW   ->  List(Y, FU_CSR, ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_RW,    Y, RS_FROM_RF,   RS_X,        Y, IMM_X    ),
-      CSRRS   ->  List(Y, FU_CSR, ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_RS,    Y, RS_FROM_RF,   RS_X,        Y, IMM_X    ),
-      CSRRC   ->  List(Y, FU_CSR, ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_RC,    Y, RS_FROM_RF,   RS_X,        Y, IMM_X    ),
-      CSRRWI  ->  List(Y, FU_CSR, ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_RW,    Y, RS_FROM_IMM,  RS_X,        Y, IMM_CSR  ),
-      CSRRSI  ->  List(Y, FU_CSR, ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_RS,    Y, RS_FROM_IMM,  RS_X,        Y, IMM_CSR  ),
-      CSRRCI  ->  List(Y, FU_CSR, ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_RC,    Y, RS_FROM_IMM,  RS_X,        Y, IMM_CSR  ),
+      CSRRW   ->  List(Y, FU_CSR, ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_RW,    N, RS_FROM_RF,   RS_X,        Y, IMM_X    ),
+      CSRRS   ->  List(Y, FU_CSR, ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_RS,    N, RS_FROM_RF,   RS_X,        Y, IMM_X    ),
+      CSRRC   ->  List(Y, FU_CSR, ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_RC,    N, RS_FROM_RF,   RS_X,        Y, IMM_X    ),
+      CSRRWI  ->  List(Y, FU_CSR, ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_RW,    N, RS_FROM_IMM,  RS_X,        Y, IMM_CSR  ),
+      CSRRSI  ->  List(Y, FU_CSR, ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_RS,    N, RS_FROM_IMM,  RS_X,        Y, IMM_CSR  ),
+      CSRRCI  ->  List(Y, FU_CSR, ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_RC,    N, RS_FROM_IMM,  RS_X,        Y, IMM_CSR  ),
       // am
       HALT    ->  List(Y, FU_X,   ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_X,     N, RS_X,         RS_X,        N, IMM_X    ),
       PUTCH   ->  List(Y, FU_X,   ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_X,     N, RS_X,         RS_X,        N, IMM_X    )

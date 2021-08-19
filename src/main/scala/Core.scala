@@ -109,28 +109,6 @@ class Core extends Module {
   //        uop_commit.valid, uop_commit.pc, uop_commit.inst, uop_commit.fu_code,
   //        uop_commit.rs1_addr, uop_commit.rs2_addr, uop_commit.rd_addr, uop_commit.imm)
 
-  val dt_cs = Module(new DifftestCSRState)
-  dt_cs.io.clock          := clock
-  dt_cs.io.coreid         := 0.U
-  dt_cs.io.priviledgeMode := 0.U
-  dt_cs.io.mstatus        := 0.U
-  dt_cs.io.sstatus        := 0.U
-  dt_cs.io.mepc           := 0.U
-  dt_cs.io.sepc           := 0.U
-  dt_cs.io.mtval          := 0.U
-  dt_cs.io.stval          := 0.U
-  dt_cs.io.mtvec          := 0.U
-  dt_cs.io.stvec          := 0.U
-  dt_cs.io.mcause         := 0.U
-  dt_cs.io.scause         := 0.U
-  dt_cs.io.satp           := 0.U
-  dt_cs.io.mip            := 0.U
-  dt_cs.io.mie            := 0.U
-  dt_cs.io.mscratch       := 0.U
-  dt_cs.io.sscratch       := 0.U
-  dt_cs.io.mideleg        := 0.U
-  dt_cs.io.medeleg        := 0.U
-
   val dt_ae = Module(new DifftestArchEvent)
   dt_ae.io.clock        := clock
   dt_ae.io.coreid       := 0.U

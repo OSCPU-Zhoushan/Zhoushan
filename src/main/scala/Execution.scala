@@ -59,9 +59,19 @@ class Execution extends Module with Ext {
 
   val busy = lsu.io.busy
 
+  val jmp = MuxLookup(uop.fu_code, false.B, Array(
+    FU_JMP -> alu.io.jmp,
+    FU_CSR -> csr.io.jmp
+  ))
+
+  val jmp_pc = MuxLookup(uop.fu_code, 0.U, Array(
+    FU_JMP -> alu.io.jmp_pc,
+    FU_CSR -> csr.io.jmp_pc
+  ))
+
   io.uop_out := io.uop
   io.result := alu.io.out | lsu.io.out | csr.io.out
   io.busy := busy
-  io.jmp := alu.io.jmp
-  io.jmp_pc := alu.io.jmp_pc
+  io.jmp := jmp
+  io.jmp_pc := jmp_pc
 }
