@@ -94,4 +94,29 @@ class MicroOp extends Bundle {
   val rd_en     = Bool()
 
   val imm       = UInt(32.W)
+
+  def nop() : Unit = {
+    valid    := false.B
+    pc       := 0.U
+    npc      := 0.U
+    inst     := 0.U
+    fu_code  := Constant.FU_X
+    alu_code := Constant.ALU_X
+    jmp_code := Constant.JMP_X
+    mem_code := Constant.MEM_X
+    mem_size := Constant.MEM_X
+    csr_code := Constant.CSR_X
+    w_type   := false.B
+    rs1_src  := Constant.RS_X
+    rs2_src  := Constant.RS_X
+    rs1_addr := 0.U
+    rs2_addr := 0.U
+    rd_addr  := 0.U
+    rd_en    := false.B
+    imm      := 0.U
+  }
+}
+
+object MicroOp {
+  def nop() : Unit = (new MicroOp).nop()
 }

@@ -14,8 +14,9 @@ class Execution extends Module with Ext {
     val uop = Input(new MicroOp())
     val rs1_data = Input(UInt(64.W))
     val rs2_data = Input(UInt(64.W))
-    val out = Output(UInt(64.W))
-    val out_valid = Output(Bool())
+    val uop_out = Output(new MicroOp())
+    val result = Output(UInt(64.W))
+    val busy = Output(Bool())
     val jmp = Output(Bool())
     val jmp_pc = Output(UInt(32.W))
     val dmem = Flipped(new RamIO)
@@ -56,8 +57,11 @@ class Execution extends Module with Ext {
   csr.io.uop := uop
   csr.io.in1 := in1
 
-  io.out := alu.io.out | lsu.io.out | csr.io.out
-  io.out_valid := lsu.io.out_valid
+  val busy = lsu.io.busy
+
+  io.uop_out := io.uop
+  io.result := alu.io.out | lsu.io.out | csr.io.out
+  io.busy := busy
   io.jmp := alu.io.jmp
   io.jmp_pc := alu.io.jmp_pc
 }
