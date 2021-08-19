@@ -18,11 +18,16 @@ class InstFetch extends Module {
   io.imem.en := true.B
   io.imem.addr := pc.asUInt()
 
+  val bp = Module(new BrPredictor)
+  bp.io.pc := pc
+  bp.io.inst := inst
+  bp.io.is_jal := (inst === Instructions.JAL)
+
   val pc_zero_reset = RegInit(true.B) // todo: fix pc reset
   pc_zero_reset := false.B
   pc := Mux(pc_zero_reset, pc_init, 
         Mux(io.jmp, io.jmp_pc, 
-        Mux(io.stall, pc, pc + 4.U)))
+        Mux(io.stall, pc, bp.io.pred_pc)))
 
   io.pc := pc
   io.inst := inst
