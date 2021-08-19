@@ -10,7 +10,7 @@ class Lsu extends Module with Ext {
     val in1 = Input(UInt(64.W))
     val in2 = Input(UInt(64.W))
     val out = Output(UInt(64.W))
-    val out_valid = Output(Bool())
+    val busy = Output(Bool())
     val dmem = Flipped(new RamIO)
   })
 
@@ -101,5 +101,5 @@ class Lsu extends Module with Ext {
   ))
 
   io.out := load_out
-  io.out_valid := !stall
+  io.busy := stall
 }

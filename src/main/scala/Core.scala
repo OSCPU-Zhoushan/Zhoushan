@@ -29,15 +29,15 @@ class Core extends Module {
   execution.io.uop := uop
   execution.io.rs1_data := rf.io.rs1_data
   execution.io.rs2_data := rf.io.rs2_data
-  rf.io.rd_data := execution.io.out
+  rf.io.rd_data := execution.io.result
   execution.io.dmem <> io.dmem
 
   fetch.io.jmp := execution.io.jmp
   fetch.io.jmp_pc := execution.io.jmp_pc
-  fetch.io.stall := !execution.io.out_valid
+  fetch.io.stall := execution.io.busy
 
   val uop_commit = RegNext(uop)
-  val uop_out_valid = RegNext(execution.io.out_valid)
+  val uop_out_valid = RegNext(!execution.io.busy)
   val dt_ic = Module(new DifftestInstrCommit)
   dt_ic.io.clock    := clock
   dt_ic.io.coreid   := 0.U
@@ -49,7 +49,7 @@ class Core extends Module {
   dt_ic.io.isRVC    := false.B
   dt_ic.io.scFailed := false.B
   dt_ic.io.wen      := uop_commit.rd_en
-  dt_ic.io.wdata    := RegNext(execution.io.out)
+  dt_ic.io.wdata    := RegNext(execution.io.result)
   dt_ic.io.wdest    := uop_commit.rd_addr
 
   // printf("valid = %x, pc = %x, inst = %x, wen = %x, wdata = %x, wdest = %x\n",
