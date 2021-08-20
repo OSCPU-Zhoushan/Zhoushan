@@ -14,17 +14,9 @@ class Execution extends Module with Ext {
     val uop = Input(new MicroOp)
     val rs1_data = Input(UInt(64.W))
     val rs2_data = Input(UInt(64.W))
-<<<<<<< HEAD
-    val uop_out = Output(new MicroOp())
-    val result = Output(UInt(64.W))
-    val busy = Output(Bool())
-    val jmp = Output(Bool())
-    val jmp_pc = Output(UInt(32.W))
-=======
     val result = Output(UInt(64.W))
     val busy = Output(Bool())
     val jmp_packet = Output(new JmpPacket)
->>>>>>> dev/ScalarPipeline
     val dmem = Flipped(new RamIO)
   })
 
