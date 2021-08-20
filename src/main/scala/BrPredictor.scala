@@ -9,8 +9,7 @@ class BrPredictorIO extends Bundle {
   val inst = Input(UInt(32.W))
   val is_br = Input(Bool())
   // from EX stage
-  val jmp = Input(Bool())
-  val jmp_pc = Input(UInt(32.W))
+  val jmp_packet = Input(new JmpPacket)
   // prediction result
   val pred_br = Output(Bool())
   val pred_pc = Output(UInt(32.W))
@@ -21,11 +20,11 @@ class BrPredictor extends Module {
 
   val BhtWidth = 6
   val BhtSize = 256
-  val BhtAddrSize = log2Up(BhtSize)
+  val BhtAddrSize = log2Up(BhtSize)     // 8
   val PhtWidth = 8
-  val PhtIndexSize = log2Up(PhtWidth)
+  val PhtIndexSize = log2Up(PhtWidth)   // 3 
   val PhtSize = 256
-  val PhtAddrSize = log2Up(PhtSize)
+  val PhtAddrSize = log2Up(PhtSize)     // 8
 
   val pc = io.pc
   val inst = io.inst
@@ -35,37 +34,17 @@ class BrPredictor extends Module {
   val pred_pc = WireInit(0.U(32.W))
 
   val bht = RegInit(VecInit(Seq.fill(BhtSize)(0.U(BhtWidth.W))))
-  val pht = RegInit(VecInit(Seq.fill(PhtWidth)(VecInit(Seq.fill(PhtSize)(0.U(2.W))))))
+  val pht = RegInit(VecInit(Seq.fill(PhtWidth)(VecInit(Seq.fill(PhtSize)(1.U(2.W))))))
 
-  pred_br := false.B
+  val bht_raddr = pc(1 + BhtAddrSize, 2)
+  val pht_raddr = bht(bht_raddr)
+  val pht_rindex = pc(7 + PhtIndexSize, 8)
+  val pred_result = pht(pht_rindex)(pht_raddr)
+
+  pred_br := pred_result(1).asBool()
   pred_pc := pc + 4.U
 
   io.pred_br := pred_br
   io.pred_pc := pred_pc
-
-  // 2-bit saturation counter
-
-  // val strong_nt :: weak_nt :: weak_t :: strong_t :: Nil = Enum(4)
-  // val state = RegInit(weak_nt)
-
-  // when (io.jmp_update) {
-  //   state := MuxLookup(state, weak_nt, Array(
-  //     strong_nt -> Mux(io.jmp, weak_nt, strong_nt),
-  //     weak_nt   -> Mux(io.jmp, weak_t, strong_nt),
-  //     weak_t    -> Mux(io.jmp, strong_t, weak_nt),
-  //     strong_t  -> Mux(io.jmp, strong_t, weak_t)
-  //   ))
-  // }
-
-  // when (io.jmp_update) {
-  //   switch (state) {
-  //     is (strong_nt) { state := Mux(io.jmp, weak_nt, strong_nt) }
-  //     is (weak_nt)   { state := Mux(io.jmp, weak_t, strong_nt)  }
-  //     is (weak_t)    { state := Mux(io.jmp, strong_t, weak_nt)  }
-  //     is (strong_t)  { state := Mux(io.jmp, strong_t, weak_t)  }
-  //   }
-  // }
-
-  // io.pred_br := (state === weak_t) || (state === strong_t)
 
 }

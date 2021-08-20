@@ -78,10 +78,9 @@ class Core extends Module {
 
   /* ----- Pipeline Control Signals -------------- */
 
-  fetch.io.jmp := execution.io.jmp
-  fetch.io.jmp_pc := execution.io.jmp_pc
+  fetch.io.jmp_packet <> execution.io.jmp_packet
   fetch.io.stall := stall
-  flush := execution.io.jmp
+  flush := execution.io.jmp_packet.jmp
   stall := execution.io.busy
 
   /* ----- Difftest ------------------------------ */

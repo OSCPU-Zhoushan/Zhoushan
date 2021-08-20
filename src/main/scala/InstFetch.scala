@@ -5,8 +5,7 @@ import chisel3._
 class InstFetch extends Module {
   val io = IO(new Bundle {
     val imem = Flipped(new RomIO)
-    val jmp = Input(Bool())
-    val jmp_pc = Input(UInt(32.W))
+    val jmp_packet = Input(new JmpPacket)
     val stall = Input(Bool())
     val out = Output(new InstPacket)
   })
@@ -14,8 +13,8 @@ class InstFetch extends Module {
   val pc_init = "h80000000".U(32.W)
   val pc = RegInit(pc_init)
   val inst = io.imem.rdata(31, 0)
-  val jmp = io.jmp
-  val jmp_pc = io.jmp_pc
+  val jmp = io.jmp_packet.jmp
+  val jmp_pc = io.jmp_packet.jmp_pc
 
   io.imem.en := true.B
   io.imem.addr := pc.asUInt()
@@ -27,8 +26,7 @@ class InstFetch extends Module {
                  (inst === Instructions.BEQ) || (inst === Instructions.BNE) ||
                  (inst === Instructions.BLT) || (inst === Instructions.BLTU) ||
                  (inst === Instructions.BGE) || (inst === Instructions.BGEU);
-  bp.io.jmp := jmp
-  bp.io.jmp_pc := jmp_pc
+  bp.io.jmp_packet <> io.jmp_packet
 
   val pc_zero_reset = RegInit(true.B) // todo: fix pc reset
   pc_zero_reset := false.B

@@ -126,3 +126,10 @@ class MicroOp extends Bundle {
 object MicroOp {
   def nop() : Unit = (new MicroOp).nop()
 }
+
+class JmpPacket extends Bundle {
+  val valid = Bool()
+  val inst_pc = UInt(32.W)
+  val jmp = Bool()
+  val jmp_pc = UInt(32.W)
+}

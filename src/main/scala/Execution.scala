@@ -16,8 +16,7 @@ class Execution extends Module with Ext {
     val rs2_data = Input(UInt(64.W))
     val result = Output(UInt(64.W))
     val busy = Output(Bool())
-    val jmp = Output(Bool())
-    val jmp_pc = Output(UInt(32.W))
+    val jmp_packet = Output(new JmpPacket)
     val dmem = Flipped(new RamIO)
   })
 
@@ -70,6 +69,9 @@ class Execution extends Module with Ext {
 
   io.result := alu.io.out | lsu.io.out | csr.io.out
   io.busy := busy
-  io.jmp := jmp
-  io.jmp_pc := jmp_pc
+  io.jmp_packet.valid := (uop.fu_code === FU_JMP) || (uop.csr_code === CSR_ECALL) ||
+                         (uop.csr_code === CSR_MRET)
+  io.jmp_packet.inst_pc := uop.pc
+  io.jmp_packet.jmp := jmp
+  io.jmp_packet.jmp_pc := jmp_pc
 }
