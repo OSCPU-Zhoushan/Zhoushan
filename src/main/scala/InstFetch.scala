@@ -13,8 +13,6 @@ class InstFetch extends Module {
   val pc_init = "h80000000".U(32.W)
   val pc = RegInit(pc_init)
   val inst = io.imem.rdata(31, 0)
-  val jmp = io.jmp_packet.jmp
-  val jmp_pc = io.jmp_packet.jmp_pc
 
   io.imem.en := true.B
   io.imem.addr := pc.asUInt()
@@ -30,9 +28,8 @@ class InstFetch extends Module {
 
   val pc_zero_reset = RegInit(true.B) // todo: fix pc reset
   pc_zero_reset := false.B
-  pc := Mux(pc_zero_reset, pc_init, 
-        Mux(jmp, jmp_pc,
-        Mux(io.stall, pc, bp.io.pred_pc)))
+  pc := Mux(pc_zero_reset, pc_init,
+        Mux(io.stall, pc, bp.io.pred_pc))
 
   io.out.pc := pc
   io.out.inst := inst

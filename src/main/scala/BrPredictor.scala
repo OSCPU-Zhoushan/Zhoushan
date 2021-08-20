@@ -29,6 +29,7 @@ class BrPredictor extends Module {
   val pc = io.pc
   val inst = io.inst
   val is_br = io.is_br
+  val packet = io.jmp_packet
 
   val pred_br = WireInit(false.B)
   val pred_pc = WireInit(0.U(32.W))
@@ -42,7 +43,14 @@ class BrPredictor extends Module {
   val pred_result = pht(pht_rindex)(pht_raddr)
 
   pred_br := pred_result(1).asBool()
-  pred_pc := pc + 4.U
+
+  when (packet.valid && packet.mis) {
+    pred_pc := Mux(packet.jmp, packet.jmp_pc, pc + 4.U)
+  } .otherwise {
+    pred_pc := pc + 4.U
+  }
+
+  pred_pc := Mux(packet.jmp, packet.jmp_pc, pc + 4.U)
 
   io.pred_br := pred_br
   io.pred_pc := pred_pc

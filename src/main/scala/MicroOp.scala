@@ -132,4 +132,5 @@ class JmpPacket extends Bundle {
   val inst_pc = UInt(32.W)
   val jmp = Bool()
   val jmp_pc = UInt(32.W)
+  val mis = Bool()
 }

@@ -74,4 +74,5 @@ class Execution extends Module with Ext {
   io.jmp_packet.inst_pc := uop.pc
   io.jmp_packet.jmp := jmp
   io.jmp_packet.jmp_pc := jmp_pc
+  io.jmp_packet.mis := io.jmp_packet.valid && ((jmp =/= uop.pred_br) || (jmp_pc =/= uop.pred_pc))
 }

@@ -80,7 +80,7 @@ class Core extends Module {
 
   fetch.io.jmp_packet <> execution.io.jmp_packet
   fetch.io.stall := stall
-  flush := execution.io.jmp_packet.jmp
+  flush := execution.io.jmp_packet.jmp // execution.io.jmp_packet.mis
   stall := execution.io.busy
 
   /* ----- Difftest ------------------------------ */
