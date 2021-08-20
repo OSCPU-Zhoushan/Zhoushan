@@ -13,21 +13,25 @@ import zhoushan.Instructions._
 
 class Decode extends Module {
   val io = IO(new Bundle {
-    val pc = Input(UInt(32.W))
-    val inst = Input(UInt(32.W))
+    val in = Input(new InstPacket)
     val uop = Output(new MicroOp())
   })
 
-  val inst = io.inst
+  val inst = io.in.inst
+  val pred_br = io.in.pred_br
+  val pred_pc = io.in.pred_pc
   val uop = io.uop
 
-  uop.pc := io.pc
-  uop.npc := io.pc + 4.U
+  uop.pc := io.in.pc
+  uop.npc := io.in.pc + 4.U
   uop.inst := inst
   
   uop.rs1_addr := inst(19, 15)
   uop.rs2_addr := inst(24, 20)
   uop.rd_addr := inst(11, 7)
+
+  uop.pred_br := pred_br
+  uop.pred_pc := pred_pc
   
   val ctrl = ListLookup(inst,
                   //   v  fu_code alu_code  jmp_code  mem_code mem_size   csr_code   w  rs1_src       rs2_src  rd_en  imm_type  
@@ -91,12 +95,12 @@ class Decode extends Module {
       SRLW    ->  List(Y, FU_ALU, ALU_SRL,  JMP_X,    MEM_X,   MEM_X,     CSR_X,     Y, RS_FROM_RF,   RS_FROM_RF,  Y, IMM_X    ),
       SRAW    ->  List(Y, FU_ALU, ALU_SRA,  JMP_X,    MEM_X,   MEM_X,     CSR_X,     Y, RS_FROM_RF,   RS_FROM_RF,  Y, IMM_X    ),
       // CSR
-      CSRRW   ->  List(Y, FU_CSR, ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_RW,    Y, RS_FROM_RF,   RS_X,        Y, IMM_X    ),
-      CSRRS   ->  List(Y, FU_CSR, ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_RS,    Y, RS_FROM_RF,   RS_X,        Y, IMM_X    ),
-      CSRRC   ->  List(Y, FU_CSR, ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_RC,    Y, RS_FROM_RF,   RS_X,        Y, IMM_X    ),
-      CSRRWI  ->  List(Y, FU_CSR, ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_RW,    Y, RS_FROM_IMM,  RS_X,        Y, IMM_CSR  ),
-      CSRRSI  ->  List(Y, FU_CSR, ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_RS,    Y, RS_FROM_IMM,  RS_X,        Y, IMM_CSR  ),
-      CSRRCI  ->  List(Y, FU_CSR, ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_RC,    Y, RS_FROM_IMM,  RS_X,        Y, IMM_CSR  ),
+      CSRRW   ->  List(Y, FU_CSR, ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_RW,    N, RS_FROM_RF,   RS_X,        Y, IMM_X    ),
+      CSRRS   ->  List(Y, FU_CSR, ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_RS,    N, RS_FROM_RF,   RS_X,        Y, IMM_X    ),
+      CSRRC   ->  List(Y, FU_CSR, ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_RC,    N, RS_FROM_RF,   RS_X,        Y, IMM_X    ),
+      CSRRWI  ->  List(Y, FU_CSR, ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_RW,    N, RS_FROM_IMM,  RS_X,        Y, IMM_CSR  ),
+      CSRRSI  ->  List(Y, FU_CSR, ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_RS,    N, RS_FROM_IMM,  RS_X,        Y, IMM_CSR  ),
+      CSRRCI  ->  List(Y, FU_CSR, ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_RC,    N, RS_FROM_IMM,  RS_X,        Y, IMM_CSR  ),
       // am
       HALT    ->  List(Y, FU_X,   ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_X,     N, RS_X,         RS_X,        N, IMM_X    ),
       PUTCH   ->  List(Y, FU_X,   ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_X,     N, RS_X,         RS_X,        N, IMM_X    )

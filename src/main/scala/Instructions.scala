@@ -69,8 +69,3 @@ object Instructions {
   def HALT    = BitPat("b00000000000000000000000001101011")
   def PUTCH   = BitPat("b00000000000000000000000001111011")
 }
-
-object Csrs {
-  val mcycle   = "hb00".U
-  val minstret = "hb02".U
-}

@@ -11,14 +11,20 @@ trait Ext {
 
 class Execution extends Module with Ext {
   val io = IO(new Bundle {
-    val uop = Input(new MicroOp())
+    val uop = Input(new MicroOp)
     val rs1_data = Input(UInt(64.W))
     val rs2_data = Input(UInt(64.W))
+<<<<<<< HEAD
     val uop_out = Output(new MicroOp())
     val result = Output(UInt(64.W))
     val busy = Output(Bool())
     val jmp = Output(Bool())
     val jmp_pc = Output(UInt(32.W))
+=======
+    val result = Output(UInt(64.W))
+    val busy = Output(Bool())
+    val jmp_packet = Output(new JmpPacket)
+>>>>>>> dev/ScalarPipeline
     val dmem = Flipped(new RamIO)
   })
 
@@ -59,9 +65,25 @@ class Execution extends Module with Ext {
 
   val busy = lsu.io.busy
 
-  io.uop_out := io.uop
+  val jmp = MuxLookup(uop.fu_code, false.B, Array(
+    FU_JMP -> alu.io.jmp,
+    FU_CSR -> csr.io.jmp
+  ))
+
+  val jmp_pc = MuxLookup(uop.fu_code, 0.U, Array(
+    FU_JMP -> alu.io.jmp_pc,
+    FU_CSR -> csr.io.jmp_pc
+  ))
+
   io.result := alu.io.out | lsu.io.out | csr.io.out
   io.busy := busy
-  io.jmp := alu.io.jmp
-  io.jmp_pc := alu.io.jmp_pc
+
+  val mis_predict = Mux(jmp, (uop.pred_br && (jmp_pc =/= uop.pred_pc)) || !uop.pred_br, uop.pred_br)
+
+  io.jmp_packet.valid := (uop.fu_code === FU_JMP) || (uop.csr_code === CSR_ECALL) ||
+                         (uop.csr_code === CSR_MRET)
+  io.jmp_packet.inst_pc := uop.pc
+  io.jmp_packet.jmp := jmp
+  io.jmp_packet.jmp_pc := jmp_pc
+  io.jmp_packet.mis := io.jmp_packet.valid && mis_predict
 }
