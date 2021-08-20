@@ -9,9 +9,13 @@ abstract class Packet extends Bundle {
 class InstPacket extends Packet {
   val pc = UInt(32.W)
   val inst = UInt(32.W)
+  val pred_br = Bool()
+  val pred_pc = UInt(32.W)
   def flush() : Unit = {
     pc := 0.U
     inst := 0.U
+    pred_br := false.B
+    pred_pc := 0.U
   }
 }
 

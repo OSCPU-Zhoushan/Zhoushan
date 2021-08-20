@@ -6,7 +6,7 @@ import zhoushan.Constant._
 
 class Alu extends Module with Ext {
   val io = IO(new Bundle {
-    val uop = Input(new MicroOp())
+    val uop = Input(new MicroOp)
     val in1 = Input(UInt(64.W))
     val in2 = Input(UInt(64.W))
     val out = Output(UInt(64.W))

@@ -95,6 +95,10 @@ class MicroOp extends Bundle {
 
   val imm       = UInt(32.W)
 
+  // branch prediction related
+  val pred_br   = Bool()
+  val pred_pc   = UInt(32.W)
+
   def nop() : Unit = {
     valid    := false.B
     pc       := 0.U
@@ -114,6 +118,8 @@ class MicroOp extends Bundle {
     rd_addr  := 0.U
     rd_en    := false.B
     imm      := 0.U
+    pred_br  := false.B
+    pred_pc  := 0.U
   }
 }
 

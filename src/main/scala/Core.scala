@@ -19,16 +19,14 @@ class Core extends Module {
   io.imem <> fetch.io.imem
 
   val if_id_reg = Module(new PipelineReg(new InstPacket))
-  if_id_reg.io.in.pc := fetch.io.pc
-  if_id_reg.io.in.inst := fetch.io.inst
+  if_id_reg.io.in <> fetch.io.out
   if_id_reg.io.stall := stall
   if_id_reg.io.flush := flush
 
   /* ----- Stage 2 - Instruction Decode (ID) ----- */
 
   val decode = Module(new Decode)
-  decode.io.pc := if_id_reg.io.out.pc
-  decode.io.inst := if_id_reg.io.out.inst
+  decode.io.in <> if_id_reg.io.out
 
   val rf = Module(new RegFile)
   rf.io.rs1_addr := decode.io.uop.rs1_addr
@@ -55,13 +53,13 @@ class Core extends Module {
 
   /* ----- Stage 4 - Commit (CM) ----------------- */
 
-  rf.io.rd_addr := execution.io.uop_out.rd_addr
+  rf.io.rd_addr := execution.io.uop.rd_addr
   rf.io.rd_data := execution.io.result
-  rf.io.rd_en := execution.io.uop_out.valid && execution.io.uop.rd_en
+  rf.io.rd_en := execution.io.uop.valid && execution.io.uop.rd_en
 
   val ex_cm_reg = Module(new PipelineReg(new CommitPacket))
 
-  ex_cm_reg.io.in.uop := execution.io.uop_out
+  ex_cm_reg.io.in.uop := execution.io.uop
   ex_cm_reg.io.in.rd_data := execution.io.result
   ex_cm_reg.io.stall := false.B
   ex_cm_reg.io.flush := execution.io.busy
@@ -102,13 +100,6 @@ class Core extends Module {
   dt_ic.io.wdata    := ex_cm_reg.io.out.rd_data
   dt_ic.io.wdest    := uop_commit.rd_addr
 
-  // printf("valid = %x, pc = %x, inst = %x, wen = %x, wdata = %x, wdest = %x\n",
-  //        dt_ic.io.valid, dt_ic.io.pc, dt_ic.io.instr, dt_ic.io.wen, dt_ic.io.wdata, dt_ic.io.wdest)
-
-  // printf("valid=%x, pc=%x, inst=%x, fu_code=%x, rs1=%x, rs2=%x, rd=%x, imm=%x\n",
-  //        uop_commit.valid, uop_commit.pc, uop_commit.inst, uop_commit.fu_code,
-  //        uop_commit.rs1_addr, uop_commit.rs2_addr, uop_commit.rd_addr, uop_commit.imm)
-
   val dt_ae = Module(new DifftestArchEvent)
   dt_ae.io.clock        := clock
   dt_ae.io.coreid       := 0.U
@@ -125,7 +116,7 @@ class Core extends Module {
   val rf_a0 = WireInit(0.U(64.W))
   BoringUtils.addSink(rf_a0, "rf_a0")
 
-  when (execution.io.uop_out.inst === Instructions.PUTCH) {
+  when (execution.io.uop.inst === Instructions.PUTCH) {
     printf("%c", rf_a0(7, 0))
   }
 

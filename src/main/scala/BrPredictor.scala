@@ -3,25 +3,45 @@ package zhoushan
 import chisel3._
 import chisel3.util._
 
+class BrPredictorIO extends Bundle {
+  // from IF stage
+  val pc = Input(UInt(32.W))
+  val inst = Input(UInt(32.W))
+  val is_br = Input(Bool())
+  // from EX stage
+  val jmp = Input(Bool())
+  val jmp_pc = Input(UInt(32.W))
+  // prediction result
+  val pred_br = Output(Bool())
+  val pred_pc = Output(UInt(32.W))
+}
+
 class BrPredictor extends Module {
-  val io = IO(new Bundle {
-    // val jmp_update = Input(Bool())
-    // val jmp = Input(Bool())
-    // val jmp_pc = Input(UInt(32.W))
-    val pc = Input(UInt(32.W))
-    val inst = Input(UInt(32.W))
-    val is_jal = Input(Bool())
-    val pred_br = Output(Bool())
-    val pred_pc = Output(UInt(32.W))
-  })
+  val io = IO(new BrPredictorIO)
 
+  val BhtWidth = 6
+  val BhtSize = 256
+  val BhtAddrSize = log2Up(BhtSize)
+  val PhtWidth = 8
+  val PhtIndexSize = log2Up(PhtWidth)
+  val PhtSize = 256
+  val PhtAddrSize = log2Up(PhtSize)
+
+  val pc = io.pc
   val inst = io.inst
-  val is_jal = io.is_jal
-  val imm_j = Cat(Fill(12, inst(31)), inst(19, 12), inst(20), inst(30, 21), 0.U)
+  val is_br = io.is_br
 
-  io.pred_br := is_jal
-  io.pred_pc := Mux(is_jal, io.pc + imm_j, io.pc + 4.U)
-  io.pred_pc := io.pc + 4.U
+  val pred_br = WireInit(false.B)
+  val pred_pc = WireInit(0.U(32.W))
+
+  val bht = RegInit(VecInit(Seq.fill(BhtSize)(0.U(BhtWidth.W))))
+  val pht = RegInit(VecInit(Seq.fill(PhtWidth)(VecInit(Seq.fill(PhtSize)(0.U(2.W))))))
+
+  pred_br := false.B
+  pred_pc := pc + 4.U
+
+  io.pred_br := pred_br
+  io.pred_pc := pred_pc
 
   // 2-bit saturation counter
 

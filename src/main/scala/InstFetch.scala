@@ -5,30 +5,39 @@ import chisel3._
 class InstFetch extends Module {
   val io = IO(new Bundle {
     val imem = Flipped(new RomIO)
-    val pc = Output(UInt(32.W))
-    val inst = Output(UInt(32.W))
     val jmp = Input(Bool())
     val jmp_pc = Input(UInt(32.W))
     val stall = Input(Bool())
+    val out = Output(new InstPacket)
   })
 
   val pc_init = "h80000000".U(32.W)
   val pc = RegInit(pc_init)
   val inst = io.imem.rdata(31, 0)
+  val jmp = io.jmp
+  val jmp_pc = io.jmp_pc
+
   io.imem.en := true.B
   io.imem.addr := pc.asUInt()
 
   val bp = Module(new BrPredictor)
   bp.io.pc := pc
   bp.io.inst := inst
-  bp.io.is_jal := (inst === Instructions.JAL)
+  bp.io.is_br := (inst === Instructions.JAL) || (inst === Instructions.JALR) ||
+                 (inst === Instructions.BEQ) || (inst === Instructions.BNE) ||
+                 (inst === Instructions.BLT) || (inst === Instructions.BLTU) ||
+                 (inst === Instructions.BGE) || (inst === Instructions.BGEU);
+  bp.io.jmp := jmp
+  bp.io.jmp_pc := jmp_pc
 
   val pc_zero_reset = RegInit(true.B) // todo: fix pc reset
   pc_zero_reset := false.B
   pc := Mux(pc_zero_reset, pc_init, 
-        Mux(io.jmp, io.jmp_pc, 
+        Mux(jmp, jmp_pc,
         Mux(io.stall, pc, bp.io.pred_pc)))
 
-  io.pc := pc
-  io.inst := inst
+  io.out.pc := pc
+  io.out.inst := inst
+  io.out.pred_br := bp.io.pred_br
+  io.out.pred_pc := bp.io.pred_pc
 }

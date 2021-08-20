@@ -11,10 +11,9 @@ trait Ext {
 
 class Execution extends Module with Ext {
   val io = IO(new Bundle {
-    val uop = Input(new MicroOp())
+    val uop = Input(new MicroOp)
     val rs1_data = Input(UInt(64.W))
     val rs2_data = Input(UInt(64.W))
-    val uop_out = Output(new MicroOp())
     val result = Output(UInt(64.W))
     val busy = Output(Bool())
     val jmp = Output(Bool())
@@ -69,7 +68,6 @@ class Execution extends Module with Ext {
     FU_CSR -> csr.io.jmp_pc
   ))
 
-  io.uop_out := io.uop
   io.result := alu.io.out | lsu.io.out | csr.io.out
   io.busy := busy
   io.jmp := jmp
