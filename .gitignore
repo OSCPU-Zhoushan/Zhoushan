@@ -10,3 +10,7 @@ test_run_dir/
 build/
 obj_dir/
 logs/
+
+# DRAMsim3
+dramsim3.json
+dramsim3.txt
