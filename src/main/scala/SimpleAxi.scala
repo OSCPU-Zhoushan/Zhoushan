@@ -1,6 +1,7 @@
 package zhoushan
 
 import chisel3._
+import chisel3.util._
 
 // Simple Axi is an simplified bus implementation modified from AXI4
 // AXI4       - Duplex
@@ -10,7 +11,7 @@ trait SimpleAxiId extends Bundle with AxiParameters {
   val id = Output(UInt(AxiIdWidth.W))
 }
 
-trait SimpleAxiReq extends Bundle with SimpleAxiId with AxiParameters {
+class SimpleAxiReq extends Bundle with SimpleAxiId with AxiParameters {
   val addr = Output(UInt(AxiAddrWidth.W))
   val ren = Output(Bool())
   val wdata = Output(UInt(AxiDataWidth.W))
@@ -31,7 +32,7 @@ class SimpleAxiIO extends Bundle {
 
 class SimpleAxi2Axi extends Module with AxiParameters {
   val io = IO(new Bundle {
-    val in = new SimpleAxiIO
+    val in = Flipped(new SimpleAxiIO)
     val out = new AxiIO
   })
 
@@ -53,8 +54,8 @@ class SimpleAxi2Axi extends Module with AxiParameters {
   out.aw.bits.qos   := 0.U
 
   out.w.valid       := in.req.valid && in.req.bits.wen
-  out.w.bits.data   := in.w.bits.wdata
-  out.w.bits.strb   := in.w.bits.wmask
+  out.w.bits.data   := in.req.bits.wdata
+  out.w.bits.strb   := in.req.bits.wmask
   out.w.bits.last   := true.B           // only 1 transfer, always true
 
   out.ar.valid      := in.req.valid && in.req.bits.ren
@@ -83,9 +84,11 @@ class SimpleAxi2Axi extends Module with AxiParameters {
   // in.resp.valid <- out.b.valid/out.r.valid
   // Currently we are using a conservative logic here
   // todo: optimize the logic by implementing a state machine
-  in.req.ready := out.aw.ready && out.ar.ready && out.w.ready
-  in.resp.valid := out.b.valid || out.r.valid
-  in.resp.bits.rdata := out.r.bits.data 
+  in.req.ready       := out.aw.ready && out.ar.ready && out.w.ready
+  in.resp.valid      := out.b.valid || out.r.valid
+  in.resp.bits.id    := Mux(out.b.valid, out.b.bits.id,
+                        Mux(out.r.valid, out.r.bits.id, 0.U))
+  in.resp.bits.rdata := out.r.bits.data
   in.resp.bits.wresp := out.b.valid
   in.resp.bits.rlast := out.r.valid & out.r.bits.last
 

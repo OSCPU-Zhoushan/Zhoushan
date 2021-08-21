@@ -6,7 +6,7 @@ import difftest._
 
 class Core extends Module {
   val io = IO(new Bundle {
-    val imem = Flipped(new RomIO)
+    val imem = new AxiIO
     val dmem = Flipped(new RamIO)
   })
 
@@ -16,7 +16,9 @@ class Core extends Module {
   /* ----- Stage 1 - Instruction Fetch (IF) ------ */
 
   val fetch = Module(new InstFetch)
-  io.imem <> fetch.io.imem
+  val simple2axi = Module(new SimpleAxi2Axi)
+  simple2axi.in <> fetch.io.imem
+  simple2axi.out <> io.imem
 
   val if_id_reg = Module(new PipelineReg(new InstPacket))
   if_id_reg.io.in <> fetch.io.out

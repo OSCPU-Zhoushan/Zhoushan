@@ -1,23 +1,56 @@
 package zhoushan
 
 import chisel3._
+import chisel3.util._
 
 class InstFetch extends Module {
   val io = IO(new Bundle {
-    val imem = Flipped(new RomIO)
+    val imem = new SimpleAxiIO
     val jmp_packet = Input(new JmpPacket)
     val stall = Input(Bool())
     val out = Output(new InstPacket)
   })
 
+  val if_axi_id = 1.U(AxiParameters.AxiIdWidth.W)   // id = 1 for IF stage
+
+  val s_init :: s_idle :: s_wait :: s_stall :: Nil = Enum(4)
+  val state = RegInit(s_init)
+
+  val req = io.imem.req
+  val resp = io.imem.resp
+
   val pc_init = "h80000000".U(32.W)
   val pc = RegInit(pc_init)
-  val inst = io.imem.rdata(31, 0)
-
-  io.imem.en := true.B
-  io.imem.addr := pc.asUInt()
-
+  val inst = RegInit(0.U(32.W))
   val bp = Module(new BrPredictor)
+  val bp_pred_pc = bp.io.pred_pc
+
+  req.bits.id := if_axi_id
+  req.bits.addr := pc.asUInt()
+  req.bits.ren := true.B          // read-only imem
+  req.bits.wdata := 0.U
+  req.bits.wmask := 0.U
+  req.bits.wen := false.B
+  req.valid := (state === s_idle)
+  
+  resp.ready := true.B
+
+  /* FSM to handle SimpleAxi bus status */
+
+  when (state === s_init || state === s_idle) {
+    pc := bp_pred_pc
+    state := s_wait
+  } .elsewhen (state === s_wait) {
+    when (resp.fire() && resp.bits.id === if_axi_id && resp.bits.rlast) {
+      inst := resp.bits.rdata
+      state := Mux(io.stall, s_stall, s_idle)
+    }
+  } .otherwise {  // s_stall
+    state := Mux(io.stall, s_stall, s_idle)
+  }
+
+  /* Branch predictor logic */
+
   bp.io.pc := pc
   bp.io.inst := inst
   bp.io.is_br := (inst === Instructions.JAL) || (inst === Instructions.JALR) ||
@@ -26,13 +59,8 @@ class InstFetch extends Module {
                  (inst === Instructions.BGE) || (inst === Instructions.BGEU);
   bp.io.jmp_packet <> io.jmp_packet
 
-  val pc_zero_reset = RegInit(true.B) // todo: fix pc reset
-  pc_zero_reset := false.B
-  pc := Mux(pc_zero_reset, pc_init,
-        Mux(io.stall, pc, bp.io.pred_pc))
-
-  io.out.pc := pc
-  io.out.inst := inst
+  io.out.pc := Mux(state === s_idle, pc, 0.U)
+  io.out.inst := Mux(state === s_idle, inst, 0.U)
   io.out.pred_br := bp.io.pred_br
   io.out.pred_pc := bp.io.pred_pc
 }

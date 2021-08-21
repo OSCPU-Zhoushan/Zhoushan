@@ -10,6 +10,8 @@ trait AxiParameters {
   val AxiUserWidth = 1
 }
 
+object AxiParameters extends AxiParameters { }
+
 trait AxiIdUser extends Bundle with AxiParameters {
   val id = Output(UInt(AxiIdWidth.W))
   val user = Output(UInt(AxiUserWidth.W))
@@ -42,9 +44,7 @@ class AxiLiteB extends Bundle {
   val resp = Output(UInt(2.W))
 }
 
-class AxiB extends AxiLiteB with AxiIdUser with AxiParameters {
-
-}
+class AxiB extends AxiLiteB with AxiIdUser with AxiParameters { }
 
 class AxiLiteR extends Bundle with AxiParameters {
   val resp = Output(UInt(2.W))
@@ -120,6 +120,5 @@ class AxiLite2Axi extends Module {
   in.r.valid        := out.r.valid
   in.r.bits.resp    := out.r.bits.resp
   in.r.bits.data    := out.r.bits.data
-  in.r.bits.last    := out.r.bits.last
 
 }
