@@ -77,45 +77,49 @@ class AxiLite2Axi extends Module {
     val out = new AxiIO
   })
 
-  io.in.aw.ready       := io.out.aw.ready
-  io.out.aw.valid      := io.in.aw.valid
-  io.out.aw.bits.addr  := io.in.aw.bits.addr
-  io.out.aw.bits.prot  := io.in.aw.bits.prot
-  io.out.aw.bits.id    := 0.U
-  io.out.aw.bits.user  := 0.U
-  io.out.aw.bits.len   := 0.U
-  io.out.aw.bits.size  := 0.U
-  io.out.aw.bits.burst := 0.U
-  io.out.aw.bits.lock  := false.B
-  io.out.aw.bits.cache := 0.U
-  io.out.aw.bits.qos   := 0.U
+  val in = io.in
+  val out = io.out
 
-  io.in.w.ready        := io.out.w.ready
-  io.out.w.valid       := io.in.w.valid
-  io.out.w.bits.data   := io.in.w.bits.data
-  io.out.w.bits.strb   := io.in.w.bits.data
-  io.out.w.bits.last   := true.B
+  in.aw.ready       := out.aw.ready
+  out.aw.valid      := in.aw.valid
+  out.aw.bits.addr  := in.aw.bits.addr
+  out.aw.bits.prot  := in.aw.bits.prot
+  out.aw.bits.id    := 0.U
+  out.aw.bits.user  := 0.U
+  out.aw.bits.len   := 0.U
+  out.aw.bits.size  := 0.U
+  out.aw.bits.burst := 0.U
+  out.aw.bits.lock  := false.B
+  out.aw.bits.cache := 0.U
+  out.aw.bits.qos   := 0.U
 
-  io.out.b.ready       := io.in.b.ready
-  io.in.b.valid        := io.out.b.valid
-  io.in.b.bits.resp    := io.out.b.bits.resp
+  in.w.ready        := out.w.ready
+  out.w.valid       := in.w.valid
+  out.w.bits.data   := in.w.bits.data
+  out.w.bits.strb   := in.w.bits.strb
+  out.w.bits.last   := true.B
 
-  io.in.ar.ready       := io.out.ar.ready
-  io.out.ar.valid      := io.in.ar.valid
-  io.out.ar.bits.addr  := io.in.ar.bits.addr
-  io.out.ar.bits.prot  := io.in.ar.bits.prot
-  io.out.ar.bits.id    := 0.U
-  io.out.ar.bits.user  := 0.U
-  io.out.ar.bits.len   := 0.U
-  io.out.ar.bits.size  := 0.U
-  io.out.ar.bits.burst := 0.U
-  io.out.ar.bits.lock  := false.B
-  io.out.ar.bits.cache := 0.U
-  io.out.ar.bits.qos   := 0.U
+  out.b.ready       := in.b.ready
+  in.b.valid        := out.b.valid
+  in.b.bits.resp    := out.b.bits.resp
 
-  io.out.r.ready       := io.out.r.ready
-  io.in.r.valid        := io.out.r.valid
-  io.in.r.bits.resp    := io.out.r.bits.resp
-  io.in.r.bits.data    := io.out.r.bits.data
+  in.ar.ready       := out.ar.ready
+  out.ar.valid      := in.ar.valid
+  out.ar.bits.addr  := in.ar.bits.addr
+  out.ar.bits.prot  := in.ar.bits.prot
+  out.ar.bits.id    := 0.U
+  out.ar.bits.user  := 0.U
+  out.ar.bits.len   := 0.U
+  out.ar.bits.size  := 0.U
+  out.ar.bits.burst := 0.U
+  out.ar.bits.lock  := false.B
+  out.ar.bits.cache := 0.U
+  out.ar.bits.qos   := 0.U
+
+  out.r.ready       := out.r.ready
+  in.r.valid        := out.r.valid
+  in.r.bits.resp    := out.r.bits.resp
+  in.r.bits.data    := out.r.bits.data
+  in.r.bits.last    := out.r.bits.last
 
 }
