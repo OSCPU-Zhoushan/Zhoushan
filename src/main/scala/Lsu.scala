@@ -18,7 +18,7 @@ class Lsu extends Module with Ext {
   val in1 = io.in1
   val in2 = io.in2
 
-  val addr = in1 + SignExt32_64(uop.imm)
+  val addr = in1 + signExt32_64(uop.imm)
   val addr_offset = addr(2, 0)
   val addr_nextline = addr + "b1000".U
   val addr_offset_nextline = (~addr_offset) + 1.U;

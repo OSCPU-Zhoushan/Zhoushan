@@ -5,8 +5,8 @@ import chisel3.util._
 import zhoushan.Constant._
 
 trait Ext {
-  def SignExt32_64(x: UInt) : UInt = Cat(Fill(32, x(31)), x)
-  def ZeroExt32_64(x: UInt) : UInt = Cat(Fill(32, 0.U), x)
+  def signExt32_64(x: UInt) : UInt = Cat(Fill(32, x(31)), x)
+  def zeroExt32_64(x: UInt) : UInt = Cat(Fill(32, 0.U), x)
 }
 
 class Execution extends Module with Ext {
@@ -25,20 +25,20 @@ class Execution extends Module with Ext {
 
   in1_0 := MuxLookup(uop.rs1_src, 0.U, Array(
     RS_FROM_RF  -> io.rs1_data,
-    RS_FROM_IMM -> SignExt32_64(uop.imm),
-    RS_FROM_PC  -> ZeroExt32_64(uop.pc),
-    RS_FROM_NPC -> ZeroExt32_64(uop.npc)
+    RS_FROM_IMM -> signExt32_64(uop.imm),
+    RS_FROM_PC  -> zeroExt32_64(uop.pc),
+    RS_FROM_NPC -> zeroExt32_64(uop.npc)
   )).asUInt()
 
   in2_0 := MuxLookup(uop.rs2_src, 0.U, Array(
     RS_FROM_RF  -> io.rs2_data,
-    RS_FROM_IMM -> SignExt32_64(uop.imm),
-    RS_FROM_PC  -> ZeroExt32_64(uop.pc),
-    RS_FROM_NPC -> ZeroExt32_64(uop.npc)
+    RS_FROM_IMM -> signExt32_64(uop.imm),
+    RS_FROM_PC  -> zeroExt32_64(uop.pc),
+    RS_FROM_NPC -> zeroExt32_64(uop.npc)
   )).asUInt()
 
-  in1 := Mux(uop.w_type, Mux(uop.alu_code === ALU_SRL, ZeroExt32_64(in1_0(31, 0)), SignExt32_64(in1_0(31, 0))), in1_0)
-  in2 := Mux(uop.w_type, SignExt32_64(in2_0(31, 0)), in2_0)
+  in1 := Mux(uop.w_type, Mux(uop.alu_code === ALU_SRL, zeroExt32_64(in1_0(31, 0)), signExt32_64(in1_0(31, 0))), in1_0)
+  in2 := Mux(uop.w_type, signExt32_64(in2_0(31, 0)), in2_0)
 
   val alu = Module(new Alu)
   alu.io.uop := uop
