@@ -26,7 +26,7 @@ class SimpleAxiResp extends Bundle with SimpleAxiId with AxiParameters {
 
 class SimpleAxiIO extends Bundle {
   val req = Decoupled(new SimpleAxiReq)
-  val resp = Decoupled(new SimpleAxiResp)
+  val resp = Flipped(Decoupled(new SimpleAxiResp))
 }
 
 class SimpleAxi2Axi extends Module with AxiParameters {
