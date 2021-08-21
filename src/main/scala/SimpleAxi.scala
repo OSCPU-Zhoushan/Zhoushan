@@ -46,7 +46,7 @@ class SimpleAxi2Axi extends Module with AxiParameters {
   out.aw.bits.prot  := "b001".U         // privileged access
   out.aw.bits.id    := in.req.bits.id
   out.aw.bits.user  := 0.U
-  out.aw.bits.len   := 1.U              // no burst, 1 transfer
+  out.aw.bits.len   := 0.U              // no burst, 1 transfer
   out.aw.bits.size  := "b011".U         // 8 bytes in transfer
   out.aw.bits.burst := "b01".U          // INCR mode, not used so far
   out.aw.bits.lock  := false.B
@@ -63,7 +63,7 @@ class SimpleAxi2Axi extends Module with AxiParameters {
   out.ar.bits.prot  := "b001".U         // privileged access
   out.ar.bits.id    := in.req.bits.id
   out.ar.bits.user  := 0.U
-  out.ar.bits.len   := 1.U              // no burst, 1 transfer
+  out.ar.bits.len   := 0.U              // no burst, 1 transfer
   out.ar.bits.size  := "b011".U         // 8 bytes in transfer
   out.ar.bits.burst := "b01".U          // INCR mode, not used so far
   out.ar.bits.lock  := false.B
