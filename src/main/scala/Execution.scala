@@ -45,7 +45,7 @@ class Execution extends Module with Ext {
   alu.io.in1 := in1
   alu.io.in2 := in2
 
-  val lsu = Module(new Lsu)
+  val lsu = Module(new LsuWithRamHelper)
   lsu.io.uop := uop
   lsu.io.in1 := in1
   lsu.io.in2 := in2
