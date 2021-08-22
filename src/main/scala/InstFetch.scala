@@ -13,11 +13,13 @@ class InstFetch extends Module {
 
   val if_axi_id = 1.U(AxiParameters.AxiIdWidth.W)   // id = 1 for IF stage
 
-  val s_reset :: s_init :: s_idle :: s_wait :: s_stall :: Nil = Enum(5)
-  val state = RegInit(s_reset)
+  val s_init :: s_idle :: s_req :: s_wait :: Nil = Enum(4)
+  val state = RegInit(s_init)
 
   val req = io.imem.req
   val resp = io.imem.resp
+
+  val stall = io.stall
 
   val pc_init = "h80000000".U(32.W)
   val pc = RegInit(pc_init)
@@ -31,24 +33,46 @@ class InstFetch extends Module {
   req.bits.wdata := 0.U
   req.bits.wmask := 0.U
   req.bits.wen := false.B
-  req.valid := (state === s_idle) || (state === s_init)
+  req.valid := (state === s_req) && !stall
   
   resp.ready := true.B
 
   /* FSM to handle SimpleAxi bus status */
 
-  when (state === s_reset) {
-    state := s_init
-  } .elsewhen (state === s_init || state === s_idle) {
-    pc := bp_pred_pc
-    state := s_wait
-  } .elsewhen (state === s_wait) {
-    when (resp.fire() && resp.bits.id === if_axi_id && resp.bits.rlast) {
-      inst := Mux(pc(2), resp.bits.rdata(63, 32), resp.bits.rdata(31, 0))
-      state := Mux(io.stall, s_stall, s_idle)
+  val resp_success = resp.fire() && resp.bits.id === if_axi_id && resp.bits.rlast
+  val mis_count = RegInit(0.U(4.W))
+
+  switch (state) {
+    is (s_init) {
+      state := s_req
     }
-  } .otherwise {  // s_stall
-    state := Mux(io.stall, s_stall, s_idle)
+    is (s_idle) {
+      pc := bp_pred_pc
+      state := Mux(stall, s_idle, s_req)
+    }
+    is (s_req) {
+      when (io.jmp_packet.mis) {
+        pc := bp_pred_pc
+        mis_count := mis_count + Mux(stall, 0.U, 1.U)
+        state := s_req
+      } .otherwise {
+        state := Mux(stall, s_req, s_wait)
+      }
+    }
+    is (s_wait) {
+      when (io.jmp_packet.mis) {
+        pc := bp_pred_pc
+        mis_count := mis_count + 1.U
+        state := s_req
+      } .elsewhen (resp_success) {
+        when (mis_count === 0.U) {
+          inst := Mux(pc(2), resp.bits.rdata(63, 32), resp.bits.rdata(31, 0))
+          state := Mux(io.stall, s_wait, s_idle)
+        } .otherwise {
+          mis_count := mis_count - 1.U
+        }
+      }
+    }
   }
 
   /* Branch predictor logic */
@@ -61,8 +85,8 @@ class InstFetch extends Module {
                  (inst === Instructions.BGE) || (inst === Instructions.BGEU);
   bp.io.jmp_packet <> io.jmp_packet
 
-  io.out.pc := Mux(state === s_idle, pc, 0.U)
-  io.out.inst := Mux(state === s_idle, inst, 0.U)
+  io.out.pc := Mux(state === s_idle && !stall, pc, 0.U)
+  io.out.inst := Mux(state === s_idle && !stall, inst, 0.U)
   io.out.pred_br := bp.io.pred_br
   io.out.pred_pc := bp.io.pred_pc
 }
