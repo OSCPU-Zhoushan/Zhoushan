@@ -37,7 +37,26 @@ class InstFetch extends Module {
   
   resp.ready := true.B
 
-  /* FSM to handle SimpleAxi bus status */
+  /* FSM to handle SimpleAxi bus status
+   *
+   *  Simplified FSM digram (no stall signal here)
+   *
+   *             mis_predict    mis_predict  !resp_success
+   *                     ┌─┐  ┌───────────┐ ┌─┐
+   *                     | v  v           | | v
+   *   ┌────────┐      ┌────────┐      ┌────────┐
+   *   │ s_init | ───> | s_req  | ───> | s_wait |
+   *   └────────┘      └────────┘      └────────┘
+   *                       ^               |
+   *                       |               | resp_success & (mis_count == 0)
+   *                   ┌────────┐          |
+   *                   | s_idle | <────────┘
+   *                   └────────┘
+   *
+   *  Note 1: When a mis-predict occurs, mis_count += 1
+   *  Note 2: stall == 1 -> stop FSM, but don't send request more than once
+   *
+   */
 
   val resp_success = resp.fire() && resp.bits.id === if_axi_id && resp.bits.rlast
   val mis_count = RegInit(0.U(4.W))
