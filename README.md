@@ -4,33 +4,27 @@ Open Source Chip Project by University (OSCPU) - Team Zhoushan
 
 Team member: Binggang Qiu, Jian Shi, Li Shi, Hanyu Wang, Yanjun Yang
 
-## Chisel Project Template
+## Dependency
 
-Another version of the [Chisel template](https://github.com/ucb-bar/chisel-template) supporting mill.
-mill is another Scala/Java build tool without obscure DSL like SBT. It is much faster than SBT.
+1. [AM](https://github.com/OSCPU-Zhoushan/abstract-machine), branch: zhoushan
 
-Contents at a glance:
+1. [AM-Kernels](https://github.com/NJU-ProjectN/am-kernels), branch: master
 
-* `.gitignore` - helps Git ignore junk like generated files, build products, and temporary files.
-* `build.sc` - instructs mill to build the Chisel project
-* `Makefile` - rules to call mill
-* `playground/src/GCD.scala` - GCD source file
-* `playground/src/DecoupledGCD.scala` - another GCD source file
-* `playground/src/Elaborate.scala` - wrapper file to call chisel command with the GCD module
-* `playground/test/src/GCDSpec.scala` - GCD tester
+1. [NEMU](https://github.com/OpenXiangShan/NEMU), branch: master
 
-Feel free to rename or delete files under `playground/` or use them as a reference/template.
+## Getting Started
 
-### Getting Started
-
-First, install mill by referring to the documentation [here](https://com-lihaoyi.github.io/mill).
-
-To run all tests in this design (recommended for test-driven development):
-```bash
-make test
-```
+First, download all the dependency repositories and set the environment variables (refer to env.sh).
 
 To generate Verilog:
-```bash
-make verilog
+
+```
+make
+```
+
+To build and run the binary for emulation and difftest:
+
+```
+make emu
+./build/emu -i path/to/risc-v/binary.bin
 ```
