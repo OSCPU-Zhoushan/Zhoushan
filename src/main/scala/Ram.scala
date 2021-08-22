@@ -77,3 +77,19 @@ class Ram1r1w extends Module {
   mem.io.dmem_wmask := io.dmem.wmask
   mem.io.dmem_wen   := io.dmem.wen
 }
+
+class Rom1r extends Module {
+  val io = IO(new Bundle {
+    val imem = new RomIO
+  })
+  val mem = Module(new ram_2r1w)
+  mem.io.clk        := clock
+  mem.io.imem_en    := io.imem.en
+  mem.io.imem_addr  := io.imem.addr
+  io.imem.rdata     := mem.io.imem_data
+  mem.io.dmem_en    := false.B
+  mem.io.dmem_addr  := 0.U
+  mem.io.dmem_wdata := 0.U
+  mem.io.dmem_wmask := 0.U
+  mem.io.dmem_wen   := false.B
+}

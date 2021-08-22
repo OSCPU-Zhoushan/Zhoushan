@@ -4,9 +4,11 @@ import chisel3._
 import chisel3.util._
 import zhoushan.Constant._
 
+// todo: 1) memory address aligned
+//       2) clear input when stall from IF stage
 class Lsu extends Module with Ext {
   val io = IO(new Bundle {
-    val uop = Input(new MicroOp())
+    val uop = Input(new MicroOp)
     val in1 = Input(UInt(64.W))
     val in2 = Input(UInt(64.W))
     val out = Output(UInt(64.W))
@@ -17,14 +19,13 @@ class Lsu extends Module with Ext {
   val uop = io.uop
   val in1 = io.in1
   val in2 = io.in2
-  val is_fu_mem = (uop.fu_code === FU_MEM)
-  val is_load = is_fu_mem && 
-                (uop.mem_code === MEM_LD || uop.mem_code === MEM_LDU)
-  val is_store = is_fu_mem && (uop.mem_code === MEM_ST)
+  val is_mem = (uop.fu_code === FU_MEM)
+  val is_load = is_mem && (uop.mem_code === MEM_LD || uop.mem_code === MEM_LDU)
+  val is_store = is_mem && (uop.mem_code === MEM_ST)
 
   val ls_axi_id = 2.U(AxiParameters.AxiIdWidth.W)   // id = 2 for load/store
 
-  val s_req :: s_wait_r :: s_wait_w :: Nil = Enum(5)
+  val s_req :: s_wait_r :: s_wait_w :: s_complete :: Nil = Enum(4)
   val state = RegInit(s_req)
 
   val req = io.dmem.req
@@ -50,13 +51,19 @@ class Lsu extends Module with Ext {
     MEM_DWORD -> "b11111111".U
   ))
 
+  // val wmask64 = Cat(Fill(8, wmask(7)), Fill(8, wmask(6)),
+  //                   Fill(8, wmask(5)), Fill(8, wmask(4)),
+  //                   Fill(8, wmask(3)), Fill(8, wmask(2)),
+  //                   Fill(8, wmask(1)), Fill(8, wmask(0)))
+  // val in2_masked = in2 & wmask64
+
   req.bits.id := ls_axi_id
   req.bits.addr := Cat(addr(63, 3), Fill(3, 0.U))
   req.bits.ren := is_load
   req.bits.wdata := (in2 << (addr_offset << 3))(63, 0)
-  req.bits.wmask := mask & ((wmask << addr_offset)(63, 0))
+  req.bits.wmask := mask & ((wmask << addr_offset)(7, 0))
   req.bits.wen := is_store
-  req.valid := is_fu_mem && (state === s_req)
+  req.valid := uop.valid && (state === s_req) && is_mem
 
   resp.ready := true.B
 
@@ -64,12 +71,11 @@ class Lsu extends Module with Ext {
    *
    */
 
-  val load_data = Wire(UInt(64.W))
+  val load_data = RegInit(UInt(64.W), 0.U)
   val resp_r_success = resp.fire() && resp.bits.rlast &&
                        (resp.bits.id === ls_axi_id)
   val resp_w_success = resp.fire() && resp.bits.wresp &&
                        (resp.bits.id === ls_axi_id)
-  val ls_success = resp_r_success || resp_w_success
 
   switch (state) {
     is (s_req) {
@@ -82,13 +88,18 @@ class Lsu extends Module with Ext {
     is (s_wait_r) {
       when (resp_r_success) {
         load_data := resp.bits.rdata >> (addr_offset << 3)
-        state := s_req
+        state := s_complete
+        // printf("[LD] addr=%x rdata=%x -> %x\n", addr, resp.bits.rdata, load_data)
       }
     }
     is (s_wait_w) {
       when (resp_w_success) {
-        state := s_req
+        state := s_complete
+        // printf("[ST] addr=%x wdata=%x -> %x wmask=%x\n", addr, in2, req.bits.wdata, req.bits.wmask)
       }
+    }
+    is (s_complete) {
+      state := s_req
     }
   }
 
@@ -115,9 +126,9 @@ class Lsu extends Module with Ext {
     MEM_LDU -> ldu_out
   ))
 
-  io.out := Mux(ls_success, load_out, 0.U)
-  io.busy := (state =/= s_req) ||
-             ((state === s_req) && is_fu_mem)
+  io.out := Mux(state === s_complete, load_out, 0.U)
+  io.busy := ((state === s_req) && is_mem) ||
+             (state === s_wait_r) || (state === s_wait_w)
 
   // raise an addr_unaligned exception
   //    half  -> offset = 111

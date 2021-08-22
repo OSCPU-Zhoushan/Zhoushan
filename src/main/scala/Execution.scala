@@ -17,7 +17,7 @@ class Execution extends Module with Ext {
     val result = Output(UInt(64.W))
     val busy = Output(Bool())
     val jmp_packet = Output(new JmpPacket)
-    val dmem = Flipped(new RamIO)
+    val dmem = new SimpleAxiIO
   })
 
   val uop = io.uop
@@ -45,7 +45,7 @@ class Execution extends Module with Ext {
   alu.io.in1 := in1
   alu.io.in2 := in2
 
-  val lsu = Module(new LsuWithRamHelper)
+  val lsu = Module(new Lsu)
   lsu.io.uop := uop
   lsu.io.in1 := in1
   lsu.io.in2 := in2
