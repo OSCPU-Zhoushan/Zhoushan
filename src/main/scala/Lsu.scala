@@ -17,6 +17,7 @@ class Lsu extends Module with Ext {
   })
 
   val uop = io.uop
+  val reg_uop = RegInit(0.U.asTypeOf(new MicroOp))
   val in1 = io.in1
   val in2 = io.in2
   val is_mem = (uop.fu_code === FU_MEM)
@@ -33,6 +34,8 @@ class Lsu extends Module with Ext {
 
   val addr = in1 + signExt32_64(uop.imm)
   val addr_offset = addr(2, 0)
+  val reg_addr = RegInit(0.U(64.W))
+  val reg_addr_offset = reg_addr(2, 0)
 
   val mask = MuxLookup(addr_offset, 0.U, Array(
     "b000".U -> "b11111111".U,
@@ -81,25 +84,31 @@ class Lsu extends Module with Ext {
     is (s_req) {
       when (is_load) {
         state := s_wait_r
+        reg_uop := uop
+        reg_addr := addr
       } .elsewhen (is_store) {
         state := s_wait_w
+        reg_uop := uop
+        reg_addr := addr
       }
     }
     is (s_wait_r) {
       when (resp_r_success) {
-        load_data := resp.bits.rdata >> (addr_offset << 3)
+        load_data := resp.bits.rdata >> (reg_addr_offset << 3)
         state := s_complete
-        // printf("[LD] addr=%x rdata=%x -> %x\n", addr, resp.bits.rdata, load_data)
+        // printf("[LD] pc=%x addr=%x rdata=%x -> %x\n", uop.pc, reg_addr, resp.bits.rdata, load_data)
       }
     }
     is (s_wait_w) {
       when (resp_w_success) {
         state := s_complete
-        // printf("[ST] addr=%x wdata=%x -> %x wmask=%x\n", addr, in2, req.bits.wdata, req.bits.wmask)
+        // printf("[ST] pc=%x addr=%x wdata=%x -> %x wmask=%x\n", uop.pc, reg_addr, in2, req.bits.wdata, req.bits.wmask)
       }
     }
     is (s_complete) {
       state := s_req
+      reg_uop := 0.U.asTypeOf(new MicroOp)
+      reg_addr := 0.U
     }
   }
 
