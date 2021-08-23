@@ -13,9 +13,14 @@ class SimTop extends Module {
   })
 
   val core = Module(new Core)
-  val dmem = Module(new Ram1r1w)
-  core.io.dmem <> dmem.io.dmem
-  core.io.imem <> io.memAXI_0
+
+  val crossbar = Module(new Crossbar2to1)
+  crossbar.io.in(0) <> core.io.imem
+  crossbar.io.in(1) <> core.io.dmem
+
+  val simple2axi = Module(new SimpleAxi2Axi)
+  simple2axi.in <> crossbar.io.out
+  simple2axi.out <> io.memAXI_0
 
   // val log_begin, log_end, log_level = WireInit(0.U(64.W))
   // log_begin := io.logCtrl.log_begin
