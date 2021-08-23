@@ -68,7 +68,7 @@ class Lsu extends Module with Ext {
   req.bits.wen := is_store
   req.valid := uop.valid && (state === s_req) && is_mem
 
-  resp.ready := true.B
+  resp.ready := (state === s_wait_r) || (state === s_wait_w)
 
   /* FSM to handle SimpleAxi bus status
    *
@@ -100,11 +100,11 @@ class Lsu extends Module with Ext {
 
   switch (state) {
     is (s_req) {
-      when (is_load) {
+      when (is_load && req.fire()) {
         state := s_wait_r
         reg_uop := uop
         reg_addr := addr
-      } .elsewhen (is_store) {
+      } .elsewhen (is_store && req.fire()) {
         state := s_wait_w
         reg_uop := uop
         reg_addr := addr
