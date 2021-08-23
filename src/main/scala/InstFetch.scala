@@ -33,9 +33,9 @@ class InstFetch extends Module {
   req.bits.wdata := 0.U
   req.bits.wmask := 0.U
   req.bits.wen := false.B
-  req.valid := (state === s_req) && !stall
+  req.valid := (state === s_req) && !stall && !io.jmp_packet.mis
   
-  resp.ready := true.B
+  resp.ready := (state === s_wait)
 
   /* FSM to handle SimpleAxi bus status
    *
@@ -60,7 +60,9 @@ class InstFetch extends Module {
 
   val resp_success = resp.fire() && resp.bits.rlast &&
                      (resp.bits.id === if_axi_id)
-  val mis_count = RegInit(0.U(4.W))
+  val mis_count = RegInit(0.U(5.W))
+  def mis_increment() : Unit = { mis_count := Cat(mis_count(3, 0), 1.U)}
+  def mis_decrement() : Unit = { mis_count := Cat(0.U, mis_count(4, 1))}
 
   switch (state) {
     is (s_init) {
@@ -73,23 +75,21 @@ class InstFetch extends Module {
     is (s_req) {
       when (io.jmp_packet.mis) {
         pc := bp_pred_pc
-        mis_count := mis_count + Mux(stall, 0.U, 1.U)
-        state := s_req
-      } .otherwise {
-        state := Mux(stall, s_req, s_wait)
+      } .elsewhen (!stall && req.fire()) {
+        state := s_wait
       }
     }
     is (s_wait) {
       when (io.jmp_packet.mis) {
         pc := bp_pred_pc
-        mis_count := mis_count + 1.U
+        mis_increment()
         state := s_req
       } .elsewhen (resp_success) {
         when (mis_count === 0.U) {
           inst := Mux(pc(2), resp.bits.rdata(63, 32), resp.bits.rdata(31, 0))
-          state := Mux(io.stall, s_wait, s_idle)
+          state := s_idle
         } .otherwise {
-          mis_count := mis_count - 1.U
+          mis_decrement()
         }
       }
     }
