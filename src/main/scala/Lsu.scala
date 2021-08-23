@@ -72,6 +72,24 @@ class Lsu extends Module with Ext {
 
   /* FSM to handle SimpleAxi bus status
    *
+   *  Simplified FSM digram
+   *
+   *                      !resp_r_success
+   *                            ┌─┐
+   *                            | v
+   *               is_load  ┌──────────┐  resp_r_success
+   *               ┌──────> | s_wait_r | ──┐
+   *   ┌───────┐   |        └──────────┘   |    ┌────────────┐
+   *   │ s_req | ──┤                       ├──> │ s_complete | ─┐
+   *   └───────┘   |      !resp_w_success  |    └────────────┘  |
+   *       ^       |            ┌─┐        |                    |
+   *       |       |            | v        |                    |
+   *       |       |        ┌──────────┐   |                    |
+   *       |       └──────> | s_wait_w | ──┘                    |
+   *       |       is_store └──────────┘  resp_w_success        |
+   *       |                                                    |
+   *       └────────────────────────────────────────────────────┘
+   *
    */
 
   val load_data = RegInit(UInt(64.W), 0.U)
