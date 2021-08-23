@@ -84,7 +84,7 @@ class SimpleAxi2Axi extends Module with AxiParameters {
   // in.resp.valid <- out.b.valid/out.r.valid
   // Currently we are using a conservative logic here
   // todo: optimize the logic by implementing a state machine
-  in.req.ready       := out.aw.ready && out.ar.ready && out.w.ready
+  in.req.ready       := (out.aw.ready && out.w.ready) || out.ar.ready
   in.resp.valid      := out.b.valid || out.r.valid
   in.resp.bits.id    := Mux(out.b.valid, out.b.bits.id,
                         Mux(out.r.valid, out.r.bits.id, 0.U))

@@ -21,23 +21,25 @@ class Lsu extends Module with Ext {
   val in1 = io.in1
   val in2 = io.in2
   val is_mem = (uop.fu_code === FU_MEM)
-  val is_load = is_mem && (uop.mem_code === MEM_LD || uop.mem_code === MEM_LDU)
-  val is_store = is_mem && (uop.mem_code === MEM_ST)
+  val reg_is_load = (reg_uop.mem_code === MEM_LD || uop.mem_code === MEM_LDU)
+  val reg_is_store = (reg_uop.mem_code === MEM_ST)
 
   val ls_axi_id = 2.U(AxiParameters.AxiIdWidth.W)   // id = 2 for load/store
 
-  val s_req :: s_wait_r :: s_wait_w :: s_complete :: Nil = Enum(4)
-  val state = RegInit(s_req)
+  val s_idle :: s_req :: s_wait_r :: s_wait_w :: s_complete :: Nil = Enum(5)
+  val state = RegInit(s_idle)
 
   val req = io.dmem.req
   val resp = io.dmem.resp
 
   val addr = in1 + signExt32_64(uop.imm)
   val addr_offset = addr(2, 0)
+  val wdata = in2
   val reg_addr = RegInit(0.U(64.W))
   val reg_addr_offset = reg_addr(2, 0)
+  val reg_wdata = RegInit(0.U(64.W))
 
-  val mask = MuxLookup(addr_offset, 0.U, Array(
+  val mask = MuxLookup(reg_addr_offset, 0.U, Array(
     "b000".U -> "b11111111".U,
     "b001".U -> "b11111110".U,
     "b010".U -> "b11111100".U,
@@ -47,7 +49,7 @@ class Lsu extends Module with Ext {
     "b110".U -> "b11000000".U,
     "b111".U -> "b10000000".U
   ))
-  val wmask = MuxLookup(uop.mem_size, 0.U, Array(
+  val wmask = MuxLookup(reg_uop.mem_size, 0.U, Array(
     MEM_BYTE  -> "b00000001".U,
     MEM_HALF  -> "b00000011".U,
     MEM_WORD  -> "b00001111".U,
@@ -61,12 +63,12 @@ class Lsu extends Module with Ext {
   // val in2_masked = in2 & wmask64
 
   req.bits.id := ls_axi_id
-  req.bits.addr := Cat(addr(63, 3), Fill(3, 0.U))
-  req.bits.ren := is_load
-  req.bits.wdata := (in2 << (addr_offset << 3))(63, 0)
-  req.bits.wmask := mask & ((wmask << addr_offset)(7, 0))
-  req.bits.wen := is_store
-  req.valid := uop.valid && (state === s_req) && is_mem
+  req.bits.addr := Cat(reg_addr(63, 3), Fill(3, 0.U))
+  req.bits.ren := reg_is_load
+  req.bits.wdata := (reg_wdata << (reg_addr_offset << 3))(63, 0)
+  req.bits.wmask := mask & ((wmask << reg_addr_offset)(7, 0))
+  req.bits.wen := reg_is_store
+  req.valid := uop.valid && (state === s_req) && (reg_is_load || reg_is_store)
 
   resp.ready := (state === s_wait_r) || (state === s_wait_w)
 
@@ -77,7 +79,7 @@ class Lsu extends Module with Ext {
    *                      !resp_r_success
    *                            ┌─┐
    *                            | v
-   *               is_load  ┌──────────┐  resp_r_success
+   *           reg_is_load  ┌──────────┐  resp_r_success
    *               ┌──────> | s_wait_r | ──┐
    *   ┌───────┐   |        └──────────┘   |    ┌────────────┐
    *   │ s_req | ──┤                       ├──> │ s_complete | ─┐
@@ -86,7 +88,7 @@ class Lsu extends Module with Ext {
    *       |       |            | v        |                    |
    *       |       |        ┌──────────┐   |                    |
    *       |       └──────> | s_wait_w | ──┘                    |
-   *       |       is_store └──────────┘  resp_w_success        |
+   *       |   reg_is_store └──────────┘  resp_w_success        |
    *       |                                                    |
    *       └────────────────────────────────────────────────────┘
    *
@@ -99,15 +101,19 @@ class Lsu extends Module with Ext {
                        (resp.bits.id === ls_axi_id)
 
   switch (state) {
+    is (s_idle) {
+      when (is_mem) {
+        state := s_req
+        reg_uop := uop
+        reg_addr := addr
+        reg_wdata := wdata
+      }
+    }
     is (s_req) {
-      when (is_load && req.fire()) {
+      when (reg_is_load && req.fire()) {
         state := s_wait_r
-        reg_uop := uop
-        reg_addr := addr
-      } .elsewhen (is_store && req.fire()) {
+      } .elsewhen (reg_is_store && req.fire()) {
         state := s_wait_w
-        reg_uop := uop
-        reg_addr := addr
       }
     }
     is (s_wait_r) {
@@ -124,7 +130,7 @@ class Lsu extends Module with Ext {
       }
     }
     is (s_complete) {
-      state := s_req
+      state := s_idle
       reg_uop := 0.U.asTypeOf(new MicroOp)
       reg_addr := 0.U
     }
@@ -134,27 +140,27 @@ class Lsu extends Module with Ext {
   val ldu_out = Wire(UInt(64.W))
   val load_out = Wire(UInt(64.W))
 
-  ld_out := Mux(uop.mem_code === MEM_LD, MuxLookup(uop.mem_size, 0.U, Array(
+  ld_out := Mux(reg_uop.mem_code === MEM_LD, MuxLookup(reg_uop.mem_size, 0.U, Array(
     MEM_BYTE  -> Cat(Fill(56, load_data(7)), load_data(7, 0)),
     MEM_HALF  -> Cat(Fill(48, load_data(15)), load_data(15, 0)),
     MEM_WORD  -> Cat(Fill(32, load_data(31)), load_data(31, 0)),
     MEM_DWORD -> load_data
   )), 0.U)
 
-  ldu_out := Mux(uop.mem_code === MEM_LDU, MuxLookup(uop.mem_size, 0.U, Array(
+  ldu_out := Mux(reg_uop.mem_code === MEM_LDU, MuxLookup(reg_uop.mem_size, 0.U, Array(
     MEM_BYTE  -> Cat(Fill(56, 0.U), load_data(7, 0)),
     MEM_HALF  -> Cat(Fill(48, 0.U), load_data(15, 0)),
     MEM_WORD  -> Cat(Fill(32, 0.U), load_data(31, 0)),
     MEM_DWORD -> load_data
   )), 0.U)
 
-  load_out := MuxLookup(uop.mem_code, 0.U, Array(
+  load_out := MuxLookup(reg_uop.mem_code, 0.U, Array(
     MEM_LD  -> ld_out,
     MEM_LDU -> ldu_out
   ))
 
   io.out := Mux(state === s_complete, load_out, 0.U)
-  io.busy := ((state === s_req) && is_mem) ||
+  io.busy := ((state === s_idle) && is_mem) || (state === s_req) ||
              (state === s_wait_r) || (state === s_wait_w)
 
   // raise an addr_unaligned exception
