@@ -13,9 +13,9 @@ class SimTop extends Module {
   })
 
   val core = Module(new Core)
-  val imem = Module(new Rom1r)
-  core.io.imem <> imem.io.imem
-  core.io.dmem <> io.memAXI_0
+  val dmem = Module(new Ram1r1w)
+  core.io.dmem <> dmem.io.dmem
+  core.io.imem <> io.memAXI_0
 
   // val log_begin, log_end, log_level = WireInit(0.U(64.W))
   // log_begin := io.logCtrl.log_begin

@@ -109,6 +109,7 @@ class InstFetch extends Module {
   io.out.inst := Mux(state === s_idle && !stall, inst, 0.U)
   io.out.pred_br := bp.io.pred_br
   io.out.pred_pc := bp.io.pred_pc
+  io.out.valid := true.B
 }
 
 class InstFetchWithRamHelper extends Module {
@@ -144,4 +145,5 @@ class InstFetchWithRamHelper extends Module {
   io.out.inst := inst
   io.out.pred_br := bp.io.pred_br
   io.out.pred_pc := bp.io.pred_pc
+  io.out.valid := true.B
 }

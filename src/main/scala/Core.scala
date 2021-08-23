@@ -6,8 +6,8 @@ import difftest._
 
 class Core extends Module {
   val io = IO(new Bundle {
-    val imem = Flipped(new RomIO)
-    val dmem = new AxiIO
+    val imem = new AxiIO
+    val dmem = Flipped(new RamIO)
   })
 
   val stall = WireInit(false.B)
@@ -15,8 +15,12 @@ class Core extends Module {
 
   /* ----- Stage 1 - Instruction Fetch (IF) ------ */
 
-  val fetch = Module(new InstFetchWithRamHelper)
-  fetch.io.imem <> io.imem
+  val fetch = Module(new InstFetch)
+  // fetch.io.imem <> io.imem
+
+  val simple2axi = Module(new SimpleAxi2Axi)
+  simple2axi.in <> fetch.io.imem
+  simple2axi.out <> io.imem
 
   val if_id_reg = Module(new PipelineReg(new InstPacket))
   if_id_reg.io.in <> fetch.io.out
@@ -50,9 +54,10 @@ class Core extends Module {
   execution.io.rs1_data := ex_rs1_data // id_ex_reg.io.out.rs1_data
   execution.io.rs2_data := ex_rs2_data // id_ex_reg.io.out.rs2_data
 
-  val simple2axi = Module(new SimpleAxi2Axi)
-  simple2axi.in <> execution.io.dmem
-  simple2axi.out <> io.dmem
+  // val simple2axi = Module(new SimpleAxi2Axi)
+  // simple2axi.in <> execution.io.dmem
+  // simple2axi.out <> io.dmem
+  execution.io.dmem <> io.dmem
 
   /* ----- Stage 4 - Commit (CM) ----------------- */
 

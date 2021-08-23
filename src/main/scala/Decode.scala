@@ -20,7 +20,7 @@ class Decode extends Module {
   val inst = io.in.inst
   val pred_br = io.in.pred_br
   val pred_pc = io.in.pred_pc
-  val uop = io.uop
+  val uop = Wire(new MicroOp())
 
   uop.pc := io.in.pc
   uop.npc := io.in.pc + 4.U
@@ -138,5 +138,7 @@ class Decode extends Module {
     IMM_SHAMT -> imm_shamt,
     IMM_CSR -> imm_csr
   ))
+
+  io.uop := Mux(io.in.valid, uop, 0.U.asTypeOf(new MicroOp))
 
 }
