@@ -41,8 +41,8 @@ class Crossbar2to1 extends Module {
   }
 
   // req logic
-  io.in(0).req.ready := arbiter.io.chosen === 0.U
-  io.in(1).req.ready := arbiter.io.chosen === 1.U
+  io.in(0).req.ready := (arbiter.io.chosen === 0.U)
+  io.in(1).req.ready := (arbiter.io.chosen === 1.U)
   (io.out.req, arbiter.io.out) match { case (l, r) => {
     l.bits := r.bits
     l.valid := (state === s_idle) && r.valid
@@ -55,6 +55,6 @@ class Crossbar2to1 extends Module {
   io.out.resp.ready := io.in(chosen).resp.ready
   io.in(0).resp.valid := false.B
   io.in(1).resp.valid := false.B
-  io.in(chosen).resp.valid := true.B
+  io.in(chosen).resp.valid := io.out.resp.valid
 
 }
