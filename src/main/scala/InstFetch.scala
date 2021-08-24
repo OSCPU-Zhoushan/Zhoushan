@@ -43,14 +43,14 @@ class InstFetch extends Module {
    *
    *             mis_predict    mis_predict  !resp_success
    *                     ┌─┐  ┌───────────┐ ┌─┐
-   *                     | v  v           | | v
+   *                     │ v  v           │ │ v
    *   ┌────────┐      ┌────────┐      ┌────────┐
-   *   │ s_init | ───> | s_req  | ───> | s_wait |
+   *   │ s_init │ ───> │ s_req  │ ───> │ s_wait │
    *   └────────┘      └────────┘      └────────┘
-   *                       ^               |
-   *                       |               | resp_success & (mis_count == 0)
-   *                   ┌────────┐          |
-   *                   | s_idle | <────────┘
+   *                       ^               │
+   *                       │               │ resp_success & (mis_count == 0)
+   *                   ┌────────┐          │
+   *                   │ s_idle │ <────────┘
    *                   └────────┘
    *
    *  Note 1: When a mis-predict occurs, mis_count += 1
