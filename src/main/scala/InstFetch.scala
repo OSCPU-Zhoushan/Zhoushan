@@ -69,7 +69,7 @@ class InstFetch extends Module {
       state := s_req
     }
     is (s_idle) {
-      pc := bp_pred_pc
+      pc := Mux(stall, pc, bp_pred_pc)
       state := Mux(stall, s_idle, s_req)
     }
     is (s_req) {
