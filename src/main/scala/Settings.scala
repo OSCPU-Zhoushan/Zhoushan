@@ -1,5 +1,5 @@
 package zhoushan
 
 object Settings {
-  val UseAxi = false
+  val UseAxi = true
 }
