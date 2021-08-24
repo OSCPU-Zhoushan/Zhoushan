@@ -5,6 +5,7 @@ import chisel3.util._
 
 class Crossbar2to1 extends Module {
   val io = IO(new Bundle {
+    // val id = Vec(2, UInt(AxiParameters.AxiIdWidth.W))
     val in = Flipped(Vec(2, new SimpleAxiIO))
     val out = new SimpleAxiIO
   })
@@ -17,44 +18,36 @@ class Crossbar2to1 extends Module {
   arbiter.io.in(0) <> io.in(0).req
   arbiter.io.in(1) <> io.in(1).req
 
-  switch (state) {
-    is (s_idle) {
-      when (io.out.req.fire()) {
-        chosen := arbiter.io.chosen
-        when (io.out.req.bits.ren) {
-          state := s_wait_r
-        } .elsewhen (io.out.req.bits.wen) {
-          state := s_wait_w
-        }
-      }
-    }
-    is (s_wait_r) {
-      when (io.out.resp.fire() && io.out.resp.bits.rlast) {
-        state := s_idle
-      }
-    }
-    is (s_wait_w) {
-      when (io.out.resp.fire() && io.out.resp.bits.wresp) {
-        state := s_idle
-      }
-    }
-  }
-
   // req logic
   io.in(0).req.ready := (arbiter.io.chosen === 0.U)
   io.in(1).req.ready := (arbiter.io.chosen === 1.U)
   (io.out.req, arbiter.io.out) match { case (l, r) => {
     l.bits := r.bits
-    l.valid := (state === s_idle) && r.valid
-    r.ready := (state === s_idle) && l.ready
+    l.valid := r.valid
+    r.ready := l.ready
   }}
+  // arbiter.io.out <> io.out.req
 
-  // resp logic
+  // resp logic - send to corresponding master device
   io.in(0).resp.bits := io.out.resp.bits
   io.in(1).resp.bits := io.out.resp.bits
-  io.out.resp.ready := io.in(chosen).resp.ready
-  io.in(0).resp.valid := false.B
-  io.in(1).resp.valid := false.B
-  io.in(chosen).resp.valid := io.out.resp.valid
+  when (io.out.resp.bits.id === 1.U) {
+    io.out.resp.ready := io.in(0).resp.ready
+    io.in(0).resp.valid := io.out.resp.valid
+    io.in(1).resp.valid := false.B
+  } .elsewhen (io.out.resp.bits.id === 2.U) {
+    io.out.resp.ready := io.in(1).resp.ready
+    io.in(0).resp.valid := false.B
+    io.in(1).resp.valid := io.out.resp.valid
+  } .otherwise {
+    io.out.resp.ready := false.B
+    io.in(0).resp.valid := false.B
+    io.in(1).resp.valid := false.B
+  }
+  // io.out.resp.ready := io.in(chosen).resp.ready
+  // io.in(0).resp.valid := false.B
+  // io.in(1).resp.valid := false.B
+  // io.in(0).resp <> io.out.resp
+  // io.in(1).resp <> io.out.resp
 
 }
