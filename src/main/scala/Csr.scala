@@ -7,9 +7,11 @@ import difftest._
 import zhoushan.Constant._
 
 object Csrs {
+  val mhartid  = "hf14".U
   val mstatus  = "h300".U
   val mie      = "h304".U
   val mtvec    = "h305".U
+  val mscratch = "h340".U
   val mepc     = "h341".U
   val mcause   = "h342".U
   val mip      = "h344".U
@@ -38,16 +40,18 @@ class Csr extends Module {
 
   // CSR register definition
 
-  val mstatus = RegInit(UInt(64.W), "h00001800".U)
-  val mie = RegInit(UInt(64.W), 0.U)
-  val mtvec = RegInit(UInt(64.W), 0.U)
-  val mepc = RegInit(UInt(64.W), 0.U)
-  val mcause = RegInit(UInt(64.W), 0.U)
-  val mip = RegInit(UInt(64.W), 0.U)
+  val mhartid   = RegInit(UInt(64.W), 0.U)
+  val mstatus   = RegInit(UInt(64.W), "h00001800".U)
+  val mie       = RegInit(UInt(64.W), 0.U)
+  val mtvec     = RegInit(UInt(64.W), 0.U)
+  val mscratch  = RegInit(UInt(64.W), 0.U)
+  val mepc      = RegInit(UInt(64.W), 0.U)
+  val mcause    = RegInit(UInt(64.W), 0.U)
+  val mip       = RegInit(UInt(64.W), 0.U)
 
-  val mcycle = WireInit(UInt(64.W), 0.U)
+  val mcycle    = WireInit(UInt(64.W), 0.U)
   BoringUtils.addSink(mcycle, "csr_mcycle")
-  val minstret = WireInit(UInt(64.W), 0.U)
+  val minstret  = WireInit(UInt(64.W), 0.U)
   BoringUtils.addSink(minstret, "csr_minstret")
 
   // ECALL
@@ -70,9 +74,11 @@ class Csr extends Module {
   // CSR register map
 
   val csr_map = Map(
+    RegMap(Csrs.mhartid,  mhartid ),
     RegMap(Csrs.mstatus,  mstatus ),
     RegMap(Csrs.mie,      mie     ),
     RegMap(Csrs.mtvec,    mtvec   ),
+    RegMap(Csrs.mscratch, mscratch),
     RegMap(Csrs.mepc,     mepc    ),
     RegMap(Csrs.mcause,   mcause  ),
     RegMap(Csrs.mip,      mip     ),
@@ -119,7 +125,7 @@ class Csr extends Module {
   dt_cs.io.satp           := 0.U
   dt_cs.io.mip            := mip
   dt_cs.io.mie            := mie
-  dt_cs.io.mscratch       := 0.U
+  dt_cs.io.mscratch       := mscratch
   dt_cs.io.sscratch       := 0.U
   dt_cs.io.mideleg        := 0.U
   dt_cs.io.medeleg        := 0.U
