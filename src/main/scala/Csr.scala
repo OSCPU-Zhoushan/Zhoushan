@@ -55,14 +55,17 @@ class Csr extends Module {
     mepc := uop.pc
     mcause := 11.U  // Env call from M-mode
     mstatus := Cat(mstatus(63, 8), mstatus(3), mstatus(6, 4), 0.U, mstatus(2, 0))
-    csr_jmp_pc := Cat(mtvec(31, 2), Fill(2, 0.U))
   }
 
   // MRET
   when (csr_mret) {
     mstatus := Cat(mstatus(63, 8), 1.U, mstatus(6, 4), mstatus(7), mstatus(2, 0))
-    csr_jmp_pc := mepc
   }
+
+  csr_jmp_pc := MuxLookup(uop.csr_code, 0.U, Array(
+    CSR_ECALL -> Cat(mtvec(31, 2), Fill(2, 0.U)),
+    CSR_MRET  -> mepc
+  ))
 
   // CSR register map
 
