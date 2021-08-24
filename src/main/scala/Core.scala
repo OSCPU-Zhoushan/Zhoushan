@@ -6,8 +6,8 @@ import difftest._
 
 class Core extends Module {
   val io = IO(new Bundle {
-    val imem = new SimpleAxiIO
-    val dmem = new SimpleAxiIO
+    val imem = if (Settings.UseAxi) (new SimpleAxiIO) else (Flipped(new RomIO))
+    val dmem = if (Settings.UseAxi) (new SimpleAxiIO) else (Flipped(new RamIO))
   })
 
   val stall = WireInit(false.B)
@@ -15,7 +15,8 @@ class Core extends Module {
 
   /* ----- Stage 1 - Instruction Fetch (IF) ------ */
 
-  val fetch = Module(new InstFetch)
+  val fetch = Module(if (Settings.UseAxi) (new InstFetch) else (new InstFetchWithRamHelper))
+  // val fetch = Module(new InstFetch)
   fetch.io.imem <> io.imem
 
   val if_id_reg = Module(new PipelineReg(new InstPacket))

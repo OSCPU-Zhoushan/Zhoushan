@@ -3,13 +3,27 @@ package zhoushan
 import chisel3._
 import chisel3.util._
 
-class InstFetch extends Module {
-  val io = IO(new Bundle {
-    val imem = new SimpleAxiIO
-    val jmp_packet = Input(new JmpPacket)
-    val stall = Input(Bool())
-    val out = Output(new InstPacket)
-  })
+abstract class AbstractInstFetchIO extends Bundle {
+  val imem : MemIO
+  val jmp_packet = Input(new JmpPacket)
+  val stall = Input(Bool())
+  val out = Output(new InstPacket)
+}
+
+class InstFetchIO extends AbstractInstFetchIO {
+  override val imem = new SimpleAxiIO
+}
+
+class InstFetchWithRamHelperIO extends AbstractInstFetchIO {
+  override val imem = Flipped(new RomIO)
+}
+
+abstract class InstFetchModule extends Module {
+  val io : Bundle
+}
+
+class InstFetch extends InstFetchModule {
+  val io = IO(new InstFetchIO)
 
   val if_axi_id = 1.U(AxiParameters.AxiIdWidth.W)   // id = 1 for IF stage
 
@@ -112,13 +126,8 @@ class InstFetch extends Module {
   io.out.valid := true.B
 }
 
-class InstFetchWithRamHelper extends Module {
-  val io = IO(new Bundle {
-    val imem = Flipped(new RomIO)
-    val jmp_packet = Input(new JmpPacket)
-    val stall = Input(Bool())
-    val out = Output(new InstPacket)
-  })
+class InstFetchWithRamHelper extends InstFetchModule {
+  val io = IO(new InstFetchWithRamHelperIO)
 
   val pc_init = "h80000000".U(32.W)
   val pc = RegInit(pc_init)

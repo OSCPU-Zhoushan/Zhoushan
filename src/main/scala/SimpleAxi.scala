@@ -25,7 +25,7 @@ class SimpleAxiResp extends Bundle with SimpleAxiId with AxiParameters {
   val rlast = Output(Bool())
 }
 
-class SimpleAxiIO extends Bundle {
+class SimpleAxiIO extends MemIO {
   val req = Decoupled(new SimpleAxiReq)
   val resp = Flipped(Decoupled(new SimpleAxiResp))
 }

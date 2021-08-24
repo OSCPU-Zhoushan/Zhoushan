@@ -16,7 +16,9 @@ class RAMHelper extends BlackBox {
   })
 }
 
-class RomIO extends Bundle {
+abstract class MemIO extends Bundle { }
+
+class RomIO extends MemIO {
   val en = Input(Bool())
   val addr = Input(UInt(64.W))
   val rdata = Output(UInt(64.W))

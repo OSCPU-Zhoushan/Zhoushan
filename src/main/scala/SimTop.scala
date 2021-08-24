@@ -13,14 +13,53 @@ class SimTop extends Module {
   })
 
   val core = Module(new Core)
+  if (Settings.UseAxi) {
+    val crossbar = Module(new Crossbar2to1)
+    crossbar.io.in(0) <> core.io.imem
+    crossbar.io.in(1) <> core.io.dmem
 
-  val crossbar = Module(new Crossbar2to1)
-  crossbar.io.in(0) <> core.io.imem
-  crossbar.io.in(1) <> core.io.dmem
+    val simple2axi = Module(new SimpleAxi2Axi)
+    simple2axi.in <> crossbar.io.out
+    simple2axi.out <> io.memAXI_0
+  } else {
+    val mem = Module(new Ram2r1w)
+    mem.io.imem <> core.io.imem
+    mem.io.dmem <> core.io.dmem
 
-  val simple2axi = Module(new SimpleAxi2Axi)
-  simple2axi.in <> crossbar.io.out
-  simple2axi.out <> io.memAXI_0
+    val axi = io.memAXI_0
+    axi.aw.valid := false.B
+    axi.aw.bits.addr := 0.U
+    axi.aw.bits.prot := 0.U
+    axi.aw.bits.id := 0.U
+    axi.aw.bits.user := 0.U
+    axi.aw.bits.len := 0.U
+    axi.aw.bits.size := 0.U
+    axi.aw.bits.burst := 0.U
+    axi.aw.bits.lock := false.B
+    axi.aw.bits.cache := 0.U
+    axi.aw.bits.qos := 0.U
+
+    axi.w.valid := false.B
+    axi.w.bits.data := 0.U
+    axi.w.bits.strb := 0.U
+    axi.w.bits.last := false.B
+
+    axi.b.ready := false.B
+
+    axi.ar.valid := false.B
+    axi.ar.bits.addr := 0.U
+    axi.ar.bits.prot := 0.U
+    axi.ar.bits.id := 0.U
+    axi.ar.bits.user := 0.U
+    axi.ar.bits.len := 0.U
+    axi.ar.bits.size := 0.U
+    axi.ar.bits.burst := 0.U
+    axi.ar.bits.lock := false.B
+    axi.ar.bits.cache := 0.U
+    axi.ar.bits.qos := 0.U
+
+    axi.r.ready := false.B
+  }
 
   // val log_begin, log_end, log_level = WireInit(0.U(64.W))
   // log_begin := io.logCtrl.log_begin

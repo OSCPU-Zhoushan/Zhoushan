@@ -4,17 +4,31 @@ import chisel3._
 import chisel3.util._
 import zhoushan.Constant._
 
+abstract class AbstractLsuIO extends Bundle {
+  val uop = Input(new MicroOp)
+  val in1 = Input(UInt(64.W))
+  val in2 = Input(UInt(64.W))
+  val out = Output(UInt(64.W))
+  val busy = Output(Bool())
+  val dmem : MemIO
+}
+
+class LsuIO extends AbstractLsuIO {
+  override val dmem = new SimpleAxiIO
+}
+
+class LsuWithRamHelperIO extends AbstractLsuIO {
+  override val dmem = Flipped(new RamIO)
+}
+
+abstract class LsuModule extends Module {
+  val io : Bundle
+}
+
 // todo: 1) memory address aligned
 //       2) clear input when stall from IF stage
-class Lsu extends Module with Ext {
-  val io = IO(new Bundle {
-    val uop = Input(new MicroOp)
-    val in1 = Input(UInt(64.W))
-    val in2 = Input(UInt(64.W))
-    val out = Output(UInt(64.W))
-    val busy = Output(Bool())
-    val dmem = new SimpleAxiIO
-  })
+class Lsu extends LsuModule with Ext {
+  val io = IO(new LsuIO)
 
   val uop = io.uop
   val reg_uop = RegInit(0.U.asTypeOf(new MicroOp))
@@ -178,15 +192,8 @@ class Lsu extends Module with Ext {
 
 }
 
-class LsuWithRamHelper extends Module with Ext {
-  val io = IO(new Bundle {
-    val uop = Input(new MicroOp())
-    val in1 = Input(UInt(64.W))
-    val in2 = Input(UInt(64.W))
-    val out = Output(UInt(64.W))
-    val busy = Output(Bool())
-    val dmem = Flipped(new RamIO)
-  })
+class LsuWithRamHelper extends LsuModule with Ext {
+  val io = IO(new LsuWithRamHelperIO)
 
   val uop = io.uop
   val in1 = io.in1
