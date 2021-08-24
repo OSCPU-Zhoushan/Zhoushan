@@ -22,7 +22,6 @@ function riscv_tests {
   wait
 }
 
-
 while getopts 'crt:' OPT; do
   case $OPT in
     c)
@@ -31,7 +30,7 @@ while getopts 'crt:' OPT; do
       riscv_tests;;
     t)
       example="$OPTARG"
-      ./build/emu -i ../am-kernels/tests/cpu-tests/build/${example}-riscv64-mycpu.bin -b 0 -e 1000 --dump-wave;;
+      ./build/emu -i ../am-kernels/tests/cpu-tests/build/${example}-riscv64-mycpu.bin -b 0 --dump-wave;;
     ?)
       echo "Error: missing arguments"
   esac
