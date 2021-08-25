@@ -31,7 +31,7 @@ class Clint extends Module {
   )
 
   val addr = io.in.req.bits.addr(15, 0)
-  val rdata = Wire(UInt(64.W))
+  val rdata = WireInit(UInt(64.W), 0.U)
   val ren = io.in.req.bits.ren & io.in.req.fire()
   val wdata = io.in.req.bits.wdata
   val wmask = maskExpand(io.in.req.bits.wmask)
@@ -66,6 +66,7 @@ class Clint extends Module {
 
   io.in.req.ready := (state === s_idle)
   io.in.resp.valid := (state =/= s_idle)
+  io.in.resp.bits.id := 2.U(AxiParameters.AxiIdWidth.W)
   io.in.resp.bits.rdata := reg_rdata
   io.in.resp.bits.wresp := (state === s_resp_w)
   io.in.resp.bits.rlast := (state === s_resp_r)

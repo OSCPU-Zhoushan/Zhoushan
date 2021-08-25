@@ -72,8 +72,6 @@ class Csr extends Module {
   val mscratch  = RegInit(UInt(64.W), 0.U)
   val mepc      = RegInit(UInt(64.W), 0.U)
   val mcause    = RegInit(UInt(64.W), 0.U)
-  // val mip       = RegInit(UInt(64.W), 0.U)
-
   val mip       = new CsrMip
 
   val mcycle    = WireInit(UInt(64.W), 0.U)
@@ -129,6 +127,7 @@ class Csr extends Module {
   ))
 
   RegMap.access(csr_map, addr, rdata, ren, wdata, wmask, wen)
+  mip.access(addr, rdata, ren, wdata, wmask, wen)
 
   io.out := rdata
   io.jmp := csr_jmp

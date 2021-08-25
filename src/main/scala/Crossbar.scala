@@ -49,6 +49,9 @@ class Crossbar1to2 extends Module {
     val out = Vec(2, new SimpleAxiIO)
   })
 
+  // 0 -> dmem
+  // 1 -> CLINT
+
   val ClintAddrBase = "h02000000".U
   val ClintAddrSize = "h00010000".U
 
@@ -58,8 +61,9 @@ class Crossbar1to2 extends Module {
   // req logic
   io.out(0).req.bits := io.in.req.bits
   io.out(1).req.bits := io.in.req.bits
-  io.out(0).req.valid := !to_clint
-  io.out(1).req.valid := to_clint
+  io.out(0).req.valid := io.in.req.valid && !to_clint
+  io.out(1).req.valid := io.in.req.valid && to_clint
+  io.in.req.ready := Mux(to_clint, io.out(1).req.ready, io.out(0).req.ready)
 
   val arbiter = Module(new RRArbiter(new SimpleAxiResp, 2))
   arbiter.io.in(0) <> io.out(0).resp

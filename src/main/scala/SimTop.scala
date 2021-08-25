@@ -13,13 +13,20 @@ class SimTop extends Module {
   })
 
   val core = Module(new Core)
+
   if (Settings.UseAxi) {
-    val crossbar = Module(new Crossbar2to1)
-    crossbar.io.in(0) <> core.io.imem
-    crossbar.io.in(1) <> core.io.dmem
+    val crossbar1to2 = Module(new Crossbar1to2)
+    crossbar1to2.io.in <> core.io.dmem
+
+    val clint = Module(new Clint)
+    clint.io.in <> crossbar1to2.io.out(1)
+
+    val crossbar2to1 = Module(new Crossbar2to1)
+    crossbar2to1.io.in(0) <> core.io.imem
+    crossbar2to1.io.in(1) <> crossbar1to2.io.out(0)
 
     val simple2axi = Module(new SimpleAxi2Axi)
-    simple2axi.in <> crossbar.io.out
+    simple2axi.in <> crossbar2to1.io.out
     simple2axi.out <> io.memAXI_0
   } else {
     val mem = Module(new Ram2r1w)
