@@ -19,6 +19,31 @@ object Csrs {
   val minstret = "hb02".U
 }
 
+abstract class CsrSpecial extends Bundle {
+  val addr : UInt
+  val romask : UInt
+  def get(): UInt
+  def access(addr: UInt, rdata: UInt, ren: Bool, wdata: UInt,
+             wmask: UInt, wen: Bool): Unit
+}
+
+class CsrMip extends Bundle {
+  val addr = Csrs.mip
+  val romask = "h080".U(64.W)
+  val mtip = WireInit(UInt(1.W), 0.U)
+  BoringUtils.addSink(mtip, "csr_mip_mtip")
+  def get(): UInt = Cat(Fill(56, 0.U), mtip, Fill(7, 0.U))(63, 0)
+  def access(a: UInt, rdata: UInt, ren: Bool, wdata: UInt,
+             wmask: UInt, wen: Bool): Unit = {
+    when (addr === a && ren) {
+      rdata := get()
+    }
+    when (addr === a && wen) {
+      
+    }
+  }
+}
+
 class Csr extends Module {
   val io = IO(new Bundle {
     val uop = Input(new MicroOp())
@@ -47,7 +72,9 @@ class Csr extends Module {
   val mscratch  = RegInit(UInt(64.W), 0.U)
   val mepc      = RegInit(UInt(64.W), 0.U)
   val mcause    = RegInit(UInt(64.W), 0.U)
-  val mip       = RegInit(UInt(64.W), 0.U)
+  // val mip       = RegInit(UInt(64.W), 0.U)
+
+  val mip       = new CsrMip
 
   val mcycle    = WireInit(UInt(64.W), 0.U)
   BoringUtils.addSink(mcycle, "csr_mcycle")
@@ -81,7 +108,7 @@ class Csr extends Module {
     RegMap(Csrs.mscratch, mscratch),
     RegMap(Csrs.mepc,     mepc    ),
     RegMap(Csrs.mcause,   mcause  ),
-    RegMap(Csrs.mip,      mip     ),
+    // RegMap(Csrs.mip,      mip     ),
     RegMap(Csrs.mcycle,   mcycle  ),
     RegMap(Csrs.minstret, minstret)
   )
@@ -89,9 +116,10 @@ class Csr extends Module {
   // CSR register read/write
   
   val addr = uop.inst(31, 20)
-  val rdata = Wire(UInt(64.W))
+  val rdata = WireInit(UInt(64.W), 0.U)
   val ren = csr_rw
   val wdata = Wire(UInt(64.W))
+  val wmask = "hffffffff".U
   val wen = csr_rw && (in1 =/= 0.U)
 
   wdata := MuxLookup(uop.csr_code, 0.U, Array(
@@ -100,7 +128,7 @@ class Csr extends Module {
     CSR_RC -> (rdata & ~in1)
   ))
 
-  RegMap.access(csr_map, addr, rdata, ren, wdata, wen)
+  RegMap.access(csr_map, addr, rdata, ren, wdata, wmask, wen)
 
   io.out := rdata
   io.jmp := csr_jmp
@@ -123,7 +151,7 @@ class Csr extends Module {
   dt_cs.io.mcause         := mcause
   dt_cs.io.scause         := 0.U
   dt_cs.io.satp           := 0.U
-  dt_cs.io.mip            := mip
+  dt_cs.io.mip            := mip.get()
   dt_cs.io.mie            := mie
   dt_cs.io.mscratch       := mscratch
   dt_cs.io.sscratch       := 0.U
