@@ -14,7 +14,14 @@ Team member: Binggang Qiu, Jian Shi, Li Shi, Hanyu Wang, Yanjun Yang
 
 ## Getting Started
 
-First, download all the dependency repositories and set the environment variables (refer to env.sh).
+First, download all the dependency repositories and set the environment variables as follows.
+
+```bash
+export NOOP_HOME=<...>/Zhoushan
+export NEMU_HOME=<...>/NEMU
+export AM_HOME=<...>/abstract-machine
+export DRAMSIM3_HOME=<...>/Zhoushan/DRAMsim3
+```
 
 To generate Verilog:
 
