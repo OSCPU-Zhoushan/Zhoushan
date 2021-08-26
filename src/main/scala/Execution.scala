@@ -18,6 +18,7 @@ class Execution extends Module with Ext {
     val busy = Output(Bool())
     val jmp_packet = Output(new JmpPacket)
     val dmem = if (Settings.UseAxi) (new SimpleAxiIO) else (Flipped(new RamIO))
+    val intr = Output(Bool())
   })
 
   val intr = WireInit(false.B)
@@ -75,6 +76,7 @@ class Execution extends Module with Ext {
 
   io.result := alu.io.out | lsu.io.out | csr.io.out
   io.busy := busy
+  io.intr := intr
 
   val mis_predict = Mux(jmp, (uop.pred_br && (jmp_pc =/= uop.pred_pc)) || !uop.pred_br, uop.pred_br)
 

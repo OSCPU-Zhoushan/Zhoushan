@@ -67,7 +67,8 @@ class Core extends Module {
 
   /* ----- Forwarding Unit ----------------------- */
 
-  val uop_commit = ex_cm_reg.io.out.uop
+  val intr = execution.io.intr
+  val uop_commit = Mux(!intr, ex_cm_reg.io.out.uop, 0.U.asTypeOf(new MicroOp))
   val ex_rs1_from_cm = uop_commit.valid && uop_commit.rd_en &&
                       (uop_commit.rd_addr =/= 0.U) &&
                       (uop_commit.rd_addr === execution.io.uop.rs1_addr)
