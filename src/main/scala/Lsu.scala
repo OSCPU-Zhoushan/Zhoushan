@@ -2,6 +2,7 @@ package zhoushan
 
 import chisel3._
 import chisel3.util._
+import chisel3.util.experimental._
 import zhoushan.Constant._
 
 abstract class AbstractLsuIO extends Bundle {
@@ -11,6 +12,7 @@ abstract class AbstractLsuIO extends Bundle {
   val out = Output(UInt(64.W))
   val busy = Output(Bool())
   val dmem : MemIO
+  val intr = Input(Bool())
 }
 
 class LsuIO extends AbstractLsuIO {
@@ -82,7 +84,8 @@ class Lsu extends LsuModule with Ext {
   req.bits.wdata := (reg_wdata << (reg_addr_offset << 3))(63, 0)
   req.bits.wmask := mask & ((wmask << reg_addr_offset)(7, 0))
   req.bits.wen := reg_is_store
-  req.valid := uop.valid && (state === s_req) && (reg_is_load || reg_is_store)
+  req.valid := uop.valid && (state === s_req) &&
+               (reg_is_load || reg_is_store) && !io.intr
 
   resp.ready := (state === s_wait_r) || (state === s_wait_w)
 
@@ -116,7 +119,7 @@ class Lsu extends LsuModule with Ext {
 
   switch (state) {
     is (s_idle) {
-      when (is_mem) {
+      when (is_mem & !io.intr) {
         state := s_req
         reg_uop := uop
         reg_addr := addr
@@ -124,7 +127,9 @@ class Lsu extends LsuModule with Ext {
       }
     }
     is (s_req) {
-      when (reg_is_load && req.fire()) {
+      when (io.intr) {
+        state := s_idle
+      } .elsewhen (reg_is_load && req.fire()) {
         state := s_wait_r
       } .elsewhen (reg_is_store && req.fire()) {
         state := s_wait_w
@@ -149,6 +154,8 @@ class Lsu extends LsuModule with Ext {
       reg_addr := 0.U
     }
   }
+
+  BoringUtils.addSource(RegNext(RegNext(reg_addr)), "lsu_addr")
 
   val ld_out = Wire(UInt(64.W))
   val ldu_out = Wire(UInt(64.W))

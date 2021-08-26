@@ -53,16 +53,21 @@ class Csr extends Module {
     val out = Output(UInt(64.W))
     val jmp = Output(Bool())
     val jmp_pc = Output(UInt(32.W))
+    val intr = Output(Bool())
+    val intr_pc = Output(UInt(32.W))
   })
 
   def zeros(x: Int) : UInt = { Fill(x, 0.U) }
 
   val uop = io.uop
+  val reg_pc = RegNext(io.uop.pc)
   val in1 = io.in1
   val csr_code = uop.csr_code
   val csr_rw = (csr_code === CSR_RW) || (csr_code === CSR_RS) || (csr_code === CSR_RC)
   val csr_jmp = WireInit(Bool(), false.B)
   val csr_jmp_pc = WireInit(UInt(32.W), 0.U)
+  val intr = WireInit(Bool(), false.B)
+  val intr_pc = WireInit(UInt(32.W), 0.U)
 
   // CSR register definition
 
@@ -80,8 +85,7 @@ class Csr extends Module {
   val minstret  = WireInit(UInt(64.W), 0.U)
   BoringUtils.addSink(minstret, "csr_minstret")
 
-  val intr_no = RegInit(UInt(64.W), 0.U)
-  intr_no := 0.U
+  val intr_no = WireInit(UInt(64.W), 0.U)
 
   // ECALL
   when (csr_code === CSR_ECALL) {
@@ -103,12 +107,12 @@ class Csr extends Module {
   when (mstatus(3) === 1.U) {
     // CLINT
     when (mie(7) === 1.U && mip(7) === 1.U) {
-      mepc := uop.pc
+      mepc := reg_pc + 4.U
       mcause := "h8000000000000007".U
       mstatus := Cat(mstatus(63, 8), mstatus(3), mstatus(6, 4), 0.U, mstatus(2, 0))
-      intr_no := 7.U
-      csr_jmp := true.B
-      csr_jmp_pc := Cat(mtvec(31, 2), Fill(2, 0.U))
+      intr_no := "h8000000000000007".U
+      intr := true.B
+      intr_pc := Cat(mtvec(31, 2), Fill(2, 0.U))
     }
   }
 
@@ -148,8 +152,17 @@ class Csr extends Module {
   io.out := rdata
   io.jmp := csr_jmp
   io.jmp_pc := csr_jmp_pc
+  io.intr := intr
+  io.intr_pc := intr_pc
 
-  // difftest for CSR state
+  // difftest for arch event & CSR state
+
+  val dt_ae = Module(new DifftestArchEvent)
+  dt_ae.io.clock        := clock
+  dt_ae.io.coreid       := 0.U
+  dt_ae.io.intrNO       := RegNext(Mux(intr, intr_no, 0.U))
+  dt_ae.io.cause        := 0.U
+  dt_ae.io.exceptionPC  := RegNext(Mux(intr, reg_pc + 4.U, 0.U))
 
   val dt_cs = Module(new DifftestCSRState)
   dt_cs.io.clock          := clock

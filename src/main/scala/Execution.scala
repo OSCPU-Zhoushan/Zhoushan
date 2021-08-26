@@ -20,7 +20,9 @@ class Execution extends Module with Ext {
     val dmem = if (Settings.UseAxi) (new SimpleAxiIO) else (Flipped(new RamIO))
   })
 
-  val uop = io.uop
+  val intr = WireInit(false.B)
+
+  val uop = Mux(intr, 0.U.asTypeOf(new MicroOp), io.uop)
   val in1_0, in1, in2_0, in2 = Wire(UInt(64.W))
 
   in1_0 := MuxLookup(uop.rs1_src, 0.U, Array(
@@ -50,21 +52,25 @@ class Execution extends Module with Ext {
   lsu.io.in1 := in1
   lsu.io.in2 := in2
   lsu.io.dmem <> io.dmem
+  lsu.io.intr := intr
 
   val csr = Module(new Csr)
   csr.io.uop := uop
   csr.io.in1 := in1
+  intr := csr.io.intr
 
   val busy = lsu.io.busy
 
   val jmp = MuxLookup(uop.fu_code, false.B, Array(
     FU_JMP -> alu.io.jmp,
     FU_CSR -> csr.io.jmp
-  ))
+  )) || intr
 
-  val jmp_pc = MuxLookup(uop.fu_code, 0.U, Array(
-    FU_JMP -> alu.io.jmp_pc,
-    FU_CSR -> csr.io.jmp_pc
+  val jmp_pc = Mux(intr, csr.io.intr_pc, 
+    MuxLookup(uop.fu_code, 0.U, Array(
+      FU_JMP -> alu.io.jmp_pc,
+      FU_CSR -> csr.io.jmp_pc
+    )
   ))
 
   io.result := alu.io.out | lsu.io.out | csr.io.out
@@ -72,7 +78,7 @@ class Execution extends Module with Ext {
 
   val mis_predict = Mux(jmp, (uop.pred_br && (jmp_pc =/= uop.pred_pc)) || !uop.pred_br, uop.pred_br)
 
-  io.jmp_packet.valid := (uop.fu_code === FU_JMP) || csr.io.jmp
+  io.jmp_packet.valid := (uop.fu_code === FU_JMP) || csr.io.jmp || csr.io.intr
   io.jmp_packet.inst_pc := uop.pc
   io.jmp_packet.jmp := jmp
   io.jmp_packet.jmp_pc := jmp_pc

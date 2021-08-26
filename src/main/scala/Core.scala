@@ -86,6 +86,12 @@ class Core extends Module {
 
   /* ----- Difftest ------------------------------ */
 
+  val lsu_addr = WireInit(UInt(64.W), 0.U)
+  BoringUtils.addSink(lsu_addr, "lsu_addr")
+  val skip = (uop_commit.inst === Instructions.PUTCH) ||
+             (uop_commit.fu_code === Constant.FU_CSR && uop_commit.inst(31, 20) === Csrs.mcycle) ||
+             (uop_commit.fu_code === Constant.FU_MEM && lsu_addr >= Settings.ClintAddrBase && lsu_addr < Settings.ClintAddrBase + Settings.ClintAddrSize)
+
   val dt_ic = Module(new DifftestInstrCommit)
   dt_ic.io.clock    := clock
   dt_ic.io.coreid   := 0.U
@@ -93,23 +99,12 @@ class Core extends Module {
   dt_ic.io.valid    := uop_commit.valid
   dt_ic.io.pc       := uop_commit.pc
   dt_ic.io.instr    := uop_commit.inst
-  dt_ic.io.skip     := false.B
+  dt_ic.io.skip     := skip
   dt_ic.io.isRVC    := false.B
   dt_ic.io.scFailed := false.B
   dt_ic.io.wen      := uop_commit.rd_en
   dt_ic.io.wdata    := ex_cm_reg.io.out.rd_data
   dt_ic.io.wdest    := uop_commit.rd_addr
-
-  when (uop_commit.valid) {
-    printf("pc=%x inst=%x\n", uop_commit.pc, uop_commit.inst)
-  }
-
-  val dt_ae = Module(new DifftestArchEvent)
-  dt_ae.io.clock        := clock
-  dt_ae.io.coreid       := 0.U
-  dt_ae.io.intrNO       := 0.U
-  dt_ae.io.cause        := 0.U
-  dt_ae.io.exceptionPC  := 0.U
 
   val cycle_cnt = RegInit(0.U(64.W))
   val instr_cnt = RegInit(0.U(64.W))
@@ -119,7 +114,10 @@ class Core extends Module {
 
   val rf_a0 = WireInit(0.U(64.W))
   BoringUtils.addSink(rf_a0, "rf_a0")
-
+  
+  when (uop_commit.valid) {
+    printf("[%d] pc=%x inst=%x\n", cycle_cnt, uop_commit.pc, uop_commit.inst)
+  }
   when (execution.io.uop.inst === Instructions.PUTCH) {
     printf("%c", rf_a0(7, 0))
   }
