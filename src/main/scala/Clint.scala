@@ -26,8 +26,8 @@ class Clint extends Module {
 
   // ref: RT-Thread
   val clint_map = Map(
-    RegMap("h4000".U, mtime),
-    RegMap("hbff8".U, mtimecmp)
+    RegMap("h4000".U, mtimecmp),
+    RegMap("hbff8".U, mtime)
   )
 
   val addr = io.in.req.bits.addr(15, 0)
