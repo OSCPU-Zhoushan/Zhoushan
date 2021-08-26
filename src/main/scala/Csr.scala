@@ -20,9 +20,10 @@ object Csrs {
 }
 
 abstract class CsrSpecial extends Bundle {
-  val addr : UInt
-  val romask : UInt
-  def get(): UInt
+  val addr: UInt
+  val romask: UInt
+  def apply(): UInt
+  def apply(x: Int): UInt
   def access(addr: UInt, rdata: UInt, ren: Bool, wdata: UInt,
              wmask: UInt, wen: Bool): Unit
 }
@@ -32,11 +33,12 @@ class CsrMip extends Bundle {
   val romask = "h080".U(64.W)
   val mtip = WireInit(UInt(1.W), 0.U)
   BoringUtils.addSink(mtip, "csr_mip_mtip")
-  def get(): UInt = Cat(Fill(56, 0.U), mtip, Fill(7, 0.U))(63, 0)
+  def apply(): UInt = Cat(Fill(56, 0.U), mtip, Fill(7, 0.U))(63, 0)
+  def apply(x: Int): UInt = if (x == 7) mtip else 0.U
   def access(a: UInt, rdata: UInt, ren: Bool, wdata: UInt,
              wmask: UInt, wen: Bool): Unit = {
     when (addr === a && ren) {
-      rdata := get()
+      rdata := apply()
     }
     when (addr === a && wen) {
       
@@ -57,10 +59,9 @@ class Csr extends Module {
 
   val uop = io.uop
   val in1 = io.in1
-  val csr_rw = (uop.csr_code === CSR_RW) || (uop.csr_code === CSR_RS) || (uop.csr_code === CSR_RC)
-  val csr_ecall = (uop.csr_code === CSR_ECALL)
-  val csr_mret = (uop.csr_code === CSR_MRET)
-  val csr_jmp = csr_ecall || csr_mret
+  val csr_code = uop.csr_code
+  val csr_rw = (csr_code === CSR_RW) || (csr_code === CSR_RS) || (csr_code === CSR_RC)
+  val csr_jmp = WireInit(Bool(), false.B)
   val csr_jmp_pc = WireInit(UInt(32.W), 0.U)
 
   // CSR register definition
@@ -79,22 +80,37 @@ class Csr extends Module {
   val minstret  = WireInit(UInt(64.W), 0.U)
   BoringUtils.addSink(minstret, "csr_minstret")
 
+  val intr_no = RegInit(UInt(64.W), 0.U)
+  intr_no := 0.U
+
   // ECALL
-  when (csr_ecall) {
+  when (csr_code === CSR_ECALL) {
     mepc := uop.pc
     mcause := 11.U  // Env call from M-mode
     mstatus := Cat(mstatus(63, 8), mstatus(3), mstatus(6, 4), 0.U, mstatus(2, 0))
+    csr_jmp := true.B
+    csr_jmp_pc := Cat(mtvec(31, 2), Fill(2, 0.U))
   }
 
   // MRET
-  when (csr_mret) {
+  when (csr_code === CSR_MRET) {
     mstatus := Cat(mstatus(63, 8), 1.U, mstatus(6, 4), mstatus(7), mstatus(2, 0))
+    csr_jmp := true.B
+    csr_jmp_pc := mepc
   }
 
-  csr_jmp_pc := MuxLookup(uop.csr_code, 0.U, Array(
-    CSR_ECALL -> Cat(mtvec(31, 2), Fill(2, 0.U)),
-    CSR_MRET  -> mepc
-  ))
+  // Interrupt
+  when (mstatus(3) === 1.U) {
+    // CLINT
+    when (mie(7) === 1.U && mip(7) === 1.U) {
+      mepc := uop.pc
+      mcause := "h8000000000000007".U
+      mstatus := Cat(mstatus(63, 8), mstatus(3), mstatus(6, 4), 0.U, mstatus(2, 0))
+      intr_no := 7.U
+      csr_jmp := true.B
+      csr_jmp_pc := Cat(mtvec(31, 2), Fill(2, 0.U))
+    }
+  }
 
   // CSR register map
 
@@ -150,7 +166,7 @@ class Csr extends Module {
   dt_cs.io.mcause         := mcause
   dt_cs.io.scause         := 0.U
   dt_cs.io.satp           := 0.U
-  dt_cs.io.mip            := mip.get()
+  dt_cs.io.mip            := mip()
   dt_cs.io.mie            := mie
   dt_cs.io.mscratch       := mscratch
   dt_cs.io.sscratch       := 0.U

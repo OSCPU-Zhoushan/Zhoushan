@@ -72,8 +72,7 @@ class Execution extends Module with Ext {
 
   val mis_predict = Mux(jmp, (uop.pred_br && (jmp_pc =/= uop.pred_pc)) || !uop.pred_br, uop.pred_br)
 
-  io.jmp_packet.valid := (uop.fu_code === FU_JMP) || (uop.csr_code === CSR_ECALL) ||
-                         (uop.csr_code === CSR_MRET)
+  io.jmp_packet.valid := (uop.fu_code === FU_JMP) || csr.io.jmp
   io.jmp_packet.inst_pc := uop.pc
   io.jmp_packet.jmp := jmp
   io.jmp_packet.jmp_pc := jmp_pc

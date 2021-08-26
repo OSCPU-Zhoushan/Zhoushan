@@ -100,6 +100,10 @@ class Core extends Module {
   dt_ic.io.wdata    := ex_cm_reg.io.out.rd_data
   dt_ic.io.wdest    := uop_commit.rd_addr
 
+  when (uop_commit.valid) {
+    printf("pc=%x inst=%x\n", uop_commit.pc, uop_commit.inst)
+  }
+
   val dt_ae = Module(new DifftestArchEvent)
   dt_ae.io.clock        := clock
   dt_ae.io.coreid       := 0.U
