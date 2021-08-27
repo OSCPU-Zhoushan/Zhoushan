@@ -12,31 +12,83 @@ import chisel3.util._
  *  ___ ____ ____ ____ ____ __            (21) tag
  */
 
-class MetaData extends Bundle {
+class MetaData extends Module {
+  val io = IO(new Bundle {
+    // check hit or not
+    val check_set_idx = Input(UInt(4.W))
+    val check_tag = Input(UInt(21.W))
+    val check_hit = Output(Bool())
+    val check_hit_idx = Output(UInt(2.W))
+    // update plru
+    val plru_update = Input(Bool())
+    val plru_set_idx = Input(UInt(4.W))
+    val plru_entry_idx = Input(UInt(2.W))
+    // replace (and also update plru)
+    val replace_en = Input(Bool())
+    val replace_set_idx = Input(UInt(4.W))
+    val replace_tag = Input(UInt(21.W))
+    val replace_entry_idx = Output(UInt(2.W))
+  })
+
   val tags = RegInit(VecInit(Seq.fill(64)(0.U(21.W))))
   val valid = RegInit(VecInit(Seq.fill(64)(false.B)))
-  // PLRU replacement policy
-  // plru1    == 0 -> 0/1, == 1 -> 2/3
-  // plru0(0) == 0 -> 0,   == 1 -> 1
-  // plru0(1) == 0 -> 2,   == 1 -> 3
-  val plru1 = RegInit(VecInit(Seq.fill(16)(0.U(1.W))))
-  val plru0 = RegInit(VecInit(Seq.fill(16)(0.U(2.W))))
-  def hit(set_idx: UInt, tag: UInt): (Bool, UInt) = {
-    val idx = Vec(4, UInt(6.W))
-    for (i <- 0 until 4) {
-      idx(i) := Cat(set_idx, i.U(2.W))
-    }
-    val hit = Vec(4, Bool())
-    for (i <- 0 until 4) {
-      hit(i) := valid(idx(i)) && (tags(i) === tag)
-    }
-    (hit(0) || hit(1) || hit(2) || hit(3),
-     Mux(hit(0), 0.U(2.W),
-     Mux(hit(1), 1.U(2.W),
-     Mux(hit(2), 2.U(2.W),
-     Mux(hit(3), 3.U(3.W), 0.U(2.W)))))
-    )
+  // Tree-based PLRU replacement policy
+  // plru(0) == 0 -> 0/1, == 1 -> 2/3
+  // plru(1) == 0 -> 0,   == 1 -> 1
+  // plru(2) == 0 -> 2,   == 1 -> 3
+  val plru = RegInit(VecInit(Seq.fill(16)(0.U(3.W))))
+
+  // check hit or not
+
+  val check_line_idx = Wire(Vec(4, UInt(6.W)))
+  for (i <- 0 until 4) {
+    check_line_idx(i) := Cat(io.check_set_idx, i.U(2.W))
   }
+  val check_hit = Wire(Vec(4, Bool()))
+  for (i <- 0 until 4) {
+    check_hit(i) := valid(check_line_idx(i)) && (tags(i) === io.check_tag)
+  }
+
+  io.check_hit := check_hit(0) || check_hit(1) || check_hit(2) || check_hit(3)
+  io.check_hit_idx := Mux1H(Seq(
+    check_hit(0) -> 0.U(2.W),
+    check_hit(1) -> 1.U(2.W),
+    check_hit(2) -> 2.U(2.W),
+    check_hit(3) -> 3.U(3.W)
+  ))
+
+  // update plru, or replace (and also update plru)
+  // ref: http://blog.sina.com.cn/s/blog_65a6c8eb0101ez8w.html
+
+  val replace_plru0 = plru(io.replace_set_idx)(0)
+  val replace_plru1 = Mux(replace_plru0, plru(io.replace_set_idx)(1),
+                                         plru(io.replace_set_idx)(2))
+  val replace_entry_idx = Cat(replace_plru0, replace_plru1)
+  val replace_line_idx = Cat(io.replace_set_idx, replace_entry_idx)
+
+  val plru0, plru1, plru2 = WireInit(false.B)
+  val plru_new = Cat(plru2.asUInt(), plru1.asUInt(), plru0.asUInt())
+
+  when (io.plru_update) {
+    plru0 := !io.plru_entry_idx(1)
+    when (io.plru_entry_idx(0) === 0.U) {
+      plru1 := !io.plru_entry_idx(0)
+    } .otherwise {
+      plru2 := !io.plru_entry_idx(0)
+    }
+    plru(io.plru_set_idx) := plru_new
+  } .elsewhen (io.replace_en) {
+    plru0 := !replace_entry_idx(1)
+    when (replace_plru0 === 0.U) {
+      plru1 := !replace_entry_idx(0)
+    } .otherwise {
+      plru2 := !replace_entry_idx(0)
+    }
+    plru(io.replace_set_idx) := plru_new
+    tags(replace_line_idx) := io.replace_tag
+    valid(replace_line_idx) := true.B
+  }
+  io.replace_entry_idx := replace_entry_idx
 }
 
 class InstCache extends Module {
@@ -49,7 +101,10 @@ class InstCache extends Module {
     val sram = Module(new Sram)
     sram
   }
-  val meta = Vec(4, new MetaData)
+  val meta = for (i <- 0 until 4) yield {
+    val meta = Module(new MetaData)
+    meta
+  }
 
   // set default input
   sram.map { case m => {
@@ -57,6 +112,16 @@ class InstCache extends Module {
     m.io.wen := false.B
     m.io.addr := 0.U
     m.io.wdata := 0.U
+  }}
+  meta.map { case m => {
+    m.io.check_set_idx := 0.U
+    m.io.check_tag := 0.U
+    m.io.plru_update := false.B
+    m.io.plru_set_idx := 0.U
+    m.io.plru_entry_idx := 0.U
+    m.io.replace_en := false.B
+    m.io.replace_set_idx := 0.U
+    m.io.replace_tag := 0.U
   }}
 
   val in = io.in
@@ -74,24 +139,34 @@ class InstCache extends Module {
   val reg_set_idx = addr(9, 6)
   val reg_tag = addr(30, 10)
 
-  // val hit = Bool()
-  // val hit_idx = UInt(2.W)
-  val (hit, hit_idx) = (false.B, 0.U)// meta(sram_idx).hit(set_idx, tag)
+  val hit = WireInit(false.B)
+  val hit_idx = WireInit(0.U(2.W))
+  for (i <- 0 until 4) {
+    when (sram_idx === i.U) {
+      meta(i).io.check_set_idx := set_idx
+      meta(i).io.check_tag := tag
+      hit := meta(i).io.check_hit
+      hit_idx := meta(i).io.check_hit_idx
+    }
+  }
+  val reg_hit_idx = RegInit(0.U(2.W))
 
   val s_idle :: s_hit :: s_miss_req :: s_miss_wait :: s_miss_complete :: Nil = Enum(5)
   val state = RegInit(s_idle)
   val last_state = RegNext(state)
 
-  in.req.ready := (state === s_idle)
-  in.resp.valid := (state === s_hit) || (state === s_miss_complete)
-
   val rdata = WireInit(UInt(64.W), 0.U)
   for (i <- 0 until 4) {
     when (sram_idx === i.U) {
-      rdata := Mux(dword_offs.asBool(), sram(i).io.rdata(127, 64), sram(i).io.rdata(63, 0))
+      rdata := Mux(dword_offs.asBool(), sram(i).io.rdata(127, 64), 
+                                        sram(i).io.rdata(63, 0))
     }
   }
   val reg_rdata = RegInit(UInt(64.W), 0.U)
+
+  in.req.ready := (state === s_idle)
+  in.resp.valid := (state === s_hit) || (state === s_miss_complete)
+  in.resp.bits.rdata := 0.U
 
   out.req.valid := (state === s_miss_req)
   out.req.bits.id := 1.U
@@ -107,13 +182,6 @@ class InstCache extends Module {
   val wdata1 = RegInit(UInt(64.W), 0.U)
   val wdata2 = RegInit(UInt(64.W), 0.U)
 
-  val plru1 = WireInit(UInt(4.W), 0.U)
-  val plru0 = WireInit(UInt(4.W), 0.U)
-  val line_idx = for (i <- 0 until 4) yield {
-    val line_idx = WireInit(UInt(6.W), 0.U)
-    line_idx
-  }
-
   switch (state) {
     is (s_idle) {
       when (in.req.fire()) {
@@ -124,6 +192,7 @@ class InstCache extends Module {
               sram(i).io.addr := Cat(set_idx, hit_idx)
             }
           }
+          reg_hit_idx := hit_idx
           state := s_hit
         } .otherwise {
           reg_addr := addr
@@ -137,6 +206,14 @@ class InstCache extends Module {
       }
       when (in.resp.fire()) {
         in.resp.bits.rdata := Mux(last_state === s_idle, rdata, reg_rdata)
+        // update plru
+        for (i <- 0 until 4) {
+          when (reg_sram_idx === i.U) {
+            meta(i).io.plru_update := true.B
+            meta(i).io.plru_set_idx := reg_set_idx
+            meta(i).io.plru_entry_idx := reg_hit_idx
+          }
+        }
         state := s_idle
       }
     }
@@ -159,30 +236,13 @@ class InstCache extends Module {
       in.resp.bits.rdata := Mux(dword_offs.asBool(), wdata2, wdata1)
       for (i <- 0 until 4) {
         when (reg_sram_idx === i.U) {
-          for (j <- 0 until 16) {
-            when (reg_set_idx === j.U) {
-              plru1(i) := meta(i).plru1(j)
-              meta(i).plru1(j) := !plru1(i)
-              when (plru1(i) === 0.U) {
-                plru0(i) := meta(i).plru0(j)(0)
-                meta(i).plru0(j)(0) := !plru0(i)
-              } .otherwise {
-                plru0(i) := meta(i).plru0(j)(1)
-                meta(i).plru0(j)(1) := !plru0(i)
-              }
-            }
-          }
-          line_idx(i) := Cat(reg_set_idx, plru1(i), plru0(i))
           sram(i).io.en := true.B
           sram(i).io.wen := true.B
-          sram(i).io.addr := line_idx(i)
+          sram(i).io.addr := Cat(reg_set_idx, meta(i).io.replace_entry_idx)
           sram(i).io.wdata := Cat(wdata2, wdata1)
-          for (j <- 0 until 64) {
-            when (line_idx(i) === j.U) {
-              meta(i).tags(j) := reg_tag
-              meta(i).valid(j) := true.B
-            }
-          }
+          meta(i).io.replace_en := true.B
+          meta(i).io.replace_set_idx := reg_set_idx
+          meta(i).io.replace_tag := reg_tag
         }
       }
       state := s_idle
