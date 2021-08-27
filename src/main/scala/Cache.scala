@@ -16,7 +16,11 @@ class MetaData extends Bundle {
   val tags = RegInit(VecInit(Seq.fill(64)(0.U(21.W))))
   val valid = RegInit(VecInit(Seq.fill(64)(false.B)))
   // PLRU replacement policy
-  val replace_idx = RegInit(VecInit(Seq.fill(16)(0.U(2.W))))
+  // plru1    == 0 -> 0/1, == 1 -> 2/3
+  // plru0(0) == 0 -> 0,   == 1 -> 1
+  // plru0(1) == 0 -> 2,   == 1 -> 3
+  val plru1 = RegInit(VecInit(Seq.fill(16)(0.U(1.W))))
+  val plru0 = RegInit(VecInit(Seq.fill(16)(0.U(2.W))))
   def hit(set_idx: UInt, tag: UInt): (Bool, UInt) = {
     val idx = Vec(4, UInt(6.W))
     for (i <- 0 until 4) {
@@ -41,15 +45,18 @@ class InstCache extends Module {
     val out = new SimpleAxiIO
   })
 
-  val sram = Vec(4, Module(new Sram).io)
+  val sram = for (i <- 0 until 4) yield {
+    val sram = Module(new Sram)
+    sram
+  }
   val meta = Vec(4, new MetaData)
 
   // set default input
   sram.map { case m => {
-    m.en := false.B
-    m.wen := false.B
-    m.addr := 0.U
-    m.wdata := 0.U
+    m.io.en := false.B
+    m.io.wen := false.B
+    m.io.addr := 0.U
+    m.io.wdata := 0.U
   }}
 
   val in = io.in
@@ -69,16 +76,21 @@ class InstCache extends Module {
 
   // val hit = Bool()
   // val hit_idx = UInt(2.W)
-  val (hit, hit_idx) = meta(sram_idx).hit(set_idx, tag)
+  val (hit, hit_idx) = (false.B, 0.U)// meta(sram_idx).hit(set_idx, tag)
 
-  val s_idle :: s_hit :: s_miss_req :: s_miss_wait :: s_miss_replace :: Nil = Enum(5)
+  val s_idle :: s_hit :: s_miss_req :: s_miss_wait :: s_miss_complete :: Nil = Enum(5)
   val state = RegInit(s_idle)
   val last_state = RegNext(state)
 
   in.req.ready := (state === s_idle)
-  in.resp.valid := (state === s_hit)
+  in.resp.valid := (state === s_hit) || (state === s_miss_complete)
 
-  val rdata = Mux(dword_offs.asBool(), sram(sram_idx).rdata(127, 64), sram(sram_idx).rdata(63, 0))
+  val rdata = WireInit(UInt(64.W), 0.U)
+  for (i <- 0 until 4) {
+    when (sram_idx === i.U) {
+      rdata := Mux(dword_offs.asBool(), sram(i).io.rdata(127, 64), sram(i).io.rdata(63, 0))
+    }
+  }
   val reg_rdata = RegInit(UInt(64.W), 0.U)
 
   out.req.valid := (state === s_miss_req)
@@ -90,22 +102,31 @@ class InstCache extends Module {
   out.req.bits.wlast := true.B
   out.req.bits.wen := false.B
   out.req.bits.len := 1.U
+  out.resp.ready := (state === s_miss_wait)
 
-  val wdata = RegInit(UInt(128.W), 0.U)
+  val wdata1 = RegInit(UInt(64.W), 0.U)
+  val wdata2 = RegInit(UInt(64.W), 0.U)
+
+  val plru1 = WireInit(UInt(4.W), 0.U)
+  val plru0 = WireInit(UInt(4.W), 0.U)
+  val line_idx = for (i <- 0 until 4) yield {
+    val line_idx = WireInit(UInt(6.W), 0.U)
+    line_idx
+  }
 
   switch (state) {
     is (s_idle) {
       when (in.req.fire()) {
         when (hit) {
-          sram(sram_idx).en := true.B
-          sram(sram_idx).addr := Cat(set_idx, hit_idx)
+          for (i <- 0 until 4) {
+            when (sram_idx === i.U) {
+              sram(i).io.en := true.B
+              sram(i).io.addr := Cat(set_idx, hit_idx)
+            }
+          }
           state := s_hit
         } .otherwise {
           reg_addr := addr
-          reg_dword_offs := dword_offs
-          reg_sram_idx := sram_idx
-          reg_set_idx := set_idx
-          reg_tag := tag
           state := s_miss_req
         }
       }
@@ -121,15 +142,51 @@ class InstCache extends Module {
     }
     is (s_miss_req) {
       when (out.req.fire()) {
-
+        state := s_miss_wait
       }
     }
     is (s_miss_wait) {
-      
+      when (out.resp.fire()) {
+        when (!out.resp.bits.rlast) {
+          wdata1 := out.resp.bits.rdata
+        } .otherwise {
+          wdata2 := out.resp.bits.rdata
+          state := s_miss_complete
+        }
+      }
     }
-    is (s_miss_replace) {
-
+    is (s_miss_complete) {
+      in.resp.bits.rdata := Mux(dword_offs.asBool(), wdata2, wdata1)
+      for (i <- 0 until 4) {
+        when (reg_sram_idx === i.U) {
+          for (j <- 0 until 16) {
+            when (reg_set_idx === j.U) {
+              plru1(i) := meta(i).plru1(j)
+              meta(i).plru1(j) := !plru1(i)
+              when (plru1(i) === 0.U) {
+                plru0(i) := meta(i).plru0(j)(0)
+                meta(i).plru0(j)(0) := !plru0(i)
+              } .otherwise {
+                plru0(i) := meta(i).plru0(j)(1)
+                meta(i).plru0(j)(1) := !plru0(i)
+              }
+            }
+          }
+          line_idx(i) := Cat(reg_set_idx, plru1(i), plru0(i))
+          sram(i).io.en := true.B
+          sram(i).io.wen := true.B
+          sram(i).io.addr := line_idx(i)
+          sram(i).io.wdata := Cat(wdata2, wdata1)
+          for (j <- 0 until 64) {
+            when (line_idx(i) === j.U) {
+              meta(i).tags(j) := reg_tag
+              meta(i).valid(j) := true.B
+            }
+          }
+        }
+      }
+      state := s_idle
     }
   }
-  
+
 }

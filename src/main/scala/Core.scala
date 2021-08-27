@@ -17,9 +17,13 @@ class Core extends Module {
 
   val fetch = Module(new InstFetch)
 
-  val cb2sa1 = Module(new CacheBus2SimpelAxi(1))
-  cb2sa1.in <> fetch.io.imem
-  cb2sa1.out <> io.imem
+  // val cb2sa1 = Module(new CacheBus2SimpelAxi(1))
+  // cb2sa1.in <> fetch.io.imem
+  // cb2sa1.out <> io.imem
+
+  val icache = Module(new InstCache)
+  icache.in <> fetch.io.imem
+  icache.out <> io.imem
 
   val if_id_reg = Module(new PipelineReg(new InstPacket))
   if_id_reg.io.in <> fetch.io.out
