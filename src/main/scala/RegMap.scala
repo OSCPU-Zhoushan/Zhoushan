@@ -12,15 +12,15 @@ object LookupTable {
 
 object RegMap {
   def apply(addr: UInt, reg: UInt) = (addr, reg)
-  def access(mapping: Map[UInt, UInt], raddr: UInt, rdata: UInt, ren: Bool,
-             waddr: UInt, wdata: UInt, wen: Bool) : Unit = {
-    rdata := Mux(ren, LookupTable(raddr, mapping), 0.U)
-    mapping.map { case (a, r) => when (waddr === a && wen) {
-      r := wdata
-    } }
-  }
   def access(mapping: Map[UInt, UInt], addr: UInt, rdata: UInt, ren: Bool,
-             wdata: UInt, wen: Bool) : Unit = {
-    access(mapping, addr, rdata, ren, addr, wdata, wen)
+             wdata: UInt, wmask: UInt, wen: Bool): Unit = {
+    mapping.map { case (a, r) => {
+      when (addr === a && ren) {
+        rdata := r
+      }
+      when (addr === a && wen) {
+        r := (r & ~wmask) | (wdata & wmask)
+      }
+    }}
   }
 }
