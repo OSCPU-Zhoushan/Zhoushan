@@ -17,7 +17,7 @@ class Execution extends Module with Ext {
     val result = Output(UInt(64.W))
     val busy = Output(Bool())
     val jmp_packet = Output(new JmpPacket)
-    val dmem = if (Settings.UseAxi) (new SimpleAxiIO) else (Flipped(new RamIO))
+    val dmem = if (Settings.UseAxi) (new CacheBusIO) else (Flipped(new RamIO))
     val intr = Output(Bool())
   })
 

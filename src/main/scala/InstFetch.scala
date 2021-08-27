@@ -11,7 +11,7 @@ abstract class AbstractInstFetchIO extends Bundle {
 }
 
 class InstFetchIO extends AbstractInstFetchIO {
-  override val imem = new SimpleAxiIO
+  override val imem = new CacheBusIO
 }
 
 class InstFetchWithRamHelperIO extends AbstractInstFetchIO {
@@ -24,8 +24,6 @@ abstract class InstFetchModule extends Module {
 
 class InstFetch extends InstFetchModule {
   val io = IO(new InstFetchIO)
-
-  val if_axi_id = 1.U(AxiParameters.AxiIdWidth.W)   // id = 1 for IF stage
 
   val s_init :: s_idle :: s_req :: s_wait :: Nil = Enum(4)
   val state = RegInit(s_init)
@@ -41,7 +39,6 @@ class InstFetch extends InstFetchModule {
   val bp = Module(new BrPredictor)
   val bp_pred_pc = bp.io.pred_pc
 
-  req.bits.id := if_axi_id
   req.bits.addr := pc.asUInt()
   req.bits.ren := true.B          // read-only imem
   req.bits.wdata := 0.U
@@ -72,8 +69,7 @@ class InstFetch extends InstFetchModule {
    *
    */
 
-  val resp_success = resp.fire() && resp.bits.rlast &&
-                     (resp.bits.id === if_axi_id)
+  val resp_success = resp.fire()
   val mis_count = RegInit(0.U(5.W))
   def mis_increment() : Unit = { mis_count := Cat(mis_count(3, 0), 1.U)}
   def mis_decrement() : Unit = { mis_count := Cat(0.U, mis_count(4, 1))}

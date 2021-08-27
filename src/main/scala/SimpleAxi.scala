@@ -16,7 +16,9 @@ class SimpleAxiReq extends Bundle with SimpleAxiId with AxiParameters {
   val ren = Output(Bool())
   val wdata = Output(UInt(AxiDataWidth.W))
   val wmask = Output(UInt((AxiAddrWidth / 8).W))
+  val wlast = Output(Bool())
   val wen = Output(Bool())
+  val len = Output(UInt(8.W))
 }
 
 class SimpleAxiResp extends Bundle with SimpleAxiId with AxiParameters {
@@ -46,7 +48,7 @@ class SimpleAxi2Axi extends Module with AxiParameters {
   out.aw.bits.prot  := "b001".U         // privileged access
   out.aw.bits.id    := in.req.bits.id
   out.aw.bits.user  := 0.U
-  out.aw.bits.len   := 0.U              // no burst, 1 transfer
+  out.aw.bits.len   := in.req.bits.len
   out.aw.bits.size  := "b011".U         // 8 bytes in transfer
   out.aw.bits.burst := "b01".U          // INCR mode, not used so far
   out.aw.bits.lock  := false.B
@@ -56,14 +58,14 @@ class SimpleAxi2Axi extends Module with AxiParameters {
   out.w.valid       := in.req.valid && in.req.bits.wen
   out.w.bits.data   := in.req.bits.wdata
   out.w.bits.strb   := in.req.bits.wmask
-  out.w.bits.last   := true.B           // only 1 transfer, always true
+  out.w.bits.last   := in.req.bits.wlast
 
   out.ar.valid      := in.req.valid && in.req.bits.ren
   out.ar.bits.addr  := in.req.bits.addr
   out.ar.bits.prot  := "b001".U         // privileged access
   out.ar.bits.id    := in.req.bits.id
   out.ar.bits.user  := 0.U
-  out.ar.bits.len   := 0.U              // no burst, 1 transfer
+  out.ar.bits.len   := in.req.bits.len
   out.ar.bits.size  := "b011".U         // 8 bytes in transfer
   out.ar.bits.burst := "b01".U          // INCR mode, not used so far
   out.ar.bits.lock  := false.B

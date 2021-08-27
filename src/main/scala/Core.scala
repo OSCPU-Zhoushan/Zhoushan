@@ -16,8 +16,10 @@ class Core extends Module {
   /* ----- Stage 1 - Instruction Fetch (IF) ------ */
 
   val fetch = Module(if (Settings.UseAxi) (new InstFetch) else (new InstFetchWithRamHelper))
-  // val fetch = Module(new InstFetch)
-  fetch.io.imem <> io.imem
+
+  val cb2sa1 = Module(new CacheBus2SimpelAxi(1))
+  cb2sa1.in <> fetch.io.imem
+  cb2sa1.out <> io.imem
 
   val if_id_reg = Module(new PipelineReg(new InstPacket))
   if_id_reg.io.in <> fetch.io.out
@@ -50,7 +52,10 @@ class Core extends Module {
 
   execution.io.rs1_data := ex_rs1_data // id_ex_reg.io.out.rs1_data
   execution.io.rs2_data := ex_rs2_data // id_ex_reg.io.out.rs2_data
-  execution.io.dmem <> io.dmem
+
+  val cb2sa2 = Module(new CacheBus2SimpelAxi(2))
+  cb2sa2.in <> execution.io.dmem
+  cb2sa2.out <> io.dmem
 
   /* ----- Stage 4 - Commit (CM) ----------------- */
 

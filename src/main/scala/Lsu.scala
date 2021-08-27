@@ -16,7 +16,7 @@ abstract class AbstractLsuIO extends Bundle {
 }
 
 class LsuIO extends AbstractLsuIO {
-  override val dmem = new SimpleAxiIO
+  override val dmem = new CacheBusIO
 }
 
 class LsuWithRamHelperIO extends AbstractLsuIO {
@@ -39,8 +39,6 @@ class Lsu extends LsuModule with Ext {
   val is_mem = (uop.fu_code === FU_MEM)
   val reg_is_load = (reg_uop.mem_code === MEM_LD || uop.mem_code === MEM_LDU)
   val reg_is_store = (reg_uop.mem_code === MEM_ST)
-
-  val ls_axi_id = 2.U(AxiParameters.AxiIdWidth.W)   // id = 2 for load/store
 
   val s_idle :: s_req :: s_wait_r :: s_wait_w :: s_complete :: Nil = Enum(5)
   val state = RegInit(s_idle)
@@ -78,7 +76,6 @@ class Lsu extends LsuModule with Ext {
   //                   Fill(8, wmask(1)), Fill(8, wmask(0)))
   // val in2_masked = in2 & wmask64
 
-  req.bits.id := ls_axi_id
   req.bits.addr := Cat(reg_addr(63, 3), Fill(3, 0.U))
   req.bits.ren := reg_is_load
   req.bits.wdata := (reg_wdata << (reg_addr_offset << 3))(63, 0)
@@ -95,27 +92,24 @@ class Lsu extends LsuModule with Ext {
    *
    *       ┌───────────────────────────────────────────────────┐
    *       │                                                   │
-   *       │                  !resp_r_success                  │
+   *       │                  !resp_success                    │
    *       │                        ┌─┐                        │
    *       v                        | v                        │
-   *   ┌────────┐   reg_is_load  ┌──────────┐  resp_r_success  │
+   *   ┌────────┐   reg_is_load  ┌──────────┐  resp_success    │
    *   │ s_idle │    ┌─────────> │ s_wait_r │ ──┐              │
    *   └────────┘    │           └──────────┘   │              │
    *       |         │                          │    ┌────────────┐
-   *       |         │        !resp_w_success   ├──> │ s_complete │
+   *       |         │        !resp_success     ├──> │ s_complete │
    *       |         │               ┌─┐        │    └────────────┘
    *       v         │               | v        │
    *   ┌────────┐    │           ┌──────────┐   │
    *   │ s_req  │ ───┴─────────> │ s_wait_w │ ──┘
-   *   └────────┘   reg_is_store └──────────┘  resp_w_success
+   *   └────────┘   reg_is_store └──────────┘  resp_success
    *
    */
 
   val load_data = RegInit(UInt(64.W), 0.U)
-  val resp_r_success = resp.fire() && resp.bits.rlast &&
-                       (resp.bits.id === ls_axi_id)
-  val resp_w_success = resp.fire() && resp.bits.wresp &&
-                       (resp.bits.id === ls_axi_id)
+  val resp_success = resp.fire()
 
   switch (state) {
     is (s_idle) {
@@ -136,14 +130,14 @@ class Lsu extends LsuModule with Ext {
       }
     }
     is (s_wait_r) {
-      when (resp_r_success) {
+      when (resp_success) {
         load_data := resp.bits.rdata >> (reg_addr_offset << 3)
         state := s_complete
         // printf("[LD] pc=%x addr=%x rdata=%x -> %x\n", uop.pc, reg_addr, resp.bits.rdata, load_data)
       }
     }
     is (s_wait_w) {
-      when (resp_w_success) {
+      when (resp_success) {
         state := s_complete
         // printf("[ST] pc=%x addr=%x wdata=%x -> %x wmask=%x\n", uop.pc, reg_addr, in2, req.bits.wdata, req.bits.wmask)
       }
