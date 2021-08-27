@@ -116,9 +116,9 @@ class Core extends Module {
   val rf_a0 = WireInit(0.U(64.W))
   BoringUtils.addSink(rf_a0, "rf_a0")
   
-  when (uop_commit.valid) {
-    printf("[%d] pc=%x inst=%x\n", cycle_cnt, uop_commit.pc, uop_commit.inst)
-  }
+  // when (uop_commit.valid) {
+  //   printf("[%d] pc=%x inst=%x\n", cycle_cnt, uop_commit.pc, uop_commit.inst)
+  // }
   when (execution.io.uop.inst === Instructions.PUTCH) {
     printf("%c", rf_a0(7, 0))
   }
