@@ -7,7 +7,7 @@ class CacheBusReq extends Bundle with AxiParameters {
   val addr = Output(UInt(AxiAddrWidth.W))
   val ren = Output(Bool())
   val wdata = Output(UInt(AxiDataWidth.W))
-  val wmask = Output(UInt((AxiAddrWidth / 8).W))
+  val wmask = Output(UInt((AxiDataWidth / 8).W))
   val wen = Output(Bool())
 }
 

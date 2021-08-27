@@ -39,7 +39,7 @@ class InstFetch extends InstFetchModule {
   val bp = Module(new BrPredictor)
   val bp_pred_pc = bp.io.pred_pc
 
-  req.bits.addr := pc.asUInt()
+  req.bits.addr := pc
   req.bits.ren := true.B          // read-only imem
   req.bits.wdata := 0.U
   req.bits.wmask := 0.U

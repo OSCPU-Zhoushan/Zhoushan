@@ -46,10 +46,10 @@ class Lsu extends LsuModule with Ext {
   val req = io.dmem.req
   val resp = io.dmem.resp
 
-  val addr = in1 + signExt32_64(uop.imm)
+  val addr = (in1 + signExt32_64(uop.imm))(31, 0)
   val addr_offset = addr(2, 0)
   val wdata = in2
-  val reg_addr = RegInit(0.U(64.W))
+  val reg_addr = RegInit(0.U(32.W))
   val reg_addr_offset = reg_addr(2, 0)
   val reg_wdata = RegInit(0.U(64.W))
 
@@ -76,7 +76,7 @@ class Lsu extends LsuModule with Ext {
   //                   Fill(8, wmask(1)), Fill(8, wmask(0)))
   // val in2_masked = in2 & wmask64
 
-  req.bits.addr := Cat(reg_addr(63, 3), Fill(3, 0.U))
+  req.bits.addr := Cat(reg_addr(31, 3), Fill(3, 0.U))
   req.bits.ren := reg_is_load
   req.bits.wdata := (reg_wdata << (reg_addr_offset << 3))(63, 0)
   req.bits.wmask := mask & ((wmask << reg_addr_offset)(7, 0))

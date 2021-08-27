@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 
 trait AxiParameters {
-  val AxiAddrWidth = 64
+  val AxiAddrWidth = 32
   val AxiDataWidth = 64
   val AxiIdWidth = 4
   val AxiUserWidth = 1
@@ -32,8 +32,8 @@ class AxiA extends AxiLiteA with AxiIdUser {
 }
 
 class AxiLiteW extends Bundle with AxiParameters {
-  val data = Output(UInt(AxiAddrWidth.W))
-  val strb = Output(UInt((AxiAddrWidth / 8).W))
+  val data = Output(UInt(AxiDataWidth.W))
+  val strb = Output(UInt((AxiDataWidth / 8).W))
 }
 
 class AxiW extends AxiLiteW {
@@ -48,7 +48,7 @@ class AxiB extends AxiLiteB with AxiIdUser with AxiParameters { }
 
 class AxiLiteR extends Bundle with AxiParameters {
   val resp = Output(UInt(2.W))
-  val data = Output(UInt(AxiAddrWidth.W))
+  val data = Output(UInt(AxiDataWidth.W))
 }
 
 class AxiR extends AxiLiteR with AxiIdUser {

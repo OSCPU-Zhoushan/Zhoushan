@@ -15,7 +15,7 @@ class SimpleAxiReq extends Bundle with SimpleAxiId with AxiParameters {
   val addr = Output(UInt(AxiAddrWidth.W))
   val ren = Output(Bool())
   val wdata = Output(UInt(AxiDataWidth.W))
-  val wmask = Output(UInt((AxiAddrWidth / 8).W))
+  val wmask = Output(UInt((AxiDataWidth / 8).W))
   val wlast = Output(Bool())
   val wen = Output(Bool())
   val len = Output(UInt(8.W))
