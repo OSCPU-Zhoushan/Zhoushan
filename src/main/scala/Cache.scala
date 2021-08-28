@@ -91,7 +91,7 @@ class MetaData extends Module {
   io.replace_entry_idx := replace_entry_idx
 }
 
-class InstCache extends Module {
+abstract class Cache extends Module {
   val io = IO(new Bundle {
     val in = Flipped(new CacheBusIO)
     val out = new SimpleAxiIO
@@ -151,10 +151,6 @@ class InstCache extends Module {
   }
   val reg_hit_idx = RegInit(0.U(2.W))
 
-  val s_idle :: s_hit :: s_miss_req :: s_miss_wait :: s_miss_complete :: Nil = Enum(5)
-  val state = RegInit(s_idle)
-  val last_state = RegNext(state)
-
   val rdata = WireInit(UInt(64.W), 0.U)
   for (i <- 0 until 4) {
     when (sram_idx === i.U) {
@@ -163,6 +159,13 @@ class InstCache extends Module {
     }
   }
   val reg_rdata = RegInit(UInt(64.W), 0.U)
+
+}
+
+class InstCache extends Cache {
+  val s_idle :: s_hit :: s_miss_req :: s_miss_wait :: s_miss_complete :: Nil = Enum(5)
+  val state = RegInit(s_idle)
+  val last_state = RegNext(state)
 
   in.req.ready := (state === s_idle)
   in.resp.valid := (state === s_hit) || (state === s_miss_complete)
