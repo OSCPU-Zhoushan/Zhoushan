@@ -28,6 +28,9 @@ class MetaData extends Module {
     val replace_set_idx = Input(UInt(4.W))
     val replace_tag = Input(UInt(21.W))
     val replace_entry_idx = Output(UInt(2.W))
+    // write-back
+    val wb_en = Output(Bool())
+    val wb_tag = Output(UInt(21.W))
   })
 
   val tags = RegInit(VecInit(Seq.fill(64)(0.U(21.W))))
@@ -59,7 +62,6 @@ class MetaData extends Module {
   ))
 
   // update plru, or replace (and also update plru)
-  // ref: http://blog.sina.com.cn/s/blog_65a6c8eb0101ez8w.html
 
   val replace_plru0 = plru(io.replace_set_idx)(0)
   val replace_plru1 = Mux(replace_plru0, plru(io.replace_set_idx)(1),
@@ -70,7 +72,10 @@ class MetaData extends Module {
   val plru0, plru1, plru2 = WireInit(false.B)
   val plru_new = Cat(plru2.asUInt(), plru1.asUInt(), plru0.asUInt())
 
+  io.wb_en := false.B
+  io.wb_tag := 0.U
   when (io.plru_update) {
+    // update plru tree when hit
     plru0 := !io.plru_entry_idx(1)
     when (io.plru_entry_idx(0) === 0.U) {
       plru1 := !io.plru_entry_idx(0)
@@ -79,6 +84,7 @@ class MetaData extends Module {
     }
     plru(io.plru_set_idx) := plru_new
   } .elsewhen (io.replace_en) {
+    // update plru tree when miss/replace
     plru0 := !replace_entry_idx(1)
     when (replace_plru0 === 0.U) {
       plru1 := !replace_entry_idx(0)
@@ -88,6 +94,10 @@ class MetaData extends Module {
     plru(io.replace_set_idx) := plru_new
     tags(replace_line_idx) := io.replace_tag
     valid(replace_line_idx) := true.B
+    dirty(replace_line_idx) := false.B
+    // write back to memory if dirty
+    io.wb_en := dirty(replace_line_idx)
+    io.wb_tag := tags(replace_line_idx)
   }
   io.replace_entry_idx := replace_entry_idx
 }
