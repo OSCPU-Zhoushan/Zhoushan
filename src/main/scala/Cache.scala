@@ -46,7 +46,7 @@ class MetaData extends Module {
   }
   val check_hit = Wire(Vec(4, Bool()))
   for (i <- 0 until 4) {
-    check_hit(i) := valid(check_line_idx(i)) && (tags(i) === io.check_tag)
+    check_hit(i) := valid(check_line_idx(i)) && (tags(check_line_idx(i)) === io.check_tag)
   }
 
   io.check_hit := check_hit(0) || check_hit(1) || check_hit(2) || check_hit(3)
@@ -183,7 +183,7 @@ class InstCache extends Module {
   val wdata2 = RegInit(UInt(64.W), 0.U)
 
   switch (state) {
-    is (s_idle) {
+    is (s_idle) {             // 0
       when (in.req.fire()) {
         when (hit) {
           for (i <- 0 until 4) {
@@ -200,7 +200,7 @@ class InstCache extends Module {
         }
       }
     }
-    is (s_hit) {
+    is (s_hit) {              // 1
       when (last_state === s_idle) {
         reg_rdata := rdata
       }
@@ -217,12 +217,12 @@ class InstCache extends Module {
         state := s_idle
       }
     }
-    is (s_miss_req) {
+    is (s_miss_req) {         // 2
       when (out.req.fire()) {
         state := s_miss_wait
       }
     }
-    is (s_miss_wait) {
+    is (s_miss_wait) {        // 3
       when (out.resp.fire()) {
         when (!out.resp.bits.rlast) {
           wdata1 := out.resp.bits.rdata
@@ -232,7 +232,7 @@ class InstCache extends Module {
         }
       }
     }
-    is (s_miss_complete) {
+    is (s_miss_complete) {    // 4
       in.resp.bits.rdata := Mux(dword_offs.asBool(), wdata2, wdata1)
       for (i <- 0 until 4) {
         when (reg_sram_idx === i.U) {
