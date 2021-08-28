@@ -32,6 +32,7 @@ class MetaData extends Module {
 
   val tags = RegInit(VecInit(Seq.fill(64)(0.U(21.W))))
   val valid = RegInit(VecInit(Seq.fill(64)(false.B)))
+  val dirty = RegInit(VecInit(Seq.fill(64)(false.B)))
   // Tree-based PLRU replacement policy
   // plru(0) == 0 -> 0/1, == 1 -> 2/3
   // plru(1) == 0 -> 0,   == 1 -> 1
@@ -91,7 +92,7 @@ class MetaData extends Module {
   io.replace_entry_idx := replace_entry_idx
 }
 
-abstract class Cache extends Module {
+class Cache extends Module {
   val io = IO(new Bundle {
     val in = Flipped(new CacheBusIO)
     val out = new SimpleAxiIO
@@ -160,9 +161,6 @@ abstract class Cache extends Module {
   }
   val reg_rdata = RegInit(UInt(64.W), 0.U)
 
-}
-
-class InstCache extends Cache {
   val s_idle :: s_hit :: s_miss_req :: s_miss_wait :: s_miss_complete :: Nil = Enum(5)
   val state = RegInit(s_idle)
   val last_state = RegNext(state)
@@ -174,6 +172,7 @@ class InstCache extends Cache {
   out.req.valid := (state === s_miss_req)
   out.req.bits.id := 1.U
   out.req.bits.addr := Cat(reg_addr(31, 4), Fill(4, 0.U))
+  out.req.bits.aen := true.B
   out.req.bits.ren := true.B
   out.req.bits.wdata := 0.U
   out.req.bits.wmask := 0.U

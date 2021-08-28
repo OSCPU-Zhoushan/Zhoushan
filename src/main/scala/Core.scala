@@ -21,7 +21,7 @@ class Core extends Module {
   // cb2sa1.in <> fetch.io.imem
   // cb2sa1.out <> io.imem
 
-  val icache = Module(new InstCache)
+  val icache = Module(new Cache)
   icache.in <> fetch.io.imem
   icache.out <> io.imem
 
