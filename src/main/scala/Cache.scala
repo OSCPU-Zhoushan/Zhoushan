@@ -134,10 +134,10 @@ class InstCache extends Module {
   val tag = addr(30, 10)
 
   val reg_addr = RegInit(UInt(32.W), 0.U)
-  val reg_dword_offs = addr(3)
-  val reg_sram_idx = addr(5, 4)
-  val reg_set_idx = addr(9, 6)
-  val reg_tag = addr(30, 10)
+  val reg_dword_offs = reg_addr(3)
+  val reg_sram_idx = reg_addr(5, 4)
+  val reg_set_idx = reg_addr(9, 6)
+  val reg_tag = reg_addr(30, 10)
 
   val hit = WireInit(false.B)
   val hit_idx = WireInit(0.U(2.W))
