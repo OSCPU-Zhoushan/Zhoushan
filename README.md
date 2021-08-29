@@ -21,6 +21,8 @@ export AM_HOME=<...>/abstract-machine
 export DRAMSIM3_HOME=<...>/Zhoushan/DRAMsim3
 ```
 
+Then, config and make `NEMU` and `DRAMsim3`.
+
 To generate Verilog:
 
 ```
