@@ -7,7 +7,7 @@ import difftest._
 class Core extends Module {
   val io = IO(new Bundle {
     val imem = new SimpleAxiIO
-    val dmem = Flipped(new RamIO)
+    val dmem = new SimpleAxiIO
   })
 
   val stall = WireInit(false.B)
@@ -60,7 +60,10 @@ class Core extends Module {
   // val cb2sa2 = Module(new CacheBus2SimpelAxi(2))
   // cb2sa2.in <> execution.io.dmem
   // cb2sa2.out <> io.dmem
-  execution.io.dmem <> io.dmem
+
+  val dcache = Module(new Cache(2))
+  dcache.in <> execution.io.dmem
+  dcache.out <> io.dmem
 
   /* ----- Stage 4 - Commit (CM) ----------------- */
 

@@ -20,19 +20,12 @@ class SimTop extends Module {
   // val clint = Module(new Clint)
   // clint.io.in <> crossbar1to2.io.out(1)
 
-  // val crossbar2to1 = Module(new Crossbar2to1)
-  // crossbar2to1.io.in(0) <> core.io.imem
-  // crossbar2to1.io.in(1) <> crossbar1to2.io.out(0)
-
-  val dmem = Module(new Ram1r1w)
-  core.io.dmem <> dmem.io.dmem
-
-  // val simple2axi = Module(new SimpleAxi2Axi)
-  // simple2axi.in <> crossbar2to1.io.out
-  // simple2axi.out <> io.memAXI_0
+  val crossbar2to1 = Module(new Crossbar2to1)
+  crossbar2to1.io.in(0) <> core.io.imem
+  crossbar2to1.io.in(1) <> core.io.dmem
 
   val simple2axi = Module(new SimpleAxi2Axi)
-  simple2axi.in <> core.io.imem
+  simple2axi.in <> crossbar2to1.io.out
   simple2axi.out <> io.memAXI_0
 
   io.uart.out.valid := false.B
