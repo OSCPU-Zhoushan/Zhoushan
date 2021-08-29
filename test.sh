@@ -1,5 +1,17 @@
 #!/bin/bash
 
+function quick_tests {
+  quick_tests=(add-longlong add bit bubble-sort fact fib hello-str \
+load-store max quick-sort recursion select-sort string sum unalign)
+  for example in ${quick_tests[@]}
+  do
+    echo ======================================= ${example} start
+    ./build/emu -i ../am-kernels/tests/cpu-tests/build/${example}-riscv64-mycpu.bin
+    echo ======================================= ${example} finish
+  done
+  wait
+}
+
 function cpu_tests {
   cpu_tests=`cat cpu_tests.txt`
   for example in ${cpu_tests[@]}
@@ -22,8 +34,10 @@ function riscv_tests {
   wait
 }
 
-while getopts 'crt:' OPT; do
+while getopts 'qcrt:' OPT; do
   case $OPT in
+    q)
+      quick_tests;;
     c)
       cpu_tests;;
     r)

@@ -33,6 +33,7 @@ class CacheBus2SimpelAxi(id: Int) extends Module with AxiParameters {
   out.req.valid       := in.req.valid
   out.req.bits.id     := id.U
   out.req.bits.addr   := in.req.bits.addr
+  out.req.bits.aen    := true.B
   out.req.bits.ren    := in.req.bits.ren
   out.req.bits.wdata  := in.req.bits.wdata
   out.req.bits.wmask  := in.req.bits.wmask

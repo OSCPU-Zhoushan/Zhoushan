@@ -43,6 +43,12 @@ class Lsu extends LsuModule with Ext {
   val s_idle :: s_req :: s_wait_r :: s_wait_w :: s_complete :: Nil = Enum(5)
   val state = RegInit(s_idle)
 
+  val reset_init = RegInit(true.B)
+  when (reset_init) {
+    state := s_idle
+    reset_init := false.B
+  }
+
   val req = io.dmem.req
   val resp = io.dmem.resp
 
@@ -54,20 +60,20 @@ class Lsu extends LsuModule with Ext {
   val reg_wdata = RegInit(0.U(64.W))
 
   val mask = MuxLookup(reg_addr_offset, 0.U, Array(
-    "b000".U -> "b11111111".U,
-    "b001".U -> "b11111110".U,
-    "b010".U -> "b11111100".U,
-    "b011".U -> "b11111000".U,
-    "b100".U -> "b11110000".U,
-    "b101".U -> "b11100000".U,
-    "b110".U -> "b11000000".U,
-    "b111".U -> "b10000000".U
+    "b000".U -> "b11111111".U(8.W),
+    "b001".U -> "b11111110".U(8.W),
+    "b010".U -> "b11111100".U(8.W),
+    "b011".U -> "b11111000".U(8.W),
+    "b100".U -> "b11110000".U(8.W),
+    "b101".U -> "b11100000".U(8.W),
+    "b110".U -> "b11000000".U(8.W),
+    "b111".U -> "b10000000".U(8.W)
   ))
   val wmask = MuxLookup(reg_uop.mem_size, 0.U, Array(
-    MEM_BYTE  -> "b00000001".U,
-    MEM_HALF  -> "b00000011".U,
-    MEM_WORD  -> "b00001111".U,
-    MEM_DWORD -> "b11111111".U
+    MEM_BYTE  -> "b00000001".U(8.W),
+    MEM_HALF  -> "b00000011".U(8.W),
+    MEM_WORD  -> "b00001111".U(8.W),
+    MEM_DWORD -> "b11111111".U(8.W)
   ))
 
   // val wmask64 = Cat(Fill(8, wmask(7)), Fill(8, wmask(6)),
