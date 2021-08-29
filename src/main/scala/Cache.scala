@@ -3,7 +3,7 @@ package zhoushan
 import chisel3._
 import chisel3.util._
 
-/* InstCache configuration
+/* Cache configuration
  * 1xxx xxxx xxxx xxxx xxxx xxxx xxxx xxxx
  *                                     ___ (3) byte offset
  *                                    _    (1) dword offset (2 dwords in a line)
@@ -180,16 +180,16 @@ class Cache(id: Int) extends Module {
       rdata_raw := sram(i).io.rdata
     }
   }
-  val rdata = Mux(dword_offs.asBool(), rdata_raw(127, 64), rdata_raw(63, 0))
+  val rdata = Mux(reg_dword_offs.asBool(), rdata_raw(127, 64), rdata_raw(63, 0))
   val reg_rdata_raw = RegInit(UInt(128.W), 0.U)
   val reg_rdata = Mux(reg_dword_offs.asBool(), reg_rdata_raw(127, 64), reg_rdata_raw(63, 0))
 
   val wb_en = WireInit(false.B)
   val wb_addr = WireInit(UInt(32.W), 0.U)
   for (i <- 0 until 4) {
-    when (reg_sram_idx === i.U) {
+    when (sram_idx === i.U) {
       wb_en := meta(i).io.wb_en
-      wb_addr := Cat(1.U(1.W), meta(i).io.wb_tag, reg_addr(9, 0))
+      wb_addr := Cat(1.U(1.W), meta(i).io.wb_tag, addr(9, 0))
     }
   }
   val reg_wb_en = RegInit(false.B)
@@ -222,6 +222,7 @@ class Cache(id: Int) extends Module {
 
   switch (state) {
     is (s_idle) {
+      reg_addr := addr
       when (in.req.fire()) {
         when (hit) {
           for (i <- 0 until 4) {
@@ -233,7 +234,6 @@ class Cache(id: Int) extends Module {
           reg_hit_idx := hit_idx
           state := Mux(in.req.bits.wen, s_hit_w, s_hit_r)
         } .otherwise {
-          reg_addr := addr
           state := s_miss_req_r
           // before writing back, get the data in current cacheline
           for (i <- 0 until 4) {
@@ -272,7 +272,11 @@ class Cache(id: Int) extends Module {
             sram(i).io.en := true.B
             sram(i).io.wen := true.B
             sram(i).io.addr := Cat(reg_set_idx, reg_hit_idx)
-            sram(i).io.wdata := MaskData(rdata, in.req.bits.wdata, MaskExpand(in.req.bits.wmask))
+            sram(i).io.wdata := Mux(reg_dword_offs.asBool(),
+              Cat(MaskData(rdata_raw(127, 64), in.req.bits.wdata, MaskExpand(in.req.bits.wmask)), rdata_raw(63, 0)),
+              Cat(rdata_raw(127, 64), MaskData(rdata_raw(63, 0), in.req.bits.wdata, MaskExpand(in.req.bits.wmask)))
+            )
+            MaskData(rdata, in.req.bits.wdata, MaskExpand(in.req.bits.wmask))
             meta(i).io.dirty_en := true.B
             meta(i).io.dirty_set_idx := reg_set_idx
             meta(i).io.dirty_entry_idx := reg_hit_idx
@@ -316,7 +320,14 @@ class Cache(id: Int) extends Module {
           sram(i).io.en := true.B
           sram(i).io.wen := true.B
           sram(i).io.addr := Cat(reg_set_idx, meta(i).io.replace_entry_idx)
-          sram(i).io.wdata := Cat(wdata2, wdata1)
+          when (in.req.bits.wen) {
+            sram(i).io.wdata := Mux(reg_dword_offs.asBool(),
+              Cat(MaskData(wdata2, in.req.bits.wdata, MaskExpand(in.req.bits.wmask)), wdata1),
+              Cat(wdata2, MaskData(wdata1, in.req.bits.wdata, MaskExpand(in.req.bits.wmask)))
+            )
+          } .otherwise {
+            sram(i).io.wdata := Cat(wdata2, wdata1)
+          }
           meta(i).io.replace_en := true.B
           meta(i).io.replace_set_idx := reg_set_idx
           meta(i).io.replace_tag := reg_tag
