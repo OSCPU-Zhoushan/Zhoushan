@@ -32,6 +32,7 @@ class MetaData extends Module {
     val replace_set_idx = Input(UInt(4.W))
     val replace_tag = Input(UInt(21.W))
     val replace_entry_idx = Output(UInt(2.W))
+    val replace_en_dirty = Input(Bool())
     // write-back
     val wb_en = Output(Bool())
     val wb_tag = Output(UInt(21.W))
@@ -104,7 +105,7 @@ class MetaData extends Module {
     plru(io.replace_set_idx) := plru_new
     tags(replace_line_idx) := io.replace_tag
     valid(replace_line_idx) := true.B
-    dirty(replace_line_idx) := false.B
+    dirty(replace_line_idx) := io.replace_en_dirty
   }
   io.replace_entry_idx := replace_entry_idx
   io.wb_en := dirty(replace_line_idx) && valid(replace_line_idx)
@@ -118,7 +119,7 @@ class Cache(id: Int) extends Module {
   })
 
   val sram = for (i <- 0 until 4) yield {
-    val sram = Module(new Sram)
+    val sram = Module(new Sram(id * 10 + i))
     sram
   }
   val meta = for (i <- 0 until 4) yield {
@@ -145,6 +146,7 @@ class Cache(id: Int) extends Module {
     m.io.replace_en := false.B
     m.io.replace_set_idx := 0.U
     m.io.replace_tag := 0.U
+    m.io.replace_en_dirty := false.B
   }}
 
   val in = io.in
@@ -277,6 +279,7 @@ class Cache(id: Int) extends Module {
               Cat(rdata_raw(127, 64), MaskData(rdata_raw(63, 0), in.req.bits.wdata, MaskExpand(in.req.bits.wmask)))
             )
             MaskData(rdata, in.req.bits.wdata, MaskExpand(in.req.bits.wmask))
+            // mark as dirty
             meta(i).io.dirty_en := true.B
             meta(i).io.dirty_set_idx := reg_set_idx
             meta(i).io.dirty_entry_idx := reg_hit_idx
@@ -328,9 +331,11 @@ class Cache(id: Int) extends Module {
           } .otherwise {
             sram(i).io.wdata := Cat(wdata2, wdata1)
           }
+          // write allocate
           meta(i).io.replace_en := true.B
           meta(i).io.replace_set_idx := reg_set_idx
           meta(i).io.replace_tag := reg_tag
+          meta(i).io.replace_en_dirty := true.B
         }
       }
       state := Mux(reg_wb_en, s_miss_req_w1, s_idle)
