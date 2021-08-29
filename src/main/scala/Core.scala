@@ -22,8 +22,8 @@ class Core extends Module {
   // cb2sa1.out <> io.imem
 
   val icache = Module(new Cache(1))
-  icache.in <> fetch.io.imem
-  icache.out <> io.imem
+  icache.io.in <> fetch.io.imem
+  icache.io.out <> io.imem
 
   val if_id_reg = Module(new PipelineReg(new InstPacket))
   if_id_reg.io.in <> fetch.io.out
@@ -61,9 +61,15 @@ class Core extends Module {
   // cb2sa2.in <> execution.io.dmem
   // cb2sa2.out <> io.dmem
 
+  val crossbar1to2 = Module(new CacheBusCrossbar1to2)
+  crossbar1to2.io.in <> execution.io.dmem
+
   val dcache = Module(new Cache(2))
-  dcache.in <> execution.io.dmem
-  dcache.out <> io.dmem
+  dcache.io.in <> crossbar1to2.io.out(0)
+  dcache.io.out <> io.dmem
+
+  val clint = Module(new Clint)
+  clint.io.in <> crossbar1to2.io.out(1)
 
   /* ----- Stage 4 - Commit (CM) ----------------- */
 
@@ -102,9 +108,13 @@ class Core extends Module {
 
   val lsu_addr = WireInit(UInt(64.W), 0.U)
   BoringUtils.addSink(lsu_addr, "lsu_addr")
+
+  val ClintAddrBase = Settings.ClintAddrBase.U
+  val ClintAddrSize = Settings.ClintAddrSize.U
+
   val skip = (uop_commit.inst === Instructions.PUTCH) ||
              (uop_commit.fu_code === Constant.FU_CSR && uop_commit.inst(31, 20) === Csrs.mcycle) ||
-             (uop_commit.fu_code === Constant.FU_MEM && lsu_addr >= Settings.ClintAddrBase.U && lsu_addr < Settings.ClintAddrBase.U + Settings.ClintAddrSize.U)
+             (uop_commit.fu_code === Constant.FU_MEM && lsu_addr >= ClintAddrBase && lsu_addr < ClintAddrBase + ClintAddrSize)
 
   if (Settings.Difftest) {
     val dt_ic = Module(new DifftestInstrCommit)

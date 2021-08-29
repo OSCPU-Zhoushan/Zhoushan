@@ -3,7 +3,7 @@ package zhoushan
 import chisel3._
 import chisel3.util._
 
-class Crossbar2to1 extends Module {
+class SimpleAxiCrossbar2to1 extends Module {
   val io = IO(new Bundle {
     // val id = Vec(2, UInt(AxiParameters.AxiIdWidth.W))
     val in = Flipped(Vec(2, new SimpleAxiIO))
@@ -43,10 +43,10 @@ class Crossbar2to1 extends Module {
 
 }
 
-class Crossbar1to2 extends Module {
+class CacheBusCrossbar1to2 extends Module {
   val io = IO(new Bundle {
-    val in = Flipped(new SimpleAxiIO)
-    val out = Vec(2, new SimpleAxiIO)
+    val in = Flipped(new CacheBusIO)
+    val out = Vec(2, new CacheBusIO)
   })
 
   // 0 -> dmem
@@ -65,7 +65,7 @@ class Crossbar1to2 extends Module {
   io.out(1).req.valid := io.in.req.valid && to_clint
   io.in.req.ready := Mux(to_clint, io.out(1).req.ready, io.out(0).req.ready)
 
-  val arbiter = Module(new RRArbiter(new SimpleAxiResp, 2))
+  val arbiter = Module(new RRArbiter(new CacheBusResp, 2))
   arbiter.io.in(0) <> io.out(0).resp
   arbiter.io.in(1) <> io.out(1).resp
 

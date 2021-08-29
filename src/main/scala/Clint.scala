@@ -6,7 +6,7 @@ import chisel3.util.experimental._
 
 class Clint extends Module {
   val io = IO(new Bundle {
-    val in = Flipped(new SimpleAxiIO)
+    val in = Flipped(new CacheBusIO)
   })
 
   def maskExpand(x: UInt) = Cat(x.asBools.map(Fill(8, _)).reverse)
@@ -66,12 +66,9 @@ class Clint extends Module {
 
   io.in.req.ready := (state === s_idle)
   io.in.resp.valid := (state =/= s_idle)
-  io.in.resp.bits.id := 2.U(AxiParameters.AxiIdWidth.W)
   io.in.resp.bits.rdata := reg_rdata
-  io.in.resp.bits.wresp := (state === s_resp_w)
-  io.in.resp.bits.rlast := (state === s_resp_r)
 
-  val mtip = RegInit(0.U)
+  val mtip = WireInit(UInt(1.W), 0.U)
   mtip := (mtime >= mtimecmp).asUInt()
   BoringUtils.addSource(mtip, "csr_mip_mtip")
 

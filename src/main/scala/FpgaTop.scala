@@ -10,7 +10,7 @@ class FpgaTop extends Module {
 
   val core = Module(new Core)
 
-  val crossbar2to1 = Module(new Crossbar2to1)
+  val crossbar2to1 = Module(new SimpleAxiCrossbar2to1)
   crossbar2to1.io.in(0) <> core.io.imem
   crossbar2to1.io.in(1) <> core.io.dmem
 
