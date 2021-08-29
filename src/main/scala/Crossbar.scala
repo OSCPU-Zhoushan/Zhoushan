@@ -52,8 +52,8 @@ class Crossbar1to2 extends Module {
   // 0 -> dmem
   // 1 -> CLINT
 
-  val ClintAddrBase = Settings.ClintAddrBase
-  val ClintAddrSize = Settings.ClintAddrSize
+  val ClintAddrBase = Settings.ClintAddrBase.U
+  val ClintAddrSize = Settings.ClintAddrSize.U
 
   val addr = io.in.req.bits.addr
   val to_clint = (addr >= ClintAddrBase && addr < ClintAddrBase + ClintAddrSize)

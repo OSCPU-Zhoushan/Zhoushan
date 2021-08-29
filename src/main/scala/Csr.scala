@@ -169,32 +169,34 @@ class Csr extends Module {
 
   // difftest for arch event & CSR state
 
-  val dt_ae = Module(new DifftestArchEvent)
-  dt_ae.io.clock        := clock
-  dt_ae.io.coreid       := 0.U
-  dt_ae.io.intrNO       := Mux(intr, intr_no, 0.U)
-  dt_ae.io.cause        := 0.U
-  dt_ae.io.exceptionPC  := Mux(intr, mepc, 0.U)
+  if (Settings.Difftest) {
+    val dt_ae = Module(new DifftestArchEvent)
+    dt_ae.io.clock        := clock
+    dt_ae.io.coreid       := 0.U
+    dt_ae.io.intrNO       := Mux(intr, intr_no, 0.U)
+    dt_ae.io.cause        := 0.U
+    dt_ae.io.exceptionPC  := Mux(intr, mepc, 0.U)
 
-  val dt_cs = Module(new DifftestCSRState)
-  dt_cs.io.clock          := clock
-  dt_cs.io.coreid         := 0.U
-  dt_cs.io.priviledgeMode := 3.U  // Machine mode
-  dt_cs.io.mstatus        := mstatus
-  dt_cs.io.sstatus        := 0.U
-  dt_cs.io.mepc           := mepc
-  dt_cs.io.sepc           := 0.U
-  dt_cs.io.mtval          := 0.U
-  dt_cs.io.stval          := 0.U
-  dt_cs.io.mtvec          := mtvec
-  dt_cs.io.stvec          := 0.U
-  dt_cs.io.mcause         := mcause
-  dt_cs.io.scause         := 0.U
-  dt_cs.io.satp           := 0.U
-  dt_cs.io.mip            := mip()
-  dt_cs.io.mie            := mie
-  dt_cs.io.mscratch       := mscratch
-  dt_cs.io.sscratch       := 0.U
-  dt_cs.io.mideleg        := 0.U
-  dt_cs.io.medeleg        := 0.U
+    val dt_cs = Module(new DifftestCSRState)
+    dt_cs.io.clock          := clock
+    dt_cs.io.coreid         := 0.U
+    dt_cs.io.priviledgeMode := 3.U  // Machine mode
+    dt_cs.io.mstatus        := mstatus
+    dt_cs.io.sstatus        := 0.U
+    dt_cs.io.mepc           := mepc
+    dt_cs.io.sepc           := 0.U
+    dt_cs.io.mtval          := 0.U
+    dt_cs.io.stval          := 0.U
+    dt_cs.io.mtvec          := mtvec
+    dt_cs.io.stvec          := 0.U
+    dt_cs.io.mcause         := mcause
+    dt_cs.io.scause         := 0.U
+    dt_cs.io.satp           := 0.U
+    dt_cs.io.mip            := mip()
+    dt_cs.io.mie            := mie
+    dt_cs.io.mscratch       := mscratch
+    dt_cs.io.sscratch       := 0.U
+    dt_cs.io.mideleg        := 0.U
+    dt_cs.io.medeleg        := 0.U
+  }
 }

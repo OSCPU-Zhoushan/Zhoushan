@@ -1,8 +1,7 @@
 package zhoushan
 
-import chisel3._
-
 object Settings {
-  val ClintAddrBase = "h0000000002000000".U
-  val ClintAddrSize = "h0000000000010000".U
+  val Difftest = true
+  val ClintAddrBase = 0x02000000
+  val ClintAddrSize = 0x10000
 }

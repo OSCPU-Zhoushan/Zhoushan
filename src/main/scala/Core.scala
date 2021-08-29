@@ -104,21 +104,23 @@ class Core extends Module {
   BoringUtils.addSink(lsu_addr, "lsu_addr")
   val skip = (uop_commit.inst === Instructions.PUTCH) ||
              (uop_commit.fu_code === Constant.FU_CSR && uop_commit.inst(31, 20) === Csrs.mcycle) ||
-             (uop_commit.fu_code === Constant.FU_MEM && lsu_addr >= Settings.ClintAddrBase && lsu_addr < Settings.ClintAddrBase + Settings.ClintAddrSize)
+             (uop_commit.fu_code === Constant.FU_MEM && lsu_addr >= Settings.ClintAddrBase.U && lsu_addr < Settings.ClintAddrBase.U + Settings.ClintAddrSize.U)
 
-  val dt_ic = Module(new DifftestInstrCommit)
-  dt_ic.io.clock    := clock
-  dt_ic.io.coreid   := 0.U
-  dt_ic.io.index    := 0.U
-  dt_ic.io.valid    := uop_commit.valid
-  dt_ic.io.pc       := uop_commit.pc
-  dt_ic.io.instr    := uop_commit.inst
-  dt_ic.io.skip     := skip
-  dt_ic.io.isRVC    := false.B
-  dt_ic.io.scFailed := false.B
-  dt_ic.io.wen      := uop_commit.rd_en
-  dt_ic.io.wdata    := ex_cm_reg.io.out.rd_data
-  dt_ic.io.wdest    := uop_commit.rd_addr
+  if (Settings.Difftest) {
+    val dt_ic = Module(new DifftestInstrCommit)
+    dt_ic.io.clock    := clock
+    dt_ic.io.coreid   := 0.U
+    dt_ic.io.index    := 0.U
+    dt_ic.io.valid    := uop_commit.valid
+    dt_ic.io.pc       := uop_commit.pc
+    dt_ic.io.instr    := uop_commit.inst
+    dt_ic.io.skip     := skip
+    dt_ic.io.isRVC    := false.B
+    dt_ic.io.scFailed := false.B
+    dt_ic.io.wen      := uop_commit.rd_en
+    dt_ic.io.wdata    := ex_cm_reg.io.out.rd_data
+    dt_ic.io.wdest    := uop_commit.rd_addr
+  }
 
   val cycle_cnt = RegInit(0.U(64.W))
   val instr_cnt = RegInit(0.U(64.W))
@@ -129,23 +131,25 @@ class Core extends Module {
   val rf_a0 = WireInit(0.U(64.W))
   BoringUtils.addSink(rf_a0, "rf_a0")
   
-  // when (uop_commit.valid) {
-  //   printf("[%d] pc=%x inst=%x\n", cycle_cnt, uop_commit.pc, uop_commit.inst)
-  // }
-  when (execution.io.uop.inst === Instructions.PUTCH) {
-    printf("%c", rf_a0(7, 0))
+  if (Settings.Difftest) {
+    // when (uop_commit.valid) {
+    //   printf("[%d] pc=%x inst=%x\n", cycle_cnt, uop_commit.pc, uop_commit.inst)
+    // }
+    when (execution.io.uop.inst === Instructions.PUTCH) {
+      printf("%c", rf_a0(7, 0))
+    }
   }
 
-  // ref: https://github.com/OSCPU/ysyx/issues/8
-  // ref: https://github.com/OSCPU/ysyx/issues/11
-  val dt_te = Module(new DifftestTrapEvent)
-  dt_te.io.clock    := clock
-  dt_te.io.coreid   := 0.U
-  dt_te.io.valid    := (uop_commit.inst === "h0000006b".U)
-  dt_te.io.code     := rf_a0(2, 0)
-  dt_te.io.pc       := uop_commit.pc
-  dt_te.io.cycleCnt := cycle_cnt
-  dt_te.io.instrCnt := instr_cnt
+  if (Settings.Difftest) {
+    val dt_te = Module(new DifftestTrapEvent)
+    dt_te.io.clock    := clock
+    dt_te.io.coreid   := 0.U
+    dt_te.io.valid    := (uop_commit.inst === "h0000006b".U)
+    dt_te.io.code     := rf_a0(2, 0)
+    dt_te.io.pc       := uop_commit.pc
+    dt_te.io.cycleCnt := cycle_cnt
+    dt_te.io.instrCnt := instr_cnt
+  }
 
   BoringUtils.addSource(cycle_cnt, "csr_mcycle")
   BoringUtils.addSource(instr_cnt, "csr_minstret")
