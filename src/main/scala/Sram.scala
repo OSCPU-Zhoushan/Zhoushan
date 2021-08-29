@@ -10,7 +10,7 @@ trait SramParameters {
   val SramDataWidth = 128
 }
 
-class Sram extends Module with SramParameters {
+class Sram(id: Int) extends Module with SramParameters {
   val io = IO(new Bundle {
     val en = Input(Bool())
     val wen = Input(Bool())
@@ -30,5 +30,17 @@ class Sram extends Module with SramParameters {
     }
   } .otherwise {
     io.rdata := DontCare
+  }
+
+  if (Settings.DebugMsgSram) {
+    when (io.en) {
+      when (io.wen) {
+        printf("%d: SRAM[%d] addr=%x wdata=%x\n", DebugTimer(), id.U, io.addr, io.wdata)
+      } .otherwise {
+        when (id.U >= 20.U) {
+          printf("%d: SRAM[%d] addr=%x rdata=%x\n", DebugTimer(), id.U, io.addr, io.rdata)
+        }
+      }
+    }
   }
 }

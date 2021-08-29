@@ -132,9 +132,11 @@ class Core extends Module {
   BoringUtils.addSink(rf_a0, "rf_a0")
   
   if (Settings.Difftest) {
-    // when (uop_commit.valid) {
-    //   printf("[%d] pc=%x inst=%x\n", cycle_cnt, uop_commit.pc, uop_commit.inst)
-    // }
+    if (Settings.DebugMsgUopCommit) {
+      when (uop_commit.valid) {
+        printf("%d: [UOP] pc=%x inst=%x\n", DebugTimer(), uop_commit.pc, uop_commit.inst)
+      }
+    }
     when (execution.io.uop.inst === Instructions.PUTCH) {
       printf("%c", rf_a0(7, 0))
     }

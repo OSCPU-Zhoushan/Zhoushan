@@ -139,13 +139,17 @@ class Lsu extends LsuModule with Ext {
       when (resp_success) {
         load_data := resp.bits.rdata >> (reg_addr_offset << 3)
         state := s_complete
-        // printf("[LD] pc=%x addr=%x rdata=%x -> %x\n", uop.pc, reg_addr, resp.bits.rdata, load_data)
+        if (Settings.DebugMsgLsu) {
+          printf("%d: [LD] pc=%x addr=%x rdata=%x -> %x\n", DebugTimer(), uop.pc, reg_addr, resp.bits.rdata, load_data)
+        }
       }
     }
     is (s_wait_w) {
       when (resp_success) {
         state := s_complete
-        // printf("[ST] pc=%x addr=%x wdata=%x -> %x wmask=%x\n", uop.pc, reg_addr, in2, req.bits.wdata, req.bits.wmask)
+        if (Settings.DebugMsgLsu) {
+          printf("%d: [ST] pc=%x addr=%x wdata=%x -> %x wmask=%x\n", DebugTimer(), uop.pc, reg_addr, in2, req.bits.wdata, req.bits.wmask)
+        }
       }
     }
     is (s_complete) {
