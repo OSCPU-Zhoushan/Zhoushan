@@ -19,6 +19,10 @@ class MetaData extends Module {
     val check_tag = Input(UInt(21.W))
     val check_hit = Output(Bool())
     val check_hit_idx = Output(UInt(2.W))
+    // mark dirty
+    val dirty_en = Input(Bool())
+    val dirty_set_idx = Input(UInt(4.W))
+    val dirty_entry_idx = Input(UInt(2.W))
     // update plru
     val plru_update = Input(Bool())
     val plru_set_idx = Input(UInt(4.W))
@@ -61,6 +65,14 @@ class MetaData extends Module {
     check_hit(3) -> 3.U(3.W)
   ))
 
+  // mark dirty
+
+  val dirty_line_idx = Cat(io.dirty_set_idx, io.dirty_entry_idx)
+
+  when (io.dirty_en) {
+    dirty(dirty_line_idx) := true.B
+  }
+
   // update plru, or replace (and also update plru)
 
   val replace_plru0 = plru(io.replace_set_idx)(0)
@@ -72,8 +84,6 @@ class MetaData extends Module {
   val plru0, plru1, plru2 = WireInit(false.B)
   val plru_new = Cat(plru2.asUInt(), plru1.asUInt(), plru0.asUInt())
 
-  io.wb_en := false.B
-  io.wb_tag := 0.U
   when (io.plru_update) {
     // update plru tree when hit
     plru0 := !io.plru_entry_idx(1)
@@ -95,14 +105,13 @@ class MetaData extends Module {
     tags(replace_line_idx) := io.replace_tag
     valid(replace_line_idx) := true.B
     dirty(replace_line_idx) := false.B
-    // write back to memory if dirty
-    io.wb_en := dirty(replace_line_idx)
-    io.wb_tag := tags(replace_line_idx)
   }
   io.replace_entry_idx := replace_entry_idx
+  io.wb_en := dirty(replace_line_idx) && valid(replace_line_idx)
+  io.wb_tag := tags(replace_line_idx)
 }
 
-class Cache extends Module {
+class Cache(id: Int) extends Module {
   val io = IO(new Bundle {
     val in = Flipped(new CacheBusIO)
     val out = new SimpleAxiIO
@@ -127,6 +136,9 @@ class Cache extends Module {
   meta.map { case m => {
     m.io.check_set_idx := 0.U
     m.io.check_tag := 0.U
+    m.io.dirty_en := false.B
+    m.io.dirty_set_idx := 0.U
+    m.io.dirty_entry_idx := 0.U
     m.io.plru_update := false.B
     m.io.plru_set_idx := 0.U
     m.io.plru_entry_idx := 0.U
@@ -162,40 +174,54 @@ class Cache extends Module {
   }
   val reg_hit_idx = RegInit(0.U(2.W))
 
-  val rdata = WireInit(UInt(64.W), 0.U)
+  val rdata_raw = WireInit(UInt(128.W), 0.U)
   for (i <- 0 until 4) {
     when (sram_idx === i.U) {
-      rdata := Mux(dword_offs.asBool(), sram(i).io.rdata(127, 64), 
-                                        sram(i).io.rdata(63, 0))
+      rdata_raw := sram(i).io.rdata
     }
   }
-  val reg_rdata = RegInit(UInt(64.W), 0.U)
+  val rdata = Mux(dword_offs.asBool(), rdata_raw(127, 64), rdata_raw(63, 0))
+  val reg_rdata_raw = RegInit(UInt(128.W), 0.U)
+  val reg_rdata = Mux(reg_dword_offs.asBool(), reg_rdata_raw(127, 64), reg_rdata_raw(63, 0))
 
-  val s_idle :: s_hit :: s_miss_req :: s_miss_wait :: s_miss_complete :: Nil = Enum(5)
+  val wb_en = WireInit(false.B)
+  val wb_addr = WireInit(UInt(32.W), 0.U)
+  for (i <- 0 until 4) {
+    when (reg_sram_idx === i.U) {
+      wb_en := meta(i).io.wb_en
+      wb_addr := Cat(1.U(1.W), meta(i).io.wb_tag, reg_addr(9, 0))
+    }
+  }
+  val reg_wb_en = RegInit(false.B)
+  val reg_wb_addr = RegInit(UInt(32.W), 0.U)
+  val reg_wb_tag = reg_wb_addr(30, 10)
+
+  val s_idle :: s_hit_r :: s_hit_w :: s_miss_req_r :: s_miss_wait_r :: s1 = Enum(9)
+  val s_miss_ok_r :: s_miss_req_w1 :: s_miss_req_w2 :: s_miss_wait_w :: Nil = s1
   val state = RegInit(s_idle)
   val last_state = RegNext(state)
 
   in.req.ready := (state === s_idle)
-  in.resp.valid := (state === s_hit) || (state === s_miss_complete)
+  in.resp.valid := (state === s_hit_r) || (state === s_hit_w) || (state === s_miss_ok_r)
   in.resp.bits.rdata := 0.U
 
-  out.req.valid := (state === s_miss_req)
-  out.req.bits.id := 1.U
-  out.req.bits.addr := Cat(reg_addr(31, 4), Fill(4, 0.U))
-  out.req.bits.aen := true.B
-  out.req.bits.ren := true.B
-  out.req.bits.wdata := 0.U
-  out.req.bits.wmask := 0.U
-  out.req.bits.wlast := true.B
-  out.req.bits.wen := false.B
+  out.req.valid := (state === s_miss_req_r) || (state === s_miss_req_w1) || (state === s_miss_req_w2)
+  out.req.bits.id := id.U
+  out.req.bits.addr := Mux(state === s_miss_req_r, Cat(reg_addr(31, 4), Fill(4, 0.U)), Cat(reg_wb_addr(31, 4), Fill(4, 0.U)))
+  out.req.bits.aen := (state === s_miss_req_r) || (state === s_miss_req_w1)
+  out.req.bits.ren := (state === s_miss_req_r)
+  out.req.bits.wdata := Mux(state === s_miss_req_w1, reg_rdata_raw(63, 0), reg_rdata_raw(127, 64))
+  out.req.bits.wmask := "hff".U(8.W)
+  out.req.bits.wlast := (state === s_miss_req_w2)
+  out.req.bits.wen := (state === s_miss_req_w1) || (state === s_miss_req_w2)
   out.req.bits.len := 1.U
-  out.resp.ready := (state === s_miss_wait)
+  out.resp.ready := (state === s_miss_wait_r) || (state === s_miss_wait_w)
 
   val wdata1 = RegInit(UInt(64.W), 0.U)
   val wdata2 = RegInit(UInt(64.W), 0.U)
 
   switch (state) {
-    is (s_idle) {             // 0
+    is (s_idle) {
       when (in.req.fire()) {
         when (hit) {
           for (i <- 0 until 4) {
@@ -205,16 +231,26 @@ class Cache extends Module {
             }
           }
           reg_hit_idx := hit_idx
-          state := s_hit
+          state := Mux(in.req.bits.wen, s_hit_w, s_hit_r)
         } .otherwise {
           reg_addr := addr
-          state := s_miss_req
+          state := s_miss_req_r
+          // before writing back, get the data in current cacheline
+          for (i <- 0 until 4) {
+            when (sram_idx === i.U) {
+              meta(i).io.replace_set_idx := set_idx
+              sram(i).io.en := true.B
+              sram(i).io.addr := Cat(set_idx, meta(i).io.replace_entry_idx)
+            }
+          }
+          reg_wb_en := wb_en
+          reg_wb_addr := wb_addr
         }
       }
     }
-    is (s_hit) {              // 1
+    is (s_hit_r) {
       when (last_state === s_idle) {
-        reg_rdata := rdata
+        reg_rdata_raw := rdata_raw
       }
       when (in.resp.fire()) {
         in.resp.bits.rdata := Mux(last_state === s_idle, rdata, reg_rdata)
@@ -229,23 +265,52 @@ class Cache extends Module {
         state := s_idle
       }
     }
-    is (s_miss_req) {         // 2
-      when (out.req.fire()) {
-        state := s_miss_wait
+    is (s_hit_w) {
+      when (last_state === s_idle) {
+        for (i <- 0 until 4) {
+          when (reg_sram_idx === i.U) {
+            sram(i).io.en := true.B
+            sram(i).io.wen := true.B
+            sram(i).io.addr := Cat(reg_set_idx, reg_hit_idx)
+            sram(i).io.wdata := MaskData(rdata, in.req.bits.wdata, MaskExpand(in.req.bits.wmask))
+            meta(i).io.dirty_en := true.B
+            meta(i).io.dirty_set_idx := reg_set_idx
+            meta(i).io.dirty_entry_idx := reg_hit_idx
+          }
+        }
+      }
+      when (in.resp.fire()) {
+        // update plru
+        for (i <- 0 until 4) {
+          when (reg_sram_idx === i.U) {
+            meta(i).io.plru_update := true.B
+            meta(i).io.plru_set_idx := reg_set_idx
+            meta(i).io.plru_entry_idx := reg_hit_idx
+          }
+        }
+        state := s_idle
       }
     }
-    is (s_miss_wait) {        // 3
+    is (s_miss_req_r) {
+      when (last_state === s_idle) {
+        reg_rdata_raw := rdata_raw
+      }
+      when (out.req.fire()) {
+        state := s_miss_wait_r
+      }
+    }
+    is (s_miss_wait_r) {
       when (out.resp.fire()) {
         when (!out.resp.bits.rlast) {
           wdata1 := out.resp.bits.rdata
         } .otherwise {
           wdata2 := out.resp.bits.rdata
-          state := s_miss_complete
+          state := s_miss_ok_r
         }
       }
     }
-    is (s_miss_complete) {    // 4
-      in.resp.bits.rdata := Mux(dword_offs.asBool(), wdata2, wdata1)
+    is (s_miss_ok_r) {
+      in.resp.bits.rdata := Mux(in.req.bits.wen, 0.U, Mux(dword_offs.asBool(), wdata2, wdata1))
       for (i <- 0 until 4) {
         when (reg_sram_idx === i.U) {
           sram(i).io.en := true.B
@@ -257,8 +322,22 @@ class Cache extends Module {
           meta(i).io.replace_tag := reg_tag
         }
       }
-      state := s_idle
+      state := Mux(reg_wb_en, s_miss_req_w1, s_idle)
+    }
+    is (s_miss_req_w1) {
+      when (out.req.fire()) {
+        state := s_miss_req_w2
+      }
+    }
+    is (s_miss_req_w2) {
+      when (out.req.fire()) {
+        state := s_miss_wait_w
+      }
+    }
+    is (s_miss_wait_w) {
+      when (out.resp.fire()) {
+        state := s_idle
+      }
     }
   }
-
 }

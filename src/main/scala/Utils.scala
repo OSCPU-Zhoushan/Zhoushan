@@ -1,7 +1,10 @@
 package zhoushan
 
+import chisel3._
+import chisel3.util._
+
 object MaskExpand {
-  def apply(x: UInt) = Cat(m.asBools.map(Fill(8, _)).reverse)
+  def apply(x: UInt) = Cat(x.asBools.map(Fill(8, _)).reverse)
 }
 
 object MaskData {
