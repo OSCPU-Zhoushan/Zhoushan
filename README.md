@@ -2,8 +2,6 @@
 
 Open Source Chip Project by University (OSCPU) - Team Zhoushan
 
-Team member: Binggang Qiu, Jian Shi, Li Shi, Hanyu Wang, Yanjun Yang
-
 ## Dependency
 
 1. [AM](https://github.com/OSCPU-Zhoushan/abstract-machine), branch: zhoushan
@@ -23,6 +21,8 @@ export AM_HOME=<...>/abstract-machine
 export DRAMSIM3_HOME=<...>/Zhoushan/DRAMsim3
 ```
 
+Then, config and make `NEMU` and `DRAMsim3`.
+
 To generate Verilog:
 
 ```
@@ -35,3 +35,7 @@ To build and run the binary for emulation and difftest:
 make emu
 ./build/emu -i path/to/risc-v/binary.bin
 ```
+
+## Notes
+
+1. `IF` stage AXI ID is 1, `MEM` stage AXI ID is 2.

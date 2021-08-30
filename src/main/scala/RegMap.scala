@@ -19,7 +19,7 @@ object RegMap {
         rdata := r
       }
       when (addr === a && wen) {
-        r := (r & ~wmask) | (wdata & wmask)
+        r := MaskData(r, wdata, wmask)
       }
     }}
   }

@@ -6,8 +6,8 @@ import difftest._
 
 class Core extends Module {
   val io = IO(new Bundle {
-    val imem = if (Settings.UseAxi) (new SimpleAxiIO) else (Flipped(new RomIO))
-    val dmem = if (Settings.UseAxi) (new SimpleAxiIO) else (Flipped(new RamIO))
+    val imem = new SimpleAxiIO
+    val dmem = new SimpleAxiIO
   })
 
   val stall = WireInit(false.B)
@@ -15,9 +15,15 @@ class Core extends Module {
 
   /* ----- Stage 1 - Instruction Fetch (IF) ------ */
 
-  val fetch = Module(if (Settings.UseAxi) (new InstFetch) else (new InstFetchWithRamHelper))
-  // val fetch = Module(new InstFetch)
-  fetch.io.imem <> io.imem
+  val fetch = Module(new InstFetch)
+
+  // val cb2sa1 = Module(new CacheBus2SimpelAxi(1))
+  // cb2sa1.in <> fetch.io.imem
+  // cb2sa1.out <> io.imem
+
+  val icache = Module(new Cache(1))
+  icache.io.in <> fetch.io.imem
+  icache.io.out <> io.imem
 
   val if_id_reg = Module(new PipelineReg(new InstPacket))
   if_id_reg.io.in <> fetch.io.out
@@ -50,7 +56,20 @@ class Core extends Module {
 
   execution.io.rs1_data := ex_rs1_data // id_ex_reg.io.out.rs1_data
   execution.io.rs2_data := ex_rs2_data // id_ex_reg.io.out.rs2_data
-  execution.io.dmem <> io.dmem
+
+  // val cb2sa2 = Module(new CacheBus2SimpelAxi(2))
+  // cb2sa2.in <> execution.io.dmem
+  // cb2sa2.out <> io.dmem
+
+  val crossbar1to2 = Module(new CacheBusCrossbar1to2)
+  crossbar1to2.io.in <> execution.io.dmem
+
+  val dcache = Module(new Cache(2))
+  dcache.io.in <> crossbar1to2.io.out(0)
+  dcache.io.out <> io.dmem
+
+  val clint = Module(new Clint)
+  clint.io.in <> crossbar1to2.io.out(1)
 
   /* ----- Stage 4 - Commit (CM) ----------------- */
 
@@ -89,23 +108,29 @@ class Core extends Module {
 
   val lsu_addr = WireInit(UInt(64.W), 0.U)
   BoringUtils.addSink(lsu_addr, "lsu_addr")
+
+  val ClintAddrBase = Settings.ClintAddrBase.U
+  val ClintAddrSize = Settings.ClintAddrSize.U
+
   val skip = (uop_commit.inst === Instructions.PUTCH) ||
              (uop_commit.fu_code === Constant.FU_CSR && uop_commit.inst(31, 20) === Csrs.mcycle) ||
-             (uop_commit.fu_code === Constant.FU_MEM && lsu_addr >= Settings.ClintAddrBase && lsu_addr < Settings.ClintAddrBase + Settings.ClintAddrSize)
+             (uop_commit.fu_code === Constant.FU_MEM && lsu_addr >= ClintAddrBase && lsu_addr < ClintAddrBase + ClintAddrSize)
 
-  val dt_ic = Module(new DifftestInstrCommit)
-  dt_ic.io.clock    := clock
-  dt_ic.io.coreid   := 0.U
-  dt_ic.io.index    := 0.U
-  dt_ic.io.valid    := uop_commit.valid
-  dt_ic.io.pc       := uop_commit.pc
-  dt_ic.io.instr    := uop_commit.inst
-  dt_ic.io.skip     := skip
-  dt_ic.io.isRVC    := false.B
-  dt_ic.io.scFailed := false.B
-  dt_ic.io.wen      := uop_commit.rd_en
-  dt_ic.io.wdata    := ex_cm_reg.io.out.rd_data
-  dt_ic.io.wdest    := uop_commit.rd_addr
+  if (Settings.Difftest) {
+    val dt_ic = Module(new DifftestInstrCommit)
+    dt_ic.io.clock    := clock
+    dt_ic.io.coreid   := 0.U
+    dt_ic.io.index    := 0.U
+    dt_ic.io.valid    := uop_commit.valid
+    dt_ic.io.pc       := uop_commit.pc
+    dt_ic.io.instr    := uop_commit.inst
+    dt_ic.io.skip     := skip
+    dt_ic.io.isRVC    := false.B
+    dt_ic.io.scFailed := false.B
+    dt_ic.io.wen      := uop_commit.rd_en
+    dt_ic.io.wdata    := ex_cm_reg.io.out.rd_data
+    dt_ic.io.wdest    := uop_commit.rd_addr
+  }
 
   val cycle_cnt = RegInit(0.U(64.W))
   val instr_cnt = RegInit(0.U(64.W))
@@ -116,23 +141,27 @@ class Core extends Module {
   val rf_a0 = WireInit(0.U(64.W))
   BoringUtils.addSink(rf_a0, "rf_a0")
   
-  // when (uop_commit.valid) {
-  //   printf("[%d] pc=%x inst=%x\n", cycle_cnt, uop_commit.pc, uop_commit.inst)
-  // }
-  when (execution.io.uop.inst === Instructions.PUTCH) {
-    printf("%c", rf_a0(7, 0))
+  if (Settings.Difftest) {
+    if (Settings.DebugMsgUopCommit) {
+      when (uop_commit.valid) {
+        printf("%d: [UOP] pc=%x inst=%x\n", DebugTimer(), uop_commit.pc, uop_commit.inst)
+      }
+    }
+    when (execution.io.uop.inst === Instructions.PUTCH) {
+      printf("%c", rf_a0(7, 0))
+    }
   }
 
-  // ref: https://github.com/OSCPU/ysyx/issues/8
-  // ref: https://github.com/OSCPU/ysyx/issues/11
-  val dt_te = Module(new DifftestTrapEvent)
-  dt_te.io.clock    := clock
-  dt_te.io.coreid   := 0.U
-  dt_te.io.valid    := (uop_commit.inst === "h0000006b".U)
-  dt_te.io.code     := rf_a0(2, 0)
-  dt_te.io.pc       := uop_commit.pc
-  dt_te.io.cycleCnt := cycle_cnt
-  dt_te.io.instrCnt := instr_cnt
+  if (Settings.Difftest) {
+    val dt_te = Module(new DifftestTrapEvent)
+    dt_te.io.clock    := clock
+    dt_te.io.coreid   := 0.U
+    dt_te.io.valid    := (uop_commit.inst === "h0000006b".U)
+    dt_te.io.code     := rf_a0(2, 0)
+    dt_te.io.pc       := uop_commit.pc
+    dt_te.io.cycleCnt := cycle_cnt
+    dt_te.io.instrCnt := instr_cnt
+  }
 
   BoringUtils.addSource(cycle_cnt, "csr_mcycle")
   BoringUtils.addSource(instr_cnt, "csr_minstret")

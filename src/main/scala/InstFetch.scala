@@ -11,7 +11,7 @@ abstract class AbstractInstFetchIO extends Bundle {
 }
 
 class InstFetchIO extends AbstractInstFetchIO {
-  override val imem = new SimpleAxiIO
+  override val imem = new CacheBusIO
 }
 
 class InstFetchWithRamHelperIO extends AbstractInstFetchIO {
@@ -25,9 +25,7 @@ abstract class InstFetchModule extends Module {
 class InstFetch extends InstFetchModule {
   val io = IO(new InstFetchIO)
 
-  val if_axi_id = 1.U(AxiParameters.AxiIdWidth.W)   // id = 1 for IF stage
-
-  val s_init :: s_idle :: s_req :: s_wait :: Nil = Enum(4)
+  val s_init :: s_idle :: s_req :: s_wait :: s_wait_mis :: Nil = Enum(5)
   val state = RegInit(s_init)
 
   val req = io.imem.req
@@ -41,15 +39,14 @@ class InstFetch extends InstFetchModule {
   val bp = Module(new BrPredictor)
   val bp_pred_pc = bp.io.pred_pc
 
-  req.bits.id := if_axi_id
-  req.bits.addr := pc.asUInt()
+  req.bits.addr := pc
   req.bits.ren := true.B          // read-only imem
   req.bits.wdata := 0.U
   req.bits.wmask := 0.U
   req.bits.wen := false.B
   req.valid := (state === s_req) && !stall && !io.jmp_packet.mis
   
-  resp.ready := (state === s_wait)
+  resp.ready := (state === s_wait) || (state === s_wait_mis)
 
   /* FSM to handle SimpleAxi bus status
    *
@@ -72,12 +69,6 @@ class InstFetch extends InstFetchModule {
    *
    */
 
-  val resp_success = resp.fire() && resp.bits.rlast &&
-                     (resp.bits.id === if_axi_id)
-  val mis_count = RegInit(0.U(5.W))
-  def mis_increment() : Unit = { mis_count := Cat(mis_count(3, 0), 1.U)}
-  def mis_decrement() : Unit = { mis_count := Cat(0.U, mis_count(4, 1))}
-
   switch (state) {
     is (s_init) {
       state := s_req
@@ -89,22 +80,26 @@ class InstFetch extends InstFetchModule {
     is (s_req) {
       when (io.jmp_packet.mis) {
         pc := bp_pred_pc
-      } .elsewhen (!stall && req.fire()) {
+      } .elsewhen (req.fire()) {
         state := s_wait
       }
     }
     is (s_wait) {
       when (io.jmp_packet.mis) {
         pc := bp_pred_pc
-        mis_increment()
-        state := s_req
-      } .elsewhen (resp_success) {
-        when (mis_count === 0.U) {
-          inst := Mux(pc(2), resp.bits.rdata(63, 32), resp.bits.rdata(31, 0))
-          state := s_idle
+        when (resp.fire()) {
+          state := s_req
         } .otherwise {
-          mis_decrement()
+          state := s_wait_mis
         }
+      } .elsewhen (resp.fire()) {
+        inst := Mux(pc(2), resp.bits.rdata(63, 32), resp.bits.rdata(31, 0))
+        state := s_idle
+      }
+    }
+    is (s_wait_mis) {
+      when (resp.fire()) {
+        state := s_req
       }
     }
   }

@@ -16,7 +16,7 @@ abstract class AbstractLsuIO extends Bundle {
 }
 
 class LsuIO extends AbstractLsuIO {
-  override val dmem = new SimpleAxiIO
+  override val dmem = new CacheBusIO
 }
 
 class LsuWithRamHelperIO extends AbstractLsuIO {
@@ -40,36 +40,40 @@ class Lsu extends LsuModule with Ext {
   val reg_is_load = (reg_uop.mem_code === MEM_LD || uop.mem_code === MEM_LDU)
   val reg_is_store = (reg_uop.mem_code === MEM_ST)
 
-  val ls_axi_id = 2.U(AxiParameters.AxiIdWidth.W)   // id = 2 for load/store
-
   val s_idle :: s_req :: s_wait_r :: s_wait_w :: s_complete :: Nil = Enum(5)
   val state = RegInit(s_idle)
+
+  val reset_init = RegInit(true.B)
+  when (reset_init) {
+    state := s_idle
+    reset_init := false.B
+  }
 
   val req = io.dmem.req
   val resp = io.dmem.resp
 
-  val addr = in1 + signExt32_64(uop.imm)
+  val addr = (in1 + signExt32_64(uop.imm))(31, 0)
   val addr_offset = addr(2, 0)
   val wdata = in2
-  val reg_addr = RegInit(0.U(64.W))
+  val reg_addr = RegInit(0.U(32.W))
   val reg_addr_offset = reg_addr(2, 0)
   val reg_wdata = RegInit(0.U(64.W))
 
   val mask = MuxLookup(reg_addr_offset, 0.U, Array(
-    "b000".U -> "b11111111".U,
-    "b001".U -> "b11111110".U,
-    "b010".U -> "b11111100".U,
-    "b011".U -> "b11111000".U,
-    "b100".U -> "b11110000".U,
-    "b101".U -> "b11100000".U,
-    "b110".U -> "b11000000".U,
-    "b111".U -> "b10000000".U
+    "b000".U -> "b11111111".U(8.W),
+    "b001".U -> "b11111110".U(8.W),
+    "b010".U -> "b11111100".U(8.W),
+    "b011".U -> "b11111000".U(8.W),
+    "b100".U -> "b11110000".U(8.W),
+    "b101".U -> "b11100000".U(8.W),
+    "b110".U -> "b11000000".U(8.W),
+    "b111".U -> "b10000000".U(8.W)
   ))
   val wmask = MuxLookup(reg_uop.mem_size, 0.U, Array(
-    MEM_BYTE  -> "b00000001".U,
-    MEM_HALF  -> "b00000011".U,
-    MEM_WORD  -> "b00001111".U,
-    MEM_DWORD -> "b11111111".U
+    MEM_BYTE  -> "b00000001".U(8.W),
+    MEM_HALF  -> "b00000011".U(8.W),
+    MEM_WORD  -> "b00001111".U(8.W),
+    MEM_DWORD -> "b11111111".U(8.W)
   ))
 
   // val wmask64 = Cat(Fill(8, wmask(7)), Fill(8, wmask(6)),
@@ -78,8 +82,7 @@ class Lsu extends LsuModule with Ext {
   //                   Fill(8, wmask(1)), Fill(8, wmask(0)))
   // val in2_masked = in2 & wmask64
 
-  req.bits.id := ls_axi_id
-  req.bits.addr := Cat(reg_addr(63, 3), Fill(3, 0.U))
+  req.bits.addr := Cat(reg_addr(31, 3), Fill(3, 0.U))
   req.bits.ren := reg_is_load
   req.bits.wdata := (reg_wdata << (reg_addr_offset << 3))(63, 0)
   req.bits.wmask := mask & ((wmask << reg_addr_offset)(7, 0))
@@ -95,27 +98,24 @@ class Lsu extends LsuModule with Ext {
    *
    *       ┌───────────────────────────────────────────────────┐
    *       │                                                   │
-   *       │                  !resp_r_success                  │
+   *       │                  !resp_success                    │
    *       │                        ┌─┐                        │
    *       v                        | v                        │
-   *   ┌────────┐   reg_is_load  ┌──────────┐  resp_r_success  │
+   *   ┌────────┐   reg_is_load  ┌──────────┐  resp_success    │
    *   │ s_idle │    ┌─────────> │ s_wait_r │ ──┐              │
    *   └────────┘    │           └──────────┘   │              │
    *       |         │                          │    ┌────────────┐
-   *       |         │        !resp_w_success   ├──> │ s_complete │
+   *       |         │        !resp_success     ├──> │ s_complete │
    *       |         │               ┌─┐        │    └────────────┘
    *       v         │               | v        │
    *   ┌────────┐    │           ┌──────────┐   │
    *   │ s_req  │ ───┴─────────> │ s_wait_w │ ──┘
-   *   └────────┘   reg_is_store └──────────┘  resp_w_success
+   *   └────────┘   reg_is_store └──────────┘  resp_success
    *
    */
 
   val load_data = RegInit(UInt(64.W), 0.U)
-  val resp_r_success = resp.fire() && resp.bits.rlast &&
-                       (resp.bits.id === ls_axi_id)
-  val resp_w_success = resp.fire() && resp.bits.wresp &&
-                       (resp.bits.id === ls_axi_id)
+  val resp_success = resp.fire()
 
   switch (state) {
     is (s_idle) {
@@ -136,16 +136,20 @@ class Lsu extends LsuModule with Ext {
       }
     }
     is (s_wait_r) {
-      when (resp_r_success) {
+      when (resp_success) {
         load_data := resp.bits.rdata >> (reg_addr_offset << 3)
         state := s_complete
-        // printf("[LD] pc=%x addr=%x rdata=%x -> %x\n", uop.pc, reg_addr, resp.bits.rdata, load_data)
+        if (Settings.DebugMsgLsu) {
+          printf("%d: [LD] pc=%x addr=%x rdata=%x -> %x\n", DebugTimer(), uop.pc, reg_addr, resp.bits.rdata, load_data)
+        }
       }
     }
     is (s_wait_w) {
-      when (resp_w_success) {
+      when (resp_success) {
         state := s_complete
-        // printf("[ST] pc=%x addr=%x wdata=%x -> %x wmask=%x\n", uop.pc, reg_addr, in2, req.bits.wdata, req.bits.wmask)
+        if (Settings.DebugMsgLsu) {
+          printf("%d: [ST] pc=%x addr=%x wdata=%x -> %x wmask=%x\n", DebugTimer(), uop.pc, reg_addr, in2, req.bits.wdata, req.bits.wmask)
+        }
       }
     }
     is (s_complete) {
