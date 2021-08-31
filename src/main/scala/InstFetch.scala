@@ -48,7 +48,7 @@ class InstFetch extends InstFetchModule {
   
   resp.ready := (state === s_wait) || (state === s_wait_mis)
 
-  /* FSM to handle SimpleAxi bus status
+  /* FSM to handle CoreBus bus status
    *
    *  Simplified FSM digram (no stall signal here)
    *

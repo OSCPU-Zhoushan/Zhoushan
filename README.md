@@ -36,6 +36,55 @@ make emu
 ./build/emu -i path/to/risc-v/binary.bin
 ```
 
-## Notes
+## Development Notes
 
-1. `IF` stage AXI ID is 1, `MEM` stage AXI ID is 2.
+### Cache & Memory Convention
+
+1. `IF` stage AXI ID is 1
+
+1. `MEM` stage AXI ID is 2
+
+### Git Convention
+
+1. Branch for dev: `dev/XxxYyy`. Example: `dev/ScalarPipeline`.
+
+1. Only merge stable version (passing all tests) to `develop` branch after being permitted by Li Shi.
+
+1. Never push or merge to `master` branch directly. Make a pull request.
+
+### Naming Convention
+
+Filename & class/object name & constant: CamelCase (even though it contains abbreviation, e.g., we write `FpgaTop` rather than `FPGATop`). Example:
+
+```scala
+// SimTop.scala
+
+class SimTop extends Module {
+  ...
+}
+
+// Settings.scala
+
+object Settings {
+  ...
+  val ClintAddrSize = 0x10000
+}
+```
+
+Function name: camelCase. Example:
+
+```scala
+def signExt32_64(x: UInt) : UInt = Cat(Fill(32, x(31)), x)
+```
+
+Wire, register, instance, io name: some_name. Example:
+
+```scala
+// Core.scala
+
+...
+val ex_rs1_from_cm = ...
+...
+val dt_ic = Module(new DifftestInstrCommit)
+...
+```

@@ -23,7 +23,7 @@ class CacheBusIO extends MemIO {
 class CacheBus2SimpelAxi(id: Int) extends Module with AxiParameters {
   val io = IO(new Bundle {
     val in = Flipped(new CacheBusIO)
-    val out = new SimpleAxiIO
+    val out = new CoreBusIO
   })
 
   val in = io.in
