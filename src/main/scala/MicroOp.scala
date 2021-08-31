@@ -99,6 +99,11 @@ class MicroOp extends Bundle {
   val pred_br   = Bool()
   val pred_pc   = UInt(32.W)
 
+  // register renaming related
+  val rs1_paddr = UInt(6.W)
+  val rs2_paddr = UInt(6.W)
+  val rd_paddr  = UInt(6.W)
+
   def nop() : Unit = {
     valid    := false.B
     pc       := 0.U

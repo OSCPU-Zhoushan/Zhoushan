@@ -14,13 +14,13 @@ import zhoushan.Instructions._
 class Decode extends Module {
   val io = IO(new Bundle {
     val in = Input(new InstPacket)
-    val uop = Output(new MicroOp())
+    val uop = Output(new MicroOp)
   })
 
   val inst = io.in.inst
   val pred_br = io.in.pred_br
   val pred_pc = io.in.pred_pc
-  val uop = Wire(new MicroOp())
+  val uop = Wire(new MicroOp)
 
   uop.pc := io.in.pc
   uop.npc := io.in.pc + 4.U
@@ -120,6 +120,10 @@ class Decode extends Module {
   uop.rs1_src := rs1_src
   uop.rs2_src := rs2_src
   uop.rd_en := rd_en
+
+  uop.rs1_paddr := 0.U
+  uop.rs2_paddr := 0.U
+  uop.rd_paddr := 0.U
 
   val imm_i = Cat(Fill(21, inst(31)), inst(30, 20))
   val imm_s = Cat(Fill(21, inst(31)), inst(30, 25), inst(11, 7))
