@@ -92,7 +92,7 @@ class Lsu extends LsuModule with Ext {
 
   resp.ready := (state === s_wait_r) || (state === s_wait_w)
 
-  /* FSM to handle SimpleAxi bus status
+  /* FSM to handle CoreBus bus status
    *
    *  Simplified FSM digram
    *

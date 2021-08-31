@@ -3,14 +3,14 @@ package zhoushan
 import chisel3._
 import chisel3.util._
 
-class SimpleAxiCrossbar2to1 extends Module {
+class CoreBusCrossbar2to1 extends Module {
   val io = IO(new Bundle {
     // val id = Vec(2, UInt(AxiParameters.AxiIdWidth.W))
-    val in = Flipped(Vec(2, new SimpleAxiIO))
-    val out = new SimpleAxiIO
+    val in = Flipped(Vec(2, new CoreBusIO))
+    val out = new CoreBusIO
   })
 
-  val arbiter = Module(new RRArbiter(new SimpleAxiReq, 2))
+  val arbiter = Module(new RRArbiter(new CoreBusReq, 2))
   val chosen = RegInit(UInt(1.W), 0.U)
   arbiter.io.in(0) <> io.in(0).req
   arbiter.io.in(1) <> io.in(1).req

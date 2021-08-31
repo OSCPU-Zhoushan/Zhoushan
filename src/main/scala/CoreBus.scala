@@ -4,14 +4,14 @@ import chisel3._
 import chisel3.util._
 
 // Simple Axi is an simplified bus implementation modified from AXI4
-// AXI4       - Duplex
-// SimpleAxi  - Simplex, enough for IF (read only) and MEM stage
+// AXI4    - Duplex
+// CoreBus - Simplex, enough for IF (read only) and MEM stage
 
-trait SimpleAxiId extends Bundle with AxiParameters {
+trait CoreBusId extends Bundle with AxiParameters {
   val id = Output(UInt(AxiIdWidth.W))
 }
 
-class SimpleAxiReq extends Bundle with SimpleAxiId with AxiParameters {
+class CoreBusReq extends Bundle with CoreBusId with AxiParameters {
   val addr = Output(UInt(AxiAddrWidth.W))
   val aen = Output(Bool())  // ar/aw enable
   val ren = Output(Bool())
@@ -22,27 +22,27 @@ class SimpleAxiReq extends Bundle with SimpleAxiId with AxiParameters {
   val len = Output(UInt(8.W))
 }
 
-class SimpleAxiResp extends Bundle with SimpleAxiId with AxiParameters {
+class CoreBusResp extends Bundle with CoreBusId with AxiParameters {
   val rdata = Output(UInt(AxiDataWidth.W))
   val wresp = Output(Bool())
   val rlast = Output(Bool())
 }
 
-class SimpleAxiIO extends MemIO {
-  val req = Decoupled(new SimpleAxiReq)
-  val resp = Flipped(Decoupled(new SimpleAxiResp))
+class CoreBusIO extends MemIO {
+  val req = Decoupled(new CoreBusReq)
+  val resp = Flipped(Decoupled(new CoreBusResp))
 }
 
-class SimpleAxi2Axi extends Module with AxiParameters {
+class CoreBus2Axi extends Module with AxiParameters {
   val io = IO(new Bundle {
-    val in = Flipped(new SimpleAxiIO)
+    val in = Flipped(new CoreBusIO)
     val out = new AxiIO
   })
 
   val in = io.in
   val out = io.out
 
-  /* ----- SimpleAxi -> AXI4 -- Request --------------------------- */
+  /* ----- CoreBus -> AXI4 -- Request --------------------------- */
 
   out.aw.valid      := in.req.valid && in.req.bits.aen && in.req.bits.wen
   out.aw.bits.addr  := in.req.bits.addr
@@ -73,7 +73,7 @@ class SimpleAxi2Axi extends Module with AxiParameters {
   out.ar.bits.cache := 0.U
   out.ar.bits.qos   := 0.U
 
-  /* ----- SimpleAxi -> AXI4 -- Response -------------------------- */
+  /* ----- CoreBus -> AXI4 -- Response -------------------------- */
 
   out.b.ready := in.resp.ready
   // in.resp.valid <- out.b.valid
@@ -81,7 +81,7 @@ class SimpleAxi2Axi extends Module with AxiParameters {
   out.r.ready := in.resp.ready
   // in.resp.valid <- out.r.valid
 
-  /* ----- SimpleAxi Input Ctrl Signal Logic ---------------------- */
+  /* ----- CoreBus Input Ctrl Signal Logic ---------------------- */
 
   // in.req.ready  <- out.aw.ready/out.ar.ready/out.w.ready
   // in.resp.valid <- out.b.valid/out.r.valid

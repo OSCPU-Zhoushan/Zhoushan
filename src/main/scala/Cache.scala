@@ -115,7 +115,7 @@ class MetaData extends Module {
 class Cache(id: Int) extends Module {
   val io = IO(new Bundle {
     val in = Flipped(new CacheBusIO)
-    val out = new SimpleAxiIO
+    val out = new CoreBusIO
   })
 
   val sram = for (i <- 0 until 4) yield {
