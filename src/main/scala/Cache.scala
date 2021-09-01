@@ -108,6 +108,8 @@ class Cache(id: Int) extends Module with SramParameters {
     }
   }
 
+  val replace_way = Wire(UInt(2.W))
+
   /* ----- Pipeline Ctrl Signals ----- */
 
   val s1_valid = WireInit(false.B)
@@ -164,6 +166,8 @@ class Cache(id: Int) extends Module with SramParameters {
   val s2_rdata = sram_out(s2_way)
   val s2_dirty = dirty_out(s2_way)
 
+  val s2_tag_r = tag_out(replace_way)
+
   /* ----- Cache Stage 3 ------------- */
 
   val s3_addr  = RegInit(0.U(32.W))
@@ -177,6 +181,7 @@ class Cache(id: Int) extends Module with SramParameters {
   val s3_wdata = RegInit(0.U(64.W))
   val s3_wmask = RegInit(0.U(8.W))
   val s3_dirty = RegInit(false.B)
+  val s3_tag_r = RegInit(0.U(21.W))
 
   val s_idle :: s_hit_r :: s_hit_w :: s_miss_req_r :: s_miss_wait_r :: s1 = Enum(9)
   val s_miss_ok_r :: s_miss_req_w1 :: s_miss_req_w2 :: s_miss_wait_w :: Nil = s1
@@ -198,11 +203,11 @@ class Cache(id: Int) extends Module with SramParameters {
     s3_wdata := s2_wdata
     s3_wmask := s2_wmask
     s3_dirty := s2_dirty
+    s3_tag_r := s2_tag_r
   }
 
-  val replace_way = Wire(UInt(2.W))
   replace_way := Cat(plru0(s3_idx), Mux(plru0(s3_idx) === 0.U, plru1(s3_idx), plru2(s3_idx)))
-  val wb_addr = RegInit(UInt(32.W), 0.U)
+  val wb_addr = Cat(1.U, s3_tag_r, s3_idx, Fill(4, 0.U))
   val wdata1 = RegInit(UInt(64.W), 0.U)
   val wdata2 = RegInit(UInt(64.W), 0.U)
 
@@ -297,7 +302,6 @@ class Cache(id: Int) extends Module with SramParameters {
             meta(i).io.tag_w := s3_tag
             meta(i).io.dirty_wen := true.B
             meta(i).io.dirty_w := s3_wen
-            wb_addr := Cat(1.U, meta(i).io.tag_r, s3_idx, Fill(4, 0.U))
           }
         }
         state := Mux(s3_dirty, s_miss_req_w1, s_idle)
