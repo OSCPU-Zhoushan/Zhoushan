@@ -6,8 +6,6 @@ import chisel3.util._
 class BrPredictorIO extends Bundle {
   // from IF stage
   val pc = Input(UInt(32.W))
-  val inst = Input(UInt(32.W))
-  val is_br = Input(Bool())
   // from EX stage
   val jmp_packet = Input(new JmpPacket)
   // prediction result
@@ -31,8 +29,6 @@ class BrPredictor extends Module {
 
   val pc = io.pc
   val npc = io.pc + 4.U
-  val inst = io.inst
-  val is_br = io.is_br
   val jmp_packet = io.jmp_packet
 
   val pred_br = WireInit(false.B)

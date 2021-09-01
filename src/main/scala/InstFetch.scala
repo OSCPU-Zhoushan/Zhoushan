@@ -107,11 +107,6 @@ class InstFetch extends InstFetchModule {
   /* Branch predictor logic */
 
   bp.io.pc := pc
-  bp.io.inst := inst
-  bp.io.is_br := (inst === Instructions.JAL) || (inst === Instructions.JALR) ||
-                 (inst === Instructions.BEQ) || (inst === Instructions.BNE) ||
-                 (inst === Instructions.BLT) || (inst === Instructions.BLTU) ||
-                 (inst === Instructions.BGE) || (inst === Instructions.BGEU);
   bp.io.jmp_packet <> io.jmp_packet
 
   io.out.pc := Mux(state === s_idle && !stall, pc, 0.U)
@@ -133,11 +128,6 @@ class InstFetchWithRamHelper extends InstFetchModule {
 
   val bp = Module(new BrPredictor)
   bp.io.pc := pc
-  bp.io.inst := inst
-  bp.io.is_br := (inst === Instructions.JAL) || (inst === Instructions.JALR) ||
-                 (inst === Instructions.BEQ) || (inst === Instructions.BNE) ||
-                 (inst === Instructions.BLT) || (inst === Instructions.BLTU) ||
-                 (inst === Instructions.BGE) || (inst === Instructions.BGEU);
   bp.io.jmp_packet <> io.jmp_packet
 
   val pc_zero_reset = RegInit(true.B) // todo: fix pc reset
