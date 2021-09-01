@@ -162,6 +162,7 @@ class Cache(id: Int) extends Module with SramParameters {
   val s2_way = OHToUInt(hit)
 
   val s2_rdata = sram_out(s2_way)
+  val s2_dirty = dirty_out(s2_way)
 
   /* ----- Cache Stage 3 ------------- */
 
@@ -175,6 +176,7 @@ class Cache(id: Int) extends Module with SramParameters {
   val s3_wen   = RegInit(false.B)
   val s3_wdata = RegInit(0.U(64.W))
   val s3_wmask = RegInit(0.U(8.W))
+  val s3_dirty = RegInit(false.B)
 
   val s_idle :: s_hit_r :: s_hit_w :: s_miss_req_r :: s_miss_wait_r :: s1 = Enum(9)
   val s_miss_ok_r :: s_miss_req_w1 :: s_miss_req_w2 :: s_miss_wait_w :: Nil = s1
@@ -195,6 +197,7 @@ class Cache(id: Int) extends Module with SramParameters {
     s3_wen   := s2_wen
     s3_wdata := s2_wdata
     s3_wmask := s2_wmask
+    s3_dirty := s2_dirty
   }
 
   val replace_way = Wire(UInt(2.W))
@@ -297,7 +300,7 @@ class Cache(id: Int) extends Module with SramParameters {
             wb_addr := Cat(1.U, meta(i).io.tag_r, s3_idx, Fill(4, 0.U))
           }
         }
-        state := Mux(s3_wen, s_miss_req_w1, s_idle)
+        state := Mux(s3_dirty, s_miss_req_w1, s_idle)
       }
     }
     is (s_miss_req_w1) {
