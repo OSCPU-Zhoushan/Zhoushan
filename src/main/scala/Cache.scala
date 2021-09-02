@@ -174,7 +174,7 @@ class Cache(id: Int) extends Module with SramParameters {
   } .elsewhen (!pipeline_fire && RegNext(pipeline_fire)) {
     s2_reg_hit   := s2_hit
     s2_reg_way   := s2_way
-    s2_reg_rdata := Mux(s2_hit, s2_rdata, 0.U)
+    s2_reg_rdata := s2_rdata //Mux(s2_hit, s2_rdata, 0.U)
     s2_reg_dirty := Mux(s2_hit, s2_dirty, false.B)
     s2_reg_tag_r := Mux(s2_hit, s2_tag_r, 0.U)
     s2_reg_valid := s2_hit
@@ -196,14 +196,14 @@ class Cache(id: Int) extends Module with SramParameters {
     init := false.B
   }
 
-  val s2_hit_real = Mux(RegNext(pipeline_fire), s2_hit, s2_reg_hit) || init
+  val s2_hit_real = Mux(RegNext(pipeline_fire), s2_hit, s2_reg_hit)
 
   pipeline_valid := in.req.fire()
-  pipeline_ready := (state === s_idle) && in.resp.fire() && s2_hit_real && !s2_wen
+  pipeline_ready := (state === s_idle) && in.resp.fire() && s2_hit_real && !s2_wen || init
 
   // handshake signals with IF unit
   in.req.ready := pipeline_ready
-  in.resp.valid := (state === s_idle && s2_hit_real) || (state === s_miss_ok_r)
+  in.resp.valid := s2_hit_real
   in.resp.bits.rdata := 0.U
 
   // handshake signals with memory
@@ -283,7 +283,8 @@ class Cache(id: Int) extends Module with SramParameters {
       }
     }
     is (s_miss_ok_r) {
-      in.resp.bits.rdata := Mux(s2_wen, 0.U, Mux(s2_offs.asBool(), wdata2, wdata1))
+      s2_reg_rdata := Cat(wdata2, wdata1)
+      s2_reg_hit := true.B
       when (in.resp.fire()) {
         for (i <- 0 until 4) {
           when (replace_way === i.U) {
@@ -305,8 +306,6 @@ class Cache(id: Int) extends Module with SramParameters {
             meta(i).io.dirty_w := s2_wen
           }
         }
-        s2_wen := false.B
-        s2_reg_hit := true.B
         state := Mux(s2_reg_dirty, s_miss_req_w1, s_idle)
       }
     }
@@ -321,6 +320,7 @@ class Cache(id: Int) extends Module with SramParameters {
       }
     }
     is (s_miss_wait_w) {
+      s2_wen := false.B
       when (out.resp.fire()) {
         state := s_idle
       }
