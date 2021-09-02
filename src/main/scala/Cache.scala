@@ -214,7 +214,7 @@ class Cache(id: Int) extends Module with SramParameters {
   /* ----- Pipeline Ctrl Signals ----- */
 
   s1_valid := in.req.fire()
-  s2_ready := s3_ready
+  s2_ready := Mux(s2_valid, s2_hit && s3_ready, s3_ready)
   s2_valid := RegNext(s1_valid)
   s3_ready := (state === s_idle) || (state === s_hit_r && in.resp.fire())
 
