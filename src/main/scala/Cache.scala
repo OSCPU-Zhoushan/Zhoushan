@@ -174,22 +174,15 @@ class Cache(id: Int) extends Module with SramParameters {
   } .elsewhen (!pipeline_fire && RegNext(pipeline_fire)) {
     s2_reg_hit   := s2_hit
     s2_reg_way   := s2_way
-    s2_reg_rdata := s2_rdata
-    s2_reg_dirty := s2_dirty
-    s2_reg_tag_r := s2_tag_r
-    s2_reg_valid := true.B
+    s2_reg_rdata := Mux(s2_hit, s2_rdata, 0.U)
+    s2_reg_dirty := Mux(s2_hit, s2_dirty, false.B)
+    s2_reg_tag_r := Mux(s2_hit, s2_tag_r, 0.U)
+    s2_reg_valid := s2_hit
   }
 
-  val s_idle :: s_hit_r :: s_hit_w :: s_miss_req_r :: s_miss_wait_r :: s1 = Enum(9)
-  val s_miss_ok_r :: s_miss_req_w1 :: s_miss_req_w2 :: s_miss_wait_w :: Nil = s1
+  val s_idle        :: s_miss_req_r  :: s_miss_wait_r :: s_miss_ok_r :: s1 = Enum(7)
+  val s_miss_req_w1 :: s_miss_req_w2 :: s_miss_wait_w :: Nil               = s1
   val state = RegInit(s_idle)
-  val state_init = WireInit(s_idle)
-
-  when (Mux(s2_reg_valid, s2_reg_hit, s2_hit)) {
-    state_init := Mux(s2_wen, s_hit_w, s_hit_r)
-  } .otherwise {
-    state_init := s_miss_req_r
-  }
 
   replace_way := Cat(plru0(s2_idx), Mux(plru0(s2_idx) === 0.U, plru1(s2_idx), plru2(s2_idx)))
   val wb_addr = Cat(1.U, s2_reg_tag_r, s2_idx, Fill(4, 0.U))
