@@ -22,11 +22,14 @@ abstract class InstFetchModule extends Module {
   val io : Bundle
 }
 
+class InstBundle extends Bundle {
+  val pc = Output(UInt(32.W))
+  val pred_br = Output(Bool())
+  val pred_pc = Output(UInt(32.W))
+}
+
 class InstFetch extends InstFetchModule {
   val io = IO(new InstFetchIO)
-
-  val s_init :: s_idle :: s_req :: s_wait :: s_wait_mis :: Nil = Enum(5)
-  val state = RegInit(s_init)
 
   val req = io.imem.req
   val resp = io.imem.resp
@@ -34,86 +37,109 @@ class InstFetch extends InstFetchModule {
   val stall = io.stall
 
   val pc_init = "h80000000".U(32.W)
+  val pc_next = WireInit(0.U)
+  dontTouch(pc_next)
   val pc = RegInit(pc_init)
-  val inst = RegInit(0.U(32.W))
+
   val bp = Module(new BrPredictor)
-  val bp_pred_pc = bp.io.pred_pc
-
-  req.bits.addr := pc
-  req.bits.ren := true.B          // read-only imem
-  req.bits.wdata := 0.U
-  req.bits.wmask := 0.U
-  req.bits.wen := false.B
-  req.valid := (state === s_req) && !stall && !io.jmp_packet.mis
-  
-  resp.ready := (state === s_wait) || (state === s_wait_mis)
-
-  /* FSM to handle CoreBus bus status
-   *
-   *  Simplified FSM digram (no stall signal here)
-   *
-   *             mis_predict    mis_predict  !resp_success
-   *                     ┌─┐  ┌───────────┐ ┌─┐
-   *                     │ v  v           │ │ v
-   *   ┌────────┐      ┌────────┐      ┌────────┐
-   *   │ s_init │ ───> │ s_req  │ ───> │ s_wait │
-   *   └────────┘      └────────┘      └────────┘
-   *                       ^               │
-   *                       │               │ resp_success & (mis_count == 0)
-   *                   ┌────────┐          │
-   *                   │ s_idle │ <────────┘
-   *                   └────────┘
-   *
-   *  Note 1: When a mis-predict occurs, mis_count += 1
-   *  Note 2: stall == 1 -> stop FSM, but don't send request more than once
-   *
-   */
-
-  switch (state) {
-    is (s_init) {
-      state := s_req
-    }
-    is (s_idle) {
-      pc := Mux(stall, pc, bp_pred_pc)
-      state := Mux(stall, s_idle, s_req)
-    }
-    is (s_req) {
-      when (io.jmp_packet.mis) {
-        pc := bp_pred_pc
-      } .elsewhen (req.fire()) {
-        state := s_wait
-      }
-    }
-    is (s_wait) {
-      when (io.jmp_packet.mis) {
-        pc := bp_pred_pc
-        when (resp.fire()) {
-          state := s_req
-        } .otherwise {
-          state := s_wait_mis
-        }
-      } .elsewhen (resp.fire()) {
-        inst := Mux(pc(2), resp.bits.rdata(63, 32), resp.bits.rdata(31, 0))
-        state := s_idle
-      }
-    }
-    is (s_wait_mis) {
-      when (resp.fire()) {
-        state := s_req
-      }
-    }
-  }
-
-  /* Branch predictor logic */
 
   bp.io.pc := pc
   bp.io.jmp_packet <> io.jmp_packet
 
-  io.out.pc := Mux(state === s_idle && !stall, pc, 0.U)
-  io.out.inst := Mux(state === s_idle && !stall, inst, 0.U)
-  io.out.pred_br := bp.io.pred_br
-  io.out.pred_pc := bp.io.pred_pc
-  io.out.valid := true.B
+  val mis = io.jmp_packet.mis
+  val mis_pc = Mux(io.jmp_packet.jmp, io.jmp_packet.jmp_pc, io.jmp_packet.inst_pc + 4.U)
+  val reg_mis = RegInit(false.B)
+  val reg_mis_pc = RegInit(UInt(32.W), 0.U)
+  val reg_mis_ok = RegInit(false.B)
+  when (mis && !resp.fire()) {
+    reg_mis := true.B
+    reg_mis_pc := mis_pc
+    reg_mis_ok := false.B
+  }
+
+  val invalid_count = RegInit(0.U(2.W))
+
+  // request queue
+  val queue = Module(new Queue(gen = new InstBundle, entries = 2, pipe = true, flow = true))
+  queue.io.enq.valid := req.fire()
+  queue.io.enq.bits.pc := pc
+  queue.io.enq.bits.pred_br := bp.io.pred_br
+  queue.io.enq.bits.pred_pc := bp.io.pred_pc
+  queue.io.deq.ready := resp.fire()
+
+  when (queue.io.enq.fire()) {
+    printf("%d: [FIFO-ENQ ] addr=%x\n", DebugTimer(), queue.io.enq.bits.pc)
+  }
+  when (queue.io.deq.fire()) {
+    printf("%d: [FIFO-DEQ ] addr=%x\n", DebugTimer(), queue.io.deq.bits.pc)
+  }
+
+  // handshake signals with I cache
+  req.bits.addr := pc
+  req.bits.ren := true.B
+  req.bits.wdata := 0.U
+  req.bits.wmask := 0.U
+  req.bits.wen := false.B
+  req.valid := !stall && !io.jmp_packet.mis && queue.io.enq.ready
+
+  when (req.fire()) {
+    printf("%d: [IF  -REQ ] addr=%x\n", DebugTimer(), req.bits.addr)
+  }
+
+  when (resp.fire()) {
+    printf("%d: [IF  -RESP] rdata=%x\n", DebugTimer(), resp.bits.rdata)
+  }
+
+  resp.ready := !stall
+
+  // update pc when mis or queue.io.enq.fire()
+  when (mis || queue.io.enq.fire()) {
+    pc := pc_next
+    when (queue.io.enq.fire()) {
+      reg_mis_ok := true.B
+    }
+  }
+
+  when (mis) {
+    pc_next := mis_pc
+    invalid_count := queue.io.count
+  } .elsewhen (reg_mis) {
+    pc_next := reg_mis_pc
+  } .otherwise {
+    pc_next := bp.io.pred_pc
+  }
+
+  // update inst when queue.io.deq.fire()
+  io.out.pc := 0.U
+  io.out.inst := 0.U
+  io.out.valid := false.B
+  io.out.pred_br := false.B
+  io.out.pred_pc := 0.U
+  when (queue.io.deq.fire()) {
+    io.out.pc := queue.io.deq.bits.pc
+    io.out.inst := Mux(io.out.pc(2), resp.bits.rdata(63, 32), resp.bits.rdata(31, 0))
+    io.out.pred_br := queue.io.deq.bits.pred_br
+    io.out.pred_pc := queue.io.deq.bits.pred_pc
+    when (mis) {
+      io.out.valid := false.B
+      invalid_count := invalid_count - 1.U
+    } .elsewhen (reg_mis) {
+      when (invalid_count =/= 0.U) {
+        io.out.valid := false.B
+        invalid_count := invalid_count - 1.U
+      } .otherwise {
+        io.out.valid := true.B
+        reg_mis := false.B
+      }
+    } .otherwise {
+      io.out.valid := true.B
+    }
+  }
+
+  when (io.out.valid) {
+    printf("%d: [IF  -OUT ] pc=%x inst=%x\n", DebugTimer(), io.out.pc, io.out.inst)
+  }
+
 }
 
 class InstFetchWithRamHelper extends InstFetchModule {
