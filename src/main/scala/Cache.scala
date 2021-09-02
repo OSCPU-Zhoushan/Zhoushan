@@ -213,9 +213,12 @@ class Cache(id: Int) extends Module with SramParameters {
 
   /* ----- Pipeline Ctrl Signals ----- */
 
+  val init_stall = RegInit(true.B)
+  init_stall := false.B
+
   s1_valid := in.req.fire()
-  s2_ready := Mux(s2_valid, s2_hit && s3_ready, s3_ready)
-  s2_valid := RegNext(s1_valid)
+  s2_ready := Mux(s2_valid, s2_hit && s3_ready, s3_ready) && !init_stall
+  s2_valid := RegNext(s1_valid) && !init_stall
   s3_ready := (state === s_idle) || (state === s_hit_r && in.resp.fire())
 
   // handshake signals with IF unit
@@ -224,7 +227,6 @@ class Cache(id: Int) extends Module with SramParameters {
   in.resp.bits.rdata := 0.U
 
   // handshake signals with memory
-
   out.req.valid := (state === s_miss_req_r) || (state === s_miss_req_w1) || (state === s_miss_req_w2)
   out.req.bits.id := id.U
   out.req.bits.addr := Mux(state === s_miss_req_r, Cat(s3_addr(31, 4), Fill(4, 0.U)), Cat(wb_addr(31, 4), Fill(4, 0.U)))
@@ -236,6 +238,20 @@ class Cache(id: Int) extends Module with SramParameters {
   out.req.bits.wen := (state === s_miss_req_w1) || (state === s_miss_req_w2)
   out.req.bits.len := 1.U
   out.resp.ready := (state === s_miss_wait_r) || (state === s_miss_wait_w)
+
+  when (out.req.fire()) {
+    printf("%d: [ $  -REQ ] addr=%x aen=%x\n", DebugTimer(), out.req.bits.addr, out.req.bits.aen)
+  }
+  when (out.resp.fire()) {
+    printf("%d: [ $  -RESP] rdata=%x\n", DebugTimer(), out.resp.bits.rdata)
+  }
+
+  when (s1_fire) {
+    printf("%d: [ $ S1->S2] addr=%x\n", DebugTimer(), s1_addr)
+  }
+  when (s2_fire) {
+    printf("%d: [ $ S2->S3] addr=%x\n", DebugTimer(), s2_addr)
+  }
 
   // state machine
 

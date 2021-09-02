@@ -50,11 +50,11 @@ class InstFetch extends InstFetchModule {
   val mis_pc = Mux(io.jmp_packet.jmp, io.jmp_packet.jmp_pc, io.jmp_packet.inst_pc + 4.U)
   val reg_mis = RegInit(false.B)
   val reg_mis_pc = RegInit(UInt(32.W), 0.U)
-  val reg_mis_ok = RegInit(false.B)
+  val reg_mis_pc_valid = RegInit(false.B)
   when (mis && !resp.fire()) {
     reg_mis := true.B
     reg_mis_pc := mis_pc
-    reg_mis_ok := false.B
+    reg_mis_pc_valid := true.B
   }
 
   val invalid_count = RegInit(0.U(2.W))
@@ -85,7 +85,6 @@ class InstFetch extends InstFetchModule {
   when (req.fire()) {
     printf("%d: [IF  -REQ ] addr=%x\n", DebugTimer(), req.bits.addr)
   }
-
   when (resp.fire()) {
     printf("%d: [IF  -RESP] rdata=%x\n", DebugTimer(), resp.bits.rdata)
   }
@@ -95,15 +94,16 @@ class InstFetch extends InstFetchModule {
   // update pc when mis or queue.io.enq.fire()
   when (mis || queue.io.enq.fire()) {
     pc := pc_next
-    when (queue.io.enq.fire()) {
-      reg_mis_ok := true.B
+    when (reg_mis && queue.io.enq.fire()) {
+      pc := bp.io.pred_pc
+      reg_mis_pc_valid := false.B
     }
   }
 
   when (mis) {
     pc_next := mis_pc
     invalid_count := queue.io.count
-  } .elsewhen (reg_mis) {
+  } .elsewhen (reg_mis && reg_mis_pc_valid) {
     pc_next := reg_mis_pc
   } .otherwise {
     pc_next := bp.io.pred_pc
