@@ -22,12 +22,6 @@ abstract class InstFetchModule extends Module {
   val io : Bundle
 }
 
-class InstBundle extends Bundle {
-  val pc = Output(UInt(32.W))
-  val pred_br = Output(Bool())
-  val pred_pc = Output(UInt(32.W))
-}
-
 class InstFetch extends InstFetchModule {
   val io = IO(new InstFetchIO)
 
@@ -35,110 +29,77 @@ class InstFetch extends InstFetchModule {
   val resp = io.imem.resp
 
   val stall = io.stall
+  val reg_stall = RegNext(stall)
 
   val pc_init = "h80000000".U(32.W)
-  val pc_next = WireInit(0.U)
-  dontTouch(pc_next)
+  val pc_next = RegInit(pc_init)
   val pc = RegInit(pc_init)
+  val pc_valid = RegInit(false.B)
+
+  val inst = WireInit(UInt(32.W), 0.U)
+  val inst_valid = WireInit(false.B)
 
   val bp = Module(new BrPredictor)
-
-  bp.io.pc := pc
-  bp.io.jmp_packet <> io.jmp_packet
+  val bp_pred_pc = bp.io.pred_pc
+  val pred_br = RegInit(false.B)
+  val pred_pc = RegInit(UInt(32.W), 0.U)
 
   val mis = io.jmp_packet.mis
   val mis_pc = Mux(io.jmp_packet.jmp, io.jmp_packet.jmp_pc, io.jmp_packet.inst_pc + 4.U)
   val reg_mis = RegInit(false.B)
   val reg_mis_pc = RegInit(UInt(32.W), 0.U)
-  val reg_mis_pc_valid = RegInit(false.B)
-  when (mis && !resp.fire()) {
+  when (io.jmp_packet.mis && !resp.fire()) {
     reg_mis := true.B
     reg_mis_pc := mis_pc
-    reg_mis_pc_valid := true.B
   }
 
-  val invalid_count = RegInit(0.U(2.W))
-
-  // request queue
-  val queue = Module(new Queue(gen = new InstBundle, entries = 2, pipe = true, flow = true))
-  queue.io.enq.valid := req.fire()
-  queue.io.enq.bits.pc := pc
-  queue.io.enq.bits.pred_br := bp.io.pred_br
-  queue.io.enq.bits.pred_pc := bp.io.pred_pc
-  queue.io.deq.ready := resp.fire()
-
-  when (queue.io.enq.fire()) {
-    printf("%d: [FIFO-ENQ ] addr=%x\n", DebugTimer(), queue.io.enq.bits.pc)
-  }
-  when (queue.io.deq.fire()) {
-    printf("%d: [FIFO-DEQ ] addr=%x\n", DebugTimer(), queue.io.deq.bits.pc)
-  }
-
-  // handshake signals with I cache
-  req.bits.addr := pc
-  req.bits.ren := true.B
+  req.bits.addr := pc_next
+  req.bits.ren := true.B          // read-only imem
   req.bits.wdata := 0.U
   req.bits.wmask := 0.U
   req.bits.wen := false.B
-  req.valid := !stall && !io.jmp_packet.mis && queue.io.enq.ready
-
-  when (req.fire()) {
-    printf("%d: [IF  -REQ ] addr=%x\n", DebugTimer(), req.bits.addr)
-  }
-  when (resp.fire()) {
-    printf("%d: [IF  -RESP] rdata=%x\n", DebugTimer(), resp.bits.rdata)
-  }
-
+  req.valid := !stall && !io.jmp_packet.mis
+  
   resp.ready := !stall
+  
+  /* Branch predictor logic */
 
-  // update pc when mis or queue.io.enq.fire()
-  when (mis || queue.io.enq.fire()) {
+  bp.io.pc := pc_next
+  bp.io.jmp_packet <> io.jmp_packet
+
+  // update pc when req.fire()
+
+  when (req.fire() || io.jmp_packet.mis) {
     pc := pc_next
-    when (reg_mis && queue.io.enq.fire()) {
-      pc := bp.io.pred_pc
-      reg_mis_pc_valid := false.B
-    }
-  }
-
-  when (mis) {
-    pc_next := mis_pc
-    invalid_count := queue.io.count
-  } .elsewhen (reg_mis && reg_mis_pc_valid) {
-    pc_next := reg_mis_pc
-  } .otherwise {
-    pc_next := bp.io.pred_pc
-  }
-
-  // update inst when queue.io.deq.fire()
-  io.out.pc := 0.U
-  io.out.inst := 0.U
-  io.out.valid := false.B
-  io.out.pred_br := false.B
-  io.out.pred_pc := 0.U
-  when (queue.io.deq.fire()) {
-    io.out.pc := queue.io.deq.bits.pc
-    io.out.inst := Mux(io.out.pc(2), resp.bits.rdata(63, 32), resp.bits.rdata(31, 0))
-    io.out.pred_br := queue.io.deq.bits.pred_br
-    io.out.pred_pc := queue.io.deq.bits.pred_pc
-    when (mis) {
-      io.out.valid := false.B
-      invalid_count := invalid_count - 1.U
+    pred_br := bp.io.pred_br
+    pred_pc := bp.io.pred_pc
+    pc_valid := true.B
+    when (io.jmp_packet.mis) {
+      pc_next := mis_pc
+      pc_valid := false.B
     } .elsewhen (reg_mis) {
-      when (invalid_count =/= 0.U) {
-        io.out.valid := false.B
-        invalid_count := invalid_count - 1.U
-      } .otherwise {
-        io.out.valid := true.B
-        reg_mis := false.B
-      }
+      pc_next := reg_mis_pc
+      pc_valid := false.B
+      reg_mis := false.B
     } .otherwise {
-      io.out.valid := true.B
+      pc_next := bp_pred_pc
     }
   }
 
-  when (io.out.valid) {
-    printf("%d: [IF  -OUT ] pc=%x inst=%x\n", DebugTimer(), io.out.pc, io.out.inst)
+  // update inst when 
+
+  inst_valid := false.B
+  when (resp.fire()) {
+    inst := Mux(pc(2), resp.bits.rdata(63, 32), resp.bits.rdata(31, 0))
+    inst_valid := !reg_mis && pc_valid
   }
+
+  io.out.pc := pc
+  io.out.inst := inst
+  io.out.valid := inst_valid
+
+  io.out.pred_br := pred_br
+  io.out.pred_pc := pred_pc
 
 }
 

@@ -112,12 +112,9 @@ class Cache(id: Int) extends Module with SramParameters {
 
   /* ----- Pipeline Ctrl Signals ----- */
 
-  val s1_valid = WireInit(false.B)
-  val s2_ready = WireInit(false.B)
-  val s1_fire  = s1_valid && s2_ready
-  val s2_valid = RegInit(false.B)
-  val s3_ready = WireInit(false.B)
-  val s2_fire  = s2_valid && s3_ready
+  val pipeline_valid = WireInit(false.B)
+  val pipeline_ready = WireInit(false.B)
+  val pipeline_fire  = pipeline_valid && pipeline_ready
 
   /* ----- Cache Stage 1 ------------- */
 
@@ -129,7 +126,7 @@ class Cache(id: Int) extends Module with SramParameters {
   val s1_wdata = in.req.bits.wdata
   val s1_wmask = in.req.bits.wmask
 
-  when (s1_fire) {
+  when (pipeline_fire) {
     sram.map { case s => {
       s.io.en := true.B
       s.io.addr := s1_idx
@@ -168,13 +165,13 @@ class Cache(id: Int) extends Module with SramParameters {
 
   val s2_reg_valid = RegInit(false.B)
 
-  when (s1_fire) {
+  when (pipeline_fire) {
     s2_addr  := s1_addr
     s2_wen   := s1_wen
     s2_wdata := s1_wdata
     s2_wmask := s1_wmask
     s2_reg_valid := false.B
-  } .elsewhen (!s1_fire && RegNext(s1_fire)) {
+  } .elsewhen (!pipeline_fire && RegNext(pipeline_fire)) {
     s2_reg_hit   := s2_hit
     s2_reg_way   := s2_way
     s2_reg_rdata := s2_rdata
@@ -182,21 +179,6 @@ class Cache(id: Int) extends Module with SramParameters {
     s2_reg_tag_r := s2_tag_r
     s2_reg_valid := true.B
   }
-
-  /* ----- Cache Stage 3 ------------- */
-
-  val s3_addr  = RegInit(0.U(32.W))
-  val s3_offs  = s3_addr(3)
-  val s3_idx   = s3_addr(9, 4)
-  val s3_tag   = s3_addr(30, 10)
-  val s3_hit   = RegInit(false.B)
-  val s3_way   = RegInit(0.U(2.W))
-  val s3_rdata = RegInit(0.U(128.W))
-  val s3_wen   = RegInit(false.B)
-  val s3_wdata = RegInit(0.U(64.W))
-  val s3_wmask = RegInit(0.U(8.W))
-  val s3_dirty = RegInit(false.B)
-  val s3_tag_r = RegInit(0.U(21.W))
 
   val s_idle :: s_hit_r :: s_hit_w :: s_miss_req_r :: s_miss_wait_r :: s1 = Enum(9)
   val s_miss_ok_r :: s_miss_req_w1 :: s_miss_req_w2 :: s_miss_wait_w :: Nil = s1
@@ -209,93 +191,83 @@ class Cache(id: Int) extends Module with SramParameters {
     state_init := s_miss_req_r
   }
 
-  when (s2_fire) {
-    s3_addr  := s2_addr
-    s3_hit   := Mux(s2_reg_valid, s2_reg_hit, s2_hit)
-    s3_way   := Mux(s2_reg_valid, s2_reg_way, s2_way)
-    s3_rdata := Mux(s2_reg_valid, s2_reg_rdata, s2_rdata)
-    s3_wen   := s2_wen
-    s3_wdata := s2_wdata
-    s3_wmask := s2_wmask
-    s3_dirty := Mux(s2_reg_valid, s2_reg_dirty, s2_dirty)
-    s3_tag_r := Mux(s2_reg_valid, s2_reg_tag_r, s2_tag_r)
-  }
-
-  replace_way := Cat(plru0(s3_idx), Mux(plru0(s3_idx) === 0.U, plru1(s3_idx), plru2(s3_idx)))
-  val wb_addr = Cat(1.U, s3_tag_r, s3_idx, Fill(4, 0.U))
+  replace_way := Cat(plru0(s2_idx), Mux(plru0(s2_idx) === 0.U, plru1(s2_idx), plru2(s2_idx)))
+  val wb_addr = Cat(1.U, s2_reg_tag_r, s2_idx, Fill(4, 0.U))
   val wdata1 = RegInit(UInt(64.W), 0.U)
   val wdata2 = RegInit(UInt(64.W), 0.U)
 
   /* ----- Pipeline Ctrl Signals ----- */
 
-  val init_stall = RegInit(true.B)
-  init_stall := false.B
+  val init = RegInit(true.B)
+  init := false.B
 
-  s1_valid := in.req.fire()
-  s2_ready := Mux(s2_valid, s2_hit && s3_ready, s3_ready) && !init_stall
-  s2_valid := Mux(s1_fire, s1_valid, s2_valid)  // s2_valid is a register
-  s3_ready := (state === s_idle) || (state === s_hit_r && in.resp.fire())
+  val s2_hit_real = Mux(RegNext(pipeline_fire), s2_hit, s2_reg_hit) || init
+
+  pipeline_valid := in.req.fire()
+  pipeline_ready := (state === s_idle) && in.resp.fire() && s2_hit_real && !s2_wen
 
   // handshake signals with IF unit
-  in.req.ready := s2_ready
-  in.resp.valid := (state === s_hit_r) || (state === s_hit_w) || (state === s_miss_ok_r)
+  in.req.ready := pipeline_ready
+  in.resp.valid := (state === s_idle && s2_hit_real) || (state === s_miss_ok_r)
   in.resp.bits.rdata := 0.U
 
   // handshake signals with memory
   out.req.valid := (state === s_miss_req_r) || (state === s_miss_req_w1) || (state === s_miss_req_w2)
   out.req.bits.id := id.U
-  out.req.bits.addr := Mux(state === s_miss_req_r, Cat(s3_addr(31, 4), Fill(4, 0.U)), Cat(wb_addr(31, 4), Fill(4, 0.U)))
+  out.req.bits.addr := Mux(state === s_miss_req_r, Cat(s2_addr(31, 4), Fill(4, 0.U)), Cat(wb_addr(31, 4), Fill(4, 0.U)))
   out.req.bits.aen := (state === s_miss_req_r) || (state === s_miss_req_w1)
   out.req.bits.ren := (state === s_miss_req_r)
-  out.req.bits.wdata := Mux(state === s_miss_req_w1, s3_rdata(63, 0), s3_rdata(127, 64))
+  out.req.bits.wdata := Mux(state === s_miss_req_w1, s2_reg_rdata(63, 0), s2_reg_rdata(127, 64))
   out.req.bits.wmask := "hff".U(8.W)
   out.req.bits.wlast := (state === s_miss_req_w2)
   out.req.bits.wen := (state === s_miss_req_w1) || (state === s_miss_req_w2)
   out.req.bits.len := 1.U
   out.resp.ready := (state === s_miss_wait_r) || (state === s_miss_wait_w)
 
-  when (out.req.fire()) {
-    printf("%d: [ $  -REQ ] addr=%x aen=%x\n", DebugTimer(), out.req.bits.addr, out.req.bits.aen)
-  }
-  when (out.resp.fire()) {
-    printf("%d: [ $  -RESP] rdata=%x\n", DebugTimer(), out.resp.bits.rdata)
-  }
-
-  when (s1_fire) {
-    printf("%d: [ $ S1->S2] addr=%x\n", DebugTimer(), s1_addr)
-  }
-  when (s2_fire) {
-    printf("%d: [ $ S2->S3] addr=%x\n", DebugTimer(), s2_addr)
+  if (Settings.DebugMsgCache) {
+    when (out.req.fire()) {
+      printf("%d: [ $  -REQ ] addr=%x aen=%x\n", DebugTimer(), out.req.bits.addr, out.req.bits.aen)
+    }
+    when (out.resp.fire()) {
+      printf("%d: [ $  -RESP] rdata=%x\n", DebugTimer(), out.resp.bits.rdata)
+    }
+    when (pipeline_fire) {
+      printf("%d: [ $ S1->S2] addr=%x\n", DebugTimer(), s1_addr)
+    }
   }
 
   // state machine
 
   switch (state) {
-    is (s_hit_r) {
-      in.resp.bits.rdata := Mux(s3_offs === 1.U, s3_rdata(127, 64), s3_rdata(63, 0))
-      when (in.resp.fire()) {
-        updatePlruTree(s3_idx, s3_way)
-        state := s_idle
+    is (s_idle) {
+      when (RegNext(pipeline_fire)) {
+        in.resp.bits.rdata := Mux(s2_offs === 1.U, s2_rdata(127, 64), s2_rdata(63, 0))
+      } .otherwise {
+        in.resp.bits.rdata := Mux(s2_offs === 1.U, s2_reg_rdata(127, 64), s2_reg_rdata(63, 0))
       }
-    }
-    is (s_hit_w) {
-      when (in.resp.fire()) {
-        for (i <- 0 until 4) {
-          when (s3_way === i.U) {
-            sram(i).io.en := true.B
-            sram(i).io.wen := true.B
-            sram(i).io.addr := s3_idx
-            sram(i).io.wdata := Mux(s3_offs === 1.U, 
-                                    Cat(MaskData(s3_rdata(127, 64), s3_wdata, MaskExpand(s3_wmask)), s3_rdata(63, 0)),
-                                    Cat(s3_rdata(127, 64), MaskData(s3_rdata(63, 0), s3_wdata, MaskExpand(s3_wmask))))
-            meta(i).io.idx := s3_idx
-            meta(i).io.dirty_wen := true.B
-            meta(i).io.dirty_w := true.B
-          }
+      when (RegNext(pipeline_fire)) {
+        when (s2_hit) {
+          updatePlruTree(s2_idx, s2_way)
         }
-        updatePlruTree(s3_idx, s3_way)
+        when (s2_hit && s2_wen) {
+          for (i <- 0 until 4) {
+            when (s2_way === i.U) {
+              sram(i).io.en := true.B
+              sram(i).io.wen := true.B
+              sram(i).io.addr := s2_idx
+              sram(i).io.wdata := Mux(s2_offs === 1.U, 
+                                      Cat(MaskData(s2_rdata(127, 64), s2_wdata, MaskExpand(s2_wmask)), s2_rdata(63, 0)),
+                                      Cat(s2_rdata(127, 64), MaskData(s2_rdata(63, 0), s2_wdata, MaskExpand(s2_wmask))))
+              meta(i).io.idx := s2_idx
+              meta(i).io.dirty_wen := true.B
+              meta(i).io.dirty_w := true.B
+            }
+          }
+          s2_wen := false.B
+        } .elsewhen (!s2_hit) {
+          state := s_miss_req_r
+        }
       }
-      state := s_idle
     }
     is (s_miss_req_r) {
       when (out.req.fire()) {
@@ -313,29 +285,31 @@ class Cache(id: Int) extends Module with SramParameters {
       }
     }
     is (s_miss_ok_r) {
-      in.resp.bits.rdata := Mux(s3_wen, 0.U, Mux(s3_offs.asBool(), wdata2, wdata1))
+      in.resp.bits.rdata := Mux(s2_wen, 0.U, Mux(s2_offs.asBool(), wdata2, wdata1))
       when (in.resp.fire()) {
         for (i <- 0 until 4) {
           when (replace_way === i.U) {
             sram(i).io.en := true.B
             sram(i).io.wen := true.B
-            sram(i).io.addr := s3_idx
-            when (s3_wen) {
-              sram(i).io.wdata := Mux(s3_offs === 1.U, 
-                                      Cat(MaskData(wdata2, s3_wdata, MaskExpand(s3_wmask)), wdata1),
-                                      Cat(wdata2, MaskData(wdata1, s3_wdata, MaskExpand(s3_wmask))))
+            sram(i).io.addr := s2_idx
+            when (s2_wen) {
+              sram(i).io.wdata := Mux(s2_offs === 1.U, 
+                                      Cat(MaskData(wdata2, s2_wdata, MaskExpand(s2_wmask)), wdata1),
+                                      Cat(wdata2, MaskData(wdata1, s2_wdata, MaskExpand(s2_wmask))))
             } .otherwise {
               sram(i).io.wdata := Cat(wdata2, wdata1)
             }
             // write allocate
-            meta(i).io.idx := s3_idx
+            meta(i).io.idx := s2_idx
             meta(i).io.tag_wen := true.B
-            meta(i).io.tag_w := s3_tag
+            meta(i).io.tag_w := s2_tag
             meta(i).io.dirty_wen := true.B
-            meta(i).io.dirty_w := s3_wen
+            meta(i).io.dirty_w := s2_wen
           }
         }
-        state := Mux(s3_dirty, s_miss_req_w1, s_idle)
+        s2_wen := false.B
+        s2_reg_hit := true.B
+        state := Mux(s2_reg_dirty, s_miss_req_w1, s_idle)
       }
     }
     is (s_miss_req_w1) {
@@ -353,10 +327,6 @@ class Cache(id: Int) extends Module with SramParameters {
         state := s_idle
       }
     }
-  }
-
-  when (s2_fire) {
-    state := state_init
   }
 
 }
