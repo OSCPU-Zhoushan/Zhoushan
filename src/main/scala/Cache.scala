@@ -192,7 +192,9 @@ class Cache(id: Int) extends Module with SramParameters {
   /* ----- Pipeline Ctrl Signals ----- */
 
   val init = RegInit(true.B)
-  init := false.B
+  when (in.req.valid) {
+    init := false.B
+  }
 
   val s2_hit_real = Mux(RegNext(pipeline_fire), s2_hit, s2_reg_hit) || init
 
@@ -217,15 +219,18 @@ class Cache(id: Int) extends Module with SramParameters {
   out.req.bits.len := 1.U
   out.resp.ready := (state === s_miss_wait_r) || (state === s_miss_wait_w)
 
-  if (Settings.DebugMsgCache) {
+  if ((Settings.DebugMsgICache && id == 1) || (Settings.DebugMsgDCache && id == 2)) {
+    when (in.req.fire()) {
+      printf("%d: [$ %d] [IN -REQ ] addr=%x\n", DebugTimer(), id.U, in.req.bits.addr)
+    }
+    when (in.resp.fire()) {
+      printf("%d: [$ %d] [IN -RESP] rdata=%x\n", DebugTimer(), id.U, in.resp.bits.rdata)
+    }
     when (out.req.fire()) {
-      printf("%d: [ $  -REQ ] addr=%x aen=%x\n", DebugTimer(), out.req.bits.addr, out.req.bits.aen)
+      printf("%d: [$ %d] [OUT-REQ ] addr=%x aen=%x\n", DebugTimer(), id.U, out.req.bits.addr, out.req.bits.aen)
     }
     when (out.resp.fire()) {
-      printf("%d: [ $  -RESP] rdata=%x\n", DebugTimer(), out.resp.bits.rdata)
-    }
-    when (pipeline_fire) {
-      printf("%d: [ $ S1->S2] addr=%x\n", DebugTimer(), s1_addr)
+      printf("%d: [$ %d] [OUT-RESP] rdata=%x\n", DebugTimer(), id.U, out.resp.bits.rdata)
     }
   }
 
