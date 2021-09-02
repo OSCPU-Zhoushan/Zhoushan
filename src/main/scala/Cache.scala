@@ -115,7 +115,7 @@ class Cache(id: Int) extends Module with SramParameters {
   val s1_valid = WireInit(false.B)
   val s2_ready = WireInit(false.B)
   val s1_fire  = s1_valid && s2_ready
-  val s2_valid = WireInit(false.B)
+  val s2_valid = RegInit(false.B)
   val s3_ready = WireInit(false.B)
   val s2_fire  = s2_valid && s3_ready
 
@@ -149,24 +149,39 @@ class Cache(id: Int) extends Module with SramParameters {
   val s2_wdata = RegInit(0.U(64.W))
   val s2_wmask = RegInit(0.U(8.W))
 
-  when (s1_fire) {
-    s2_addr  := s1_addr
-    s2_wen   := s1_wen
-    s2_wdata := s1_wdata
-    s2_wmask := s1_wmask
-  }
-
   val hit = WireInit(VecInit(Seq.fill(4)(false.B)))
   (hit zip (tag_out zip valid_out)).map { case (h, (t, v)) => {
     h := (t === s2_tag) && v
   }}
   val s2_hit = hit(0) || hit(1) || hit(2) || hit(3)  // todo
   val s2_way = OHToUInt(hit)
-
   val s2_rdata = sram_out(s2_way)
   val s2_dirty = dirty_out(s2_way)
-
   val s2_tag_r = tag_out(replace_way)
+
+  val s2_reg_hit = RegInit(false.B)
+  val s2_reg_way = RegInit(0.U(2.W))
+  val s2_reg_rdata = RegInit(0.U(128.W))
+  val s2_reg_dirty = RegInit(false.B)
+  val s2_reg_tag_r = RegInit(0.U(21.W))
+  val s2_reg_v = RegInit(false.B)
+
+  val s2_reg_valid = RegInit(false.B)
+
+  when (s1_fire) {
+    s2_addr  := s1_addr
+    s2_wen   := s1_wen
+    s2_wdata := s1_wdata
+    s2_wmask := s1_wmask
+    s2_reg_valid := false.B
+  } .elsewhen (!s1_fire && RegNext(s1_fire)) {
+    s2_reg_hit   := s2_hit
+    s2_reg_way   := s2_way
+    s2_reg_rdata := s2_rdata
+    s2_reg_dirty := s2_dirty
+    s2_reg_tag_r := s2_tag_r
+    s2_reg_valid := true.B
+  }
 
   /* ----- Cache Stage 3 ------------- */
 
@@ -188,7 +203,7 @@ class Cache(id: Int) extends Module with SramParameters {
   val state = RegInit(s_idle)
   val state_init = WireInit(s_idle)
 
-  when (s2_hit) {
+  when (Mux(s2_reg_valid, s2_reg_hit, s2_hit)) {
     state_init := Mux(s2_wen, s_hit_w, s_hit_r)
   } .otherwise {
     state_init := s_miss_req_r
@@ -196,14 +211,14 @@ class Cache(id: Int) extends Module with SramParameters {
 
   when (s2_fire) {
     s3_addr  := s2_addr
-    s3_hit   := s2_hit
-    s3_way   := s2_way
-    s3_rdata := s2_rdata
+    s3_hit   := Mux(s2_reg_valid, s2_reg_hit, s2_hit)
+    s3_way   := Mux(s2_reg_valid, s2_reg_way, s2_way)
+    s3_rdata := Mux(s2_reg_valid, s2_reg_rdata, s2_rdata)
     s3_wen   := s2_wen
     s3_wdata := s2_wdata
     s3_wmask := s2_wmask
-    s3_dirty := s2_dirty
-    s3_tag_r := s2_tag_r
+    s3_dirty := Mux(s2_reg_valid, s2_reg_dirty, s2_dirty)
+    s3_tag_r := Mux(s2_reg_valid, s2_reg_tag_r, s2_tag_r)
   }
 
   replace_way := Cat(plru0(s3_idx), Mux(plru0(s3_idx) === 0.U, plru1(s3_idx), plru2(s3_idx)))
@@ -218,7 +233,7 @@ class Cache(id: Int) extends Module with SramParameters {
 
   s1_valid := in.req.fire()
   s2_ready := Mux(s2_valid, s2_hit && s3_ready, s3_ready) && !init_stall
-  s2_valid := RegNext(s1_valid) && !init_stall
+  s2_valid := Mux(s1_fire, s1_valid, s2_valid)  // s2_valid is a register
   s3_ready := (state === s_idle) || (state === s_hit_r && in.resp.fire())
 
   // handshake signals with IF unit
