@@ -5,6 +5,8 @@ object Settings {
   val DebugMsgUopCommit = false
   val DebugMsgSram = false
   val DebugMsgLsu = false
+  val DebugMsgICache = false
+  val DebugMsgDCache = false
   val ClintAddrBase = 0x02000000
   val ClintAddrSize = 0x10000
 }

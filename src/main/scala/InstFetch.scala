@@ -25,100 +25,82 @@ abstract class InstFetchModule extends Module {
 class InstFetch extends InstFetchModule {
   val io = IO(new InstFetchIO)
 
-  val s_init :: s_idle :: s_req :: s_wait :: s_wait_mis :: Nil = Enum(5)
-  val state = RegInit(s_init)
-
   val req = io.imem.req
   val resp = io.imem.resp
 
   val stall = io.stall
+  val reg_stall = RegNext(stall)
 
   val pc_init = "h80000000".U(32.W)
+  val pc_next = RegInit(pc_init)
   val pc = RegInit(pc_init)
-  val inst = RegInit(0.U(32.W))
+  val pc_valid = RegInit(false.B)
+
+  val inst = WireInit(UInt(32.W), 0.U)
+  val inst_valid = WireInit(false.B)
+
   val bp = Module(new BrPredictor)
   val bp_pred_pc = bp.io.pred_pc
+  val pred_br = RegInit(false.B)
+  val pred_pc = RegInit(UInt(32.W), 0.U)
 
-  req.bits.addr := pc
+  val mis = io.jmp_packet.mis
+  val mis_pc = Mux(io.jmp_packet.jmp, io.jmp_packet.jmp_pc, io.jmp_packet.inst_pc + 4.U)
+  val reg_mis = RegInit(false.B)
+  val reg_mis_pc = RegInit(UInt(32.W), 0.U)
+  when (io.jmp_packet.mis && !resp.fire()) {
+    reg_mis := true.B
+    reg_mis_pc := mis_pc
+  }
+
+  req.bits.addr := pc_next
   req.bits.ren := true.B          // read-only imem
   req.bits.wdata := 0.U
   req.bits.wmask := 0.U
   req.bits.wen := false.B
-  req.valid := (state === s_req) && !stall && !io.jmp_packet.mis
+  req.valid := !stall && !io.jmp_packet.mis
   
-  resp.ready := (state === s_wait) || (state === s_wait_mis)
+  resp.ready := !stall
+  
+  /* Branch predictor logic */
 
-  /* FSM to handle CoreBus bus status
-   *
-   *  Simplified FSM digram (no stall signal here)
-   *
-   *             mis_predict    mis_predict  !resp_success
-   *                     ┌─┐  ┌───────────┐ ┌─┐
-   *                     │ v  v           │ │ v
-   *   ┌────────┐      ┌────────┐      ┌────────┐
-   *   │ s_init │ ───> │ s_req  │ ───> │ s_wait │
-   *   └────────┘      └────────┘      └────────┘
-   *                       ^               │
-   *                       │               │ resp_success & (mis_count == 0)
-   *                   ┌────────┐          │
-   *                   │ s_idle │ <────────┘
-   *                   └────────┘
-   *
-   *  Note 1: When a mis-predict occurs, mis_count += 1
-   *  Note 2: stall == 1 -> stop FSM, but don't send request more than once
-   *
-   */
+  bp.io.pc := pc_next
+  bp.io.jmp_packet <> io.jmp_packet
 
-  switch (state) {
-    is (s_init) {
-      state := s_req
-    }
-    is (s_idle) {
-      pc := Mux(stall, pc, bp_pred_pc)
-      state := Mux(stall, s_idle, s_req)
-    }
-    is (s_req) {
-      when (io.jmp_packet.mis) {
-        pc := bp_pred_pc
-      } .elsewhen (req.fire()) {
-        state := s_wait
-      }
-    }
-    is (s_wait) {
-      when (io.jmp_packet.mis) {
-        pc := bp_pred_pc
-        when (resp.fire()) {
-          state := s_req
-        } .otherwise {
-          state := s_wait_mis
-        }
-      } .elsewhen (resp.fire()) {
-        inst := Mux(pc(2), resp.bits.rdata(63, 32), resp.bits.rdata(31, 0))
-        state := s_idle
-      }
-    }
-    is (s_wait_mis) {
-      when (resp.fire()) {
-        state := s_req
-      }
+  // update pc when req.fire()
+
+  when (req.fire() || io.jmp_packet.mis) {
+    pc := pc_next
+    pred_br := bp.io.pred_br
+    pred_pc := bp.io.pred_pc
+    pc_valid := true.B
+    when (io.jmp_packet.mis) {
+      pc_next := mis_pc
+      pc_valid := false.B
+    } .elsewhen (reg_mis) {
+      pc_next := reg_mis_pc
+      pc_valid := false.B
+      reg_mis := false.B
+    } .otherwise {
+      pc_next := bp_pred_pc
     }
   }
 
-  /* Branch predictor logic */
+  // update inst when 
 
-  bp.io.pc := pc
-  bp.io.inst := inst
-  bp.io.is_br := (inst === Instructions.JAL) || (inst === Instructions.JALR) ||
-                 (inst === Instructions.BEQ) || (inst === Instructions.BNE) ||
-                 (inst === Instructions.BLT) || (inst === Instructions.BLTU) ||
-                 (inst === Instructions.BGE) || (inst === Instructions.BGEU);
-  bp.io.jmp_packet <> io.jmp_packet
+  inst_valid := false.B
+  when (resp.fire()) {
+    inst := Mux(pc(2), resp.bits.rdata(63, 32), resp.bits.rdata(31, 0))
+    inst_valid := !reg_mis && pc_valid
+  }
 
-  io.out.pc := Mux(state === s_idle && !stall, pc, 0.U)
-  io.out.inst := Mux(state === s_idle && !stall, inst, 0.U)
-  io.out.pred_br := bp.io.pred_br
-  io.out.pred_pc := bp.io.pred_pc
-  io.out.valid := true.B
+  io.out.pc := pc
+  io.out.inst := inst
+  io.out.valid := inst_valid
+
+  io.out.pred_br := pred_br
+  io.out.pred_pc := pred_pc
+
 }
 
 class InstFetchWithRamHelper extends InstFetchModule {
@@ -133,11 +115,6 @@ class InstFetchWithRamHelper extends InstFetchModule {
 
   val bp = Module(new BrPredictor)
   bp.io.pc := pc
-  bp.io.inst := inst
-  bp.io.is_br := (inst === Instructions.JAL) || (inst === Instructions.JALR) ||
-                 (inst === Instructions.BEQ) || (inst === Instructions.BNE) ||
-                 (inst === Instructions.BLT) || (inst === Instructions.BLTU) ||
-                 (inst === Instructions.BGE) || (inst === Instructions.BGEU);
   bp.io.jmp_packet <> io.jmp_packet
 
   val pc_zero_reset = RegInit(true.B) // todo: fix pc reset
