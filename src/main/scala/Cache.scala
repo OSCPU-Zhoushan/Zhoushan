@@ -138,6 +138,10 @@ class Cache(id: Int) extends Module with SramParameters {
 
   /* ----- Cache Stage 2 ------------- */
 
+  val s_idle        :: s_hit_w       :: s_miss_req_r  :: s_miss_wait_r :: s_miss_ok_r :: s1  = Enum(10)
+  val s_miss_req_w1 :: s_miss_req_w2 :: s_miss_wait_w :: s_miss_ok_w   :: s_complete  :: Nil = s1
+  val state = RegInit(s_idle)
+
   val s2_addr  = RegInit(0.U(32.W))
   val s2_offs  = s2_addr(3)
   val s2_idx   = s2_addr(9, 4)
@@ -155,34 +159,29 @@ class Cache(id: Int) extends Module with SramParameters {
   val s2_rdata = sram_out(s2_way)
   val s2_dirty = dirty_out(s2_way)
   val s2_tag_r = tag_out(replace_way)
+  val s2_dat_w = sram_out(replace_way)
 
   val s2_reg_hit = RegInit(false.B)
   val s2_reg_way = RegInit(0.U(2.W))
   val s2_reg_rdata = RegInit(0.U(128.W))
   val s2_reg_dirty = RegInit(false.B)
   val s2_reg_tag_r = RegInit(0.U(21.W))
-  val s2_reg_v = RegInit(false.B)
-
-  val s2_reg_valid = RegInit(false.B)
+  val s2_reg_dat_w = RegInit(0.U(128.W))
 
   when (pipeline_fire) {
     s2_addr  := s1_addr
     s2_wen   := s1_wen
     s2_wdata := s1_wdata
     s2_wmask := s1_wmask
-    s2_reg_valid := false.B
+    state := s_idle
   } .elsewhen (!pipeline_fire && RegNext(pipeline_fire)) {
     s2_reg_hit   := s2_hit
     s2_reg_way   := s2_way
-    s2_reg_rdata := s2_rdata //Mux(s2_hit, s2_rdata, 0.U)
-    s2_reg_dirty := Mux(s2_hit, s2_dirty, false.B)
-    s2_reg_tag_r := Mux(s2_hit, s2_tag_r, 0.U)
-    s2_reg_valid := s2_hit
+    s2_reg_rdata := s2_rdata
+    s2_reg_dirty := s2_dirty
+    s2_reg_tag_r := s2_tag_r
+    s2_reg_dat_w := s2_dat_w
   }
-
-  val s_idle        :: s_miss_req_r  :: s_miss_wait_r :: s_miss_ok_r :: s1 = Enum(7)
-  val s_miss_req_w1 :: s_miss_req_w2 :: s_miss_wait_w :: Nil               = s1
-  val state = RegInit(s_idle)
 
   replace_way := Cat(plru0(s2_idx), Mux(plru0(s2_idx) === 0.U, plru1(s2_idx), plru2(s2_idx)))
   val wb_addr = Cat(1.U, s2_reg_tag_r, s2_idx, Fill(4, 0.U))
@@ -197,13 +196,18 @@ class Cache(id: Int) extends Module with SramParameters {
   }
 
   val s2_hit_real = Mux(RegNext(pipeline_fire), s2_hit, s2_reg_hit)
+  val s2_dirty_real = Mux(RegNext(pipeline_fire), s2_dirty, s2_reg_dirty)
+
+  val hit_ready = s2_hit_real && Mux(s2_wen, state === s_complete, state === s_idle)
+  val miss_ready = (state === s_complete)
+  // val no_req_ready = (state === s_idle) && RegNext(!in.req.valid)
 
   pipeline_valid := in.req.fire()
-  pipeline_ready := (state === s_idle) && in.resp.fire() && s2_hit_real && !s2_wen || init
+  pipeline_ready := hit_ready || miss_ready || init
 
   // handshake signals with IF unit
   in.req.ready := pipeline_ready
-  in.resp.valid := s2_hit_real
+  in.resp.valid := s2_hit_real || (state === s_miss_ok_r)
   in.resp.bits.rdata := 0.U
 
   // handshake signals with memory
@@ -212,7 +216,7 @@ class Cache(id: Int) extends Module with SramParameters {
   out.req.bits.addr := Mux(state === s_miss_req_r, Cat(s2_addr(31, 4), Fill(4, 0.U)), Cat(wb_addr(31, 4), Fill(4, 0.U)))
   out.req.bits.aen := (state === s_miss_req_r) || (state === s_miss_req_w1)
   out.req.bits.ren := (state === s_miss_req_r)
-  out.req.bits.wdata := Mux(state === s_miss_req_w1, s2_reg_rdata(63, 0), s2_reg_rdata(127, 64))
+  out.req.bits.wdata := Mux(state === s_miss_req_w1, s2_reg_dat_w(63, 0), s2_reg_dat_w(127, 64))
   out.req.bits.wmask := "hff".U(8.W)
   out.req.bits.wlast := (state === s_miss_req_w2)
   out.req.bits.wen := (state === s_miss_req_w1) || (state === s_miss_req_w2)
@@ -261,10 +265,15 @@ class Cache(id: Int) extends Module with SramParameters {
               meta(i).io.dirty_w := true.B
             }
           }
-          s2_wen := false.B
+          state := s_hit_w
         } .elsewhen (!s2_hit) {
           state := s_miss_req_r
         }
+      }
+    }
+    is (s_hit_w) {
+      when (in.resp.fire()) {
+        state := s_complete
       }
     }
     is (s_miss_req_r) {
@@ -283,8 +292,9 @@ class Cache(id: Int) extends Module with SramParameters {
       }
     }
     is (s_miss_ok_r) {
-      s2_reg_rdata := Cat(wdata2, wdata1)
-      s2_reg_hit := true.B
+      // s2_reg_rdata := Cat(wdata2, wdata1)
+      // s2_reg_hit := true.B
+      in.resp.bits.rdata := Mux(s2_offs.asBool(), wdata2, wdata1)
       when (in.resp.fire()) {
         for (i <- 0 until 4) {
           when (replace_way === i.U) {
@@ -306,7 +316,11 @@ class Cache(id: Int) extends Module with SramParameters {
             meta(i).io.dirty_w := s2_wen
           }
         }
-        state := Mux(s2_reg_dirty, s_miss_req_w1, s_idle)
+        when (s2_reg_dirty) {
+          state := s_miss_req_w1
+        } .otherwise {
+          state := s_complete
+        }
       }
     }
     is (s_miss_req_w1) {
@@ -322,9 +336,8 @@ class Cache(id: Int) extends Module with SramParameters {
     is (s_miss_wait_w) {
       s2_wen := false.B
       when (out.resp.fire()) {
-        state := s_idle
+        state := s_complete
       }
     }
   }
-
 }
