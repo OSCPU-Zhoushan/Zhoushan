@@ -157,7 +157,7 @@ class Cache(id: Int) extends Module with SramParameters {
   val s2_hit = hit(0) || hit(1) || hit(2) || hit(3)  // todo
   val s2_way = OHToUInt(hit)
   val s2_rdata = sram_out(s2_way)
-  val s2_dirty = dirty_out(s2_way)
+  val s2_dirty = dirty_out(replace_way)
   val s2_tag_r = tag_out(replace_way)
   val s2_dat_w = sram_out(replace_way)
 
@@ -225,13 +225,16 @@ class Cache(id: Int) extends Module with SramParameters {
 
   if ((Settings.DebugMsgICache && id == 1) || (Settings.DebugMsgDCache && id == 2)) {
     when (in.req.fire()) {
-      printf("%d: [$ %d] [IN -REQ ] addr=%x\n", DebugTimer(), id.U, in.req.bits.addr)
+      printf("%d: [$ %d] [IN -REQ ] addr=%x wen=%x wdata=%x\n", DebugTimer(), id.U, in.req.bits.addr, in.req.bits.wen, in.req.bits.wdata)
     }
     when (in.resp.fire()) {
-      printf("%d: [$ %d] [IN -RESP] rdata=%x\n", DebugTimer(), id.U, in.resp.bits.rdata)
+      printf("%d: [$ %d] [IN -RESP] addr=%x wen=%x rdata=%x\n", DebugTimer(), id.U, s2_addr, s2_wen, in.resp.bits.rdata)
+    }
+    when (RegNext(pipeline_fire)) {
+      printf("%d: [$ %d] hit=%x idx=%d way=%d rdata=%x dirty=%x replace_way=%d tag_r=%x dat_w=%x\n", DebugTimer(), id.U, s2_hit, s2_idx, s2_way, s2_rdata, s2_dirty, replace_way, s2_tag_r, s2_dat_w)
     }
     when (out.req.fire()) {
-      printf("%d: [$ %d] [OUT-REQ ] addr=%x aen=%x\n", DebugTimer(), id.U, out.req.bits.addr, out.req.bits.aen)
+      printf("%d: [$ %d] [OUT-REQ ] addr=%x aen=%x wen=%x wdata=%x\n", DebugTimer(), id.U, out.req.bits.addr, out.req.bits.aen, out.req.bits.wen, out.req.bits.wdata)
     }
     when (out.resp.fire()) {
       printf("%d: [$ %d] [OUT-RESP] rdata=%x\n", DebugTimer(), id.U, out.resp.bits.rdata)
