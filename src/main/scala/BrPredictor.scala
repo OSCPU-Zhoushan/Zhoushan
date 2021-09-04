@@ -54,7 +54,13 @@ class PatternHistoryTable extends Module with BpParameters{
 
 }
 
-class BranchTargetBuffer extends Module with BpParameters{
+sealed class BtbEntry extends Bundle with BpParameters {
+  val valid = Bool()
+  val tag = UInt(BtbTagSize.W)
+  val target = UInt(32.W)
+}
+
+class BranchTargetBuffer extends Module with BpParameters {
   val io = IO(new Bundle {
     val raddr = Input(UInt(BtbAddrSize.W))
     val rtag = Input(UInt(BtbTagSize.W))
@@ -66,22 +72,18 @@ class BranchTargetBuffer extends Module with BpParameters{
     val wtarget = Input(UInt(32.W))
   })
 
-  def btbEntry() = new Bundle {
-    val valid = Bool()
-    val tag = UInt(BtbTagSize.W)
-    val target = UInt(32.W)
-  }
+  val btb = SyncReadMem(BtbSize, new BtbEntry)
 
-  val btb = RegInit(VecInit(Seq.fill(BtbSize)(0.U.asTypeOf(btbEntry()))))
-
-  val rdata = btb(io.raddr)
+  val rdata = btb.read(io.raddr)
   io.rhit := rdata.valid && (rdata.tag === io.rtag)
   io.rtarget := rdata.target
 
+  val wentry = Wire(new BtbEntry)
+  wentry.valid := true.B
+  wentry.tag := io.wtag
+  wentry.target := io.wtarget
   when (io.wen) {
-    btb(io.waddr).valid := true.B
-    btb(io.waddr).tag := io.wtag
-    btb(io.waddr).target := io.wtarget
+    btb.write(io.waddr, wentry)
   }
 
 }
@@ -119,7 +121,8 @@ class BrPredictor extends Module with BpParameters {
   // PHT read logic
   pht.io.raddr := phtAddr(bht_rdata, pc)
   pht.io.rindex := phtIndex(pc)
-  val pht_rdirect = pht.io.rdirect
+  val pht_rdirect = RegInit(false.B)
+  pht_rdirect := pht.io.rdirect   // delay for 1 cycle to sync with BTB
 
   // PHT update logic
   pht.io.waddr := phtAddr(bht_wrdata, jmp_packet.inst_pc)
@@ -150,10 +153,10 @@ class BrPredictor extends Module with BpParameters {
   } .otherwise {
     when (pht_rdirect) {
       pred_br := btb_rhit   // equivalent to Mux(btb_rhit, pht_rdirect, false.B)
-      pred_pc := Mux(btb_rhit, btb_rtarget, npc)
+      pred_pc := Mux(btb_rhit, btb_rtarget, RegNext(npc))
     } .otherwise {
       pred_br := false.B
-      pred_pc := npc
+      pred_pc := RegNext(npc)
     }
   }
 
