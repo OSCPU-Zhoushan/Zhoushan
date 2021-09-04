@@ -17,13 +17,13 @@ class Core extends Module {
 
   val fetch = Module(new InstFetch)
 
-  val cb2sa1 = Module(new CacheBus2SimpelAxi(1))
-  cb2sa1.in <> fetch.io.imem
-  cb2sa1.out <> io.imem
+  // val cb2sa1 = Module(new CacheBus2SimpelAxi(1))
+  // cb2sa1.in <> fetch.io.imem
+  // cb2sa1.out <> io.imem
 
-  // val icache = Module(new Cache(1))
-  // icache.io.in <> fetch.io.imem
-  // icache.io.out <> io.imem
+  val icache = Module(new Cache(1))
+  icache.io.in <> fetch.io.imem
+  icache.io.out <> io.imem
 
   val if_id_reg = Module(new PipelineReg(new InstPacket))
   if_id_reg.io.in <> fetch.io.out
@@ -57,19 +57,19 @@ class Core extends Module {
   execution.io.rs1_data := ex_rs1_data // id_ex_reg.io.out.rs1_data
   execution.io.rs2_data := ex_rs2_data // id_ex_reg.io.out.rs2_data
 
-  val cb2sa2 = Module(new CacheBus2SimpelAxi(2))
-  cb2sa2.in <> execution.io.dmem
-  cb2sa2.out <> io.dmem
+  // val cb2sa2 = Module(new CacheBus2SimpelAxi(2))
+  // cb2sa2.in <> execution.io.dmem
+  // cb2sa2.out <> io.dmem
 
-  // val crossbar1to2 = Module(new CacheBusCrossbar1to2)
-  // crossbar1to2.io.in <> execution.io.dmem
+  val crossbar1to2 = Module(new CacheBusCrossbar1to2)
+  crossbar1to2.io.in <> execution.io.dmem
 
-  // val dcache = Module(new Cache(2))
-  // dcache.io.in <> crossbar1to2.io.out(0)
-  // dcache.io.out <> io.dmem
+  val dcache = Module(new Cache(2))
+  dcache.io.in <> crossbar1to2.io.out(0)
+  dcache.io.out <> io.dmem
 
-  // val clint = Module(new Clint)
-  // clint.io.in <> crossbar1to2.io.out(1)
+  val clint = Module(new Clint)
+  clint.io.in <> crossbar1to2.io.out(1)
 
   /* ----- Stage 4 - Commit (CM) ----------------- */
 

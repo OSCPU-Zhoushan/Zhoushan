@@ -7,301 +7,279 @@ import chisel3.util._
  * 1xxx xxxx xxxx xxxx xxxx xxxx xxxx xxxx
  *                                     ___ (3) byte offset
  *                                    _    (1) dword offset (2 dwords in a line)
- *                                 __      (2) sram index (4 srams)
- *                            __ __        (4) set index (16 sets)
+ *                            __ ____      (6) set index (4-way associative in 4 srams)
  *  ___ ____ ____ ____ ____ __            (21) tag
  */
 
-class MetaData extends Module {
+class Meta extends Module {
   val io = IO(new Bundle {
-    // check hit or not
-    val check_set_idx = Input(UInt(4.W))
-    val check_tag = Input(UInt(21.W))
-    val check_hit = Output(Bool())
-    val check_hit_idx = Output(UInt(2.W))
-    // mark dirty
-    val dirty_en = Input(Bool())
-    val dirty_set_idx = Input(UInt(4.W))
-    val dirty_entry_idx = Input(UInt(2.W))
-    // update plru
-    val plru_update = Input(Bool())
-    val plru_set_idx = Input(UInt(4.W))
-    val plru_entry_idx = Input(UInt(2.W))
-    // replace (and also update plru)
-    val replace_en = Input(Bool())
-    val replace_set_idx = Input(UInt(4.W))
-    val replace_tag = Input(UInt(21.W))
-    val replace_entry_idx = Output(UInt(2.W))
-    val replace_en_dirty = Input(Bool())
-    // write-back
-    val wb_en = Output(Bool())
-    val wb_tag = Output(UInt(21.W))
+    val idx = Input(UInt(6.W))
+    val tag_r = Output(UInt(21.W))
+    val tag_w = Input(UInt(21.W))
+    val tag_wen = Input(Bool())
+    val dirty_r = Output(Bool())
+    val dirty_w = Input(Bool())
+    val dirty_wen = Input(Bool())
+    val valid_r = Output(Bool())
   })
 
-  val tags = RegInit(VecInit(Seq.fill(64)(0.U(21.W))))
+  val tags = SyncReadMem(64, UInt(21.W))
   val valid = RegInit(VecInit(Seq.fill(64)(false.B)))
   val dirty = RegInit(VecInit(Seq.fill(64)(false.B)))
-  // Tree-based PLRU replacement policy
-  // plru(0) == 0 -> 0/1, == 1 -> 2/3
-  // plru(1) == 0 -> 0,   == 1 -> 1
-  // plru(2) == 0 -> 2,   == 1 -> 3
-  val plru = RegInit(VecInit(Seq.fill(16)(0.U(3.W))))
 
-  // check hit or not
+  val idx = io.idx
 
-  val check_line_idx = Wire(Vec(4, UInt(6.W)))
-  for (i <- 0 until 4) {
-    check_line_idx(i) := Cat(io.check_set_idx, i.U(2.W))
+  when (io.tag_wen) {
+    tags.write(idx, io.tag_w)
+    valid(idx) := true.B
   }
-  val check_hit = Wire(Vec(4, Bool()))
-  for (i <- 0 until 4) {
-    check_hit(i) := valid(check_line_idx(i)) && (tags(check_line_idx(i)) === io.check_tag)
-  }
+  io.tag_r := tags.read(idx)
 
-  io.check_hit := check_hit(0) || check_hit(1) || check_hit(2) || check_hit(3)
-  io.check_hit_idx := Mux1H(Seq(
-    check_hit(0) -> 0.U(2.W),
-    check_hit(1) -> 1.U(2.W),
-    check_hit(2) -> 2.U(2.W),
-    check_hit(3) -> 3.U(3.W)
-  ))
+  // sync read
+  val dirty_r = RegNext(dirty(idx))
+  io.dirty_r := dirty_r
 
-  // mark dirty
-
-  val dirty_line_idx = Cat(io.dirty_set_idx, io.dirty_entry_idx)
-
-  when (io.dirty_en) {
-    dirty(dirty_line_idx) := true.B
+  when (io.dirty_wen) {
+    dirty(idx) := io.dirty_w
   }
 
-  // update plru, or replace (and also update plru)
+  val valid_r = RegNext(valid(idx))
+  io.valid_r := valid_r
 
-  val replace_plru0 = plru(io.replace_set_idx)(0)
-  val replace_plru1 = Mux(replace_plru0, plru(io.replace_set_idx)(1),
-                                         plru(io.replace_set_idx)(2))
-  val replace_entry_idx = Cat(replace_plru0, replace_plru1)
-  val replace_line_idx = Cat(io.replace_set_idx, replace_entry_idx)
-
-  val plru0, plru1, plru2 = WireInit(false.B)
-  val plru_new = Cat(plru2.asUInt(), plru1.asUInt(), plru0.asUInt())
-
-  when (io.plru_update) {
-    // update plru tree when hit
-    plru0 := !io.plru_entry_idx(1)
-    when (io.plru_entry_idx(0) === 0.U) {
-      plru1 := !io.plru_entry_idx(0)
-    } .otherwise {
-      plru2 := !io.plru_entry_idx(0)
-    }
-    plru(io.plru_set_idx) := plru_new
-  } .elsewhen (io.replace_en) {
-    // update plru tree when miss/replace
-    plru0 := !replace_entry_idx(1)
-    when (replace_plru0 === 0.U) {
-      plru1 := !replace_entry_idx(0)
-    } .otherwise {
-      plru2 := !replace_entry_idx(0)
-    }
-    plru(io.replace_set_idx) := plru_new
-    tags(replace_line_idx) := io.replace_tag
-    valid(replace_line_idx) := true.B
-    dirty(replace_line_idx) := io.replace_en_dirty
-  }
-  io.replace_entry_idx := replace_entry_idx
-  io.wb_en := dirty(replace_line_idx) && valid(replace_line_idx)
-  io.wb_tag := tags(replace_line_idx)
 }
 
-class Cache(id: Int) extends Module {
+class Cache(id: Int) extends Module with SramParameters {
   val io = IO(new Bundle {
     val in = Flipped(new CacheBusIO)
     val out = new CoreBusIO
   })
 
+  val in = io.in
+  val out = io.out
+
   val sram = for (i <- 0 until 4) yield {
     val sram = Module(new Sram(id * 10 + i))
     sram
   }
+
+  val sram_out = WireInit(VecInit(Seq.fill(4)(0.U(SramDataWidth.W))))
+
   val meta = for (i <- 0 until 4) yield {
-    val meta = Module(new MetaData)
+    val meta = Module(new Meta)
     meta
   }
 
+  val tag_out = WireInit(VecInit(Seq.fill(4)(0.U(21.W))))
+  val valid_out = WireInit(VecInit(Seq.fill(4)(false.B)))
+  val dirty_out = WireInit(VecInit(Seq.fill(4)(false.B)))
+
   // set default input
-  sram.map { case m => {
-    m.io.en := false.B
-    m.io.wen := false.B
-    m.io.addr := 0.U
-    m.io.wdata := 0.U
+  sram.map { case s => {
+    s.io.en := false.B
+    s.io.wen := false.B
+    s.io.addr := 0.U
+    s.io.wdata := 0.U
   }}
   meta.map { case m => {
-    m.io.check_set_idx := 0.U
-    m.io.check_tag := 0.U
-    m.io.dirty_en := false.B
-    m.io.dirty_set_idx := 0.U
-    m.io.dirty_entry_idx := 0.U
-    m.io.plru_update := false.B
-    m.io.plru_set_idx := 0.U
-    m.io.plru_entry_idx := 0.U
-    m.io.replace_en := false.B
-    m.io.replace_set_idx := 0.U
-    m.io.replace_tag := 0.U
-    m.io.replace_en_dirty := false.B
+    m.io.idx := 0.U
+    m.io.tag_w := 0.U
+    m.io.tag_wen := false.B
+    m.io.dirty_w := false.B
+    m.io.dirty_wen := false.B
   }}
 
-  val in = io.in
-  val out = io.out
+  (sram_out  zip sram).map { case (o, s) => { o := s.io.rdata }}
+  (tag_out   zip meta).map { case (t, m) => { t := m.io.tag_r }}
+  (valid_out zip meta).map { case (v, m) => { v := m.io.valid_r }}
+  (dirty_out zip meta).map { case (d, m) => { d := m.io.dirty_r }}
 
-  val addr = in.req.bits.addr
-  val dword_offs = addr(3)
-  val sram_idx = addr(5, 4)
-  val set_idx = addr(9, 6)
-  val tag = addr(30, 10)
+  /* ----- PLRU replacement ---------- */
 
-  val reg_addr = RegInit(UInt(32.W), 0.U)
-  val reg_dword_offs = reg_addr(3)
-  val reg_sram_idx = reg_addr(5, 4)
-  val reg_set_idx = reg_addr(9, 6)
-  val reg_tag = reg_addr(30, 10)
+  val plru0 = RegInit(VecInit(Seq.fill(64)(0.U)))
+  val plru1 = RegInit(VecInit(Seq.fill(64)(0.U)))
+  val plru2 = RegInit(VecInit(Seq.fill(64)(0.U)))
 
-  val hit = WireInit(false.B)
-  val hit_idx = WireInit(0.U(2.W))
-  for (i <- 0 until 4) {
-    when (sram_idx === i.U) {
-      meta(i).io.check_set_idx := set_idx
-      meta(i).io.check_tag := tag
-      hit := meta(i).io.check_hit
-      hit_idx := meta(i).io.check_hit_idx
+  def updatePlruTree(idx: UInt, way: UInt) = {
+    plru0(idx) := ~way(1)
+    when (way(1) === 0.U) {
+      plru1(idx) := ~way(0)
+    } .otherwise {
+      plru2(idx) := ~way(0)
     }
   }
-  val reg_hit_idx = RegInit(0.U(2.W))
 
-  val rdata_raw = WireInit(UInt(128.W), 0.U)
-  for (i <- 0 until 4) {
-    when (sram_idx === i.U) {
-      rdata_raw := sram(i).io.rdata
-    }
+  val replace_way = Wire(UInt(2.W))
+
+  /* ----- Pipeline Ctrl Signals ----- */
+
+  val pipeline_valid = WireInit(false.B)
+  val pipeline_ready = WireInit(false.B)
+  val pipeline_fire  = pipeline_valid && pipeline_ready
+
+  /* ----- Cache Stage 1 ------------- */
+
+  val s1_addr  = in.req.bits.addr
+  val s1_offs  = s1_addr(3)
+  val s1_idx   = s1_addr(9, 4)
+  val s1_tag   = s1_addr(30, 10)
+  val s1_wen   = in.req.bits.wen
+  val s1_wdata = in.req.bits.wdata
+  val s1_wmask = in.req.bits.wmask
+
+  when (pipeline_fire) {
+    sram.map { case s => {
+      s.io.en := true.B
+      s.io.addr := s1_idx
+    }}
+    meta.map { case m => {
+      m.io.idx := s1_idx
+    }}
   }
-  val rdata = Mux(reg_dword_offs.asBool(), rdata_raw(127, 64), rdata_raw(63, 0))
-  val reg_rdata_raw = RegInit(UInt(128.W), 0.U)
-  val reg_rdata = Mux(reg_dword_offs.asBool(), reg_rdata_raw(127, 64), reg_rdata_raw(63, 0))
 
-  val wb_en = WireInit(false.B)
-  val wb_addr = WireInit(UInt(32.W), 0.U)
-  for (i <- 0 until 4) {
-    when (sram_idx === i.U) {
-      wb_en := meta(i).io.wb_en
-      wb_addr := Cat(1.U(1.W), meta(i).io.wb_tag, addr(9, 0))
-    }
-  }
-  val reg_wb_en = RegInit(false.B)
-  val reg_wb_addr = RegInit(UInt(32.W), 0.U)
-  val reg_wb_tag = reg_wb_addr(30, 10)
+  /* ----- Cache Stage 2 ------------- */
 
-  val s_idle :: s_hit_r :: s_hit_w :: s_miss_req_r :: s_miss_wait_r :: s1 = Enum(9)
-  val s_miss_ok_r :: s_miss_req_w1 :: s_miss_req_w2 :: s_miss_wait_w :: Nil = s1
+  val s_idle        :: s_hit_w       :: s_miss_req_r  :: s_miss_wait_r :: s_miss_ok_r :: s1  = Enum(10)
+  val s_miss_req_w1 :: s_miss_req_w2 :: s_miss_wait_w :: s_miss_ok_w   :: s_complete  :: Nil = s1
   val state = RegInit(s_idle)
-  val last_state = RegNext(state)
 
-  in.req.ready := (state === s_idle)
-  in.resp.valid := (state === s_hit_r) || (state === s_hit_w) || (state === s_miss_ok_r)
+  val s2_addr  = RegInit(0.U(32.W))
+  val s2_offs  = s2_addr(3)
+  val s2_idx   = s2_addr(9, 4)
+  val s2_tag   = s2_addr(30, 10)
+  val s2_wen   = RegInit(false.B)
+  val s2_wdata = RegInit(0.U(64.W))
+  val s2_wmask = RegInit(0.U(8.W))
+
+  val hit = WireInit(VecInit(Seq.fill(4)(false.B)))
+  (hit zip (tag_out zip valid_out)).map { case (h, (t, v)) => {
+    h := (t === s2_tag) && v
+  }}
+  val s2_hit = hit(0) || hit(1) || hit(2) || hit(3)  // todo
+  val s2_way = OHToUInt(hit)
+  val s2_rdata = sram_out(s2_way)
+  val s2_dirty = dirty_out(replace_way)
+  val s2_tag_r = tag_out(replace_way)
+  val s2_dat_w = sram_out(replace_way)
+
+  val s2_reg_hit = RegInit(false.B)
+  val s2_reg_way = RegInit(0.U(2.W))
+  val s2_reg_rdata = RegInit(0.U(128.W))
+  val s2_reg_dirty = RegInit(false.B)
+  val s2_reg_tag_r = RegInit(0.U(21.W))
+  val s2_reg_dat_w = RegInit(0.U(128.W))
+
+  when (pipeline_fire) {
+    s2_addr  := s1_addr
+    s2_wen   := s1_wen
+    s2_wdata := s1_wdata
+    s2_wmask := s1_wmask
+    state := s_idle
+  } .elsewhen (!pipeline_fire && RegNext(pipeline_fire)) {
+    s2_reg_hit   := s2_hit
+    s2_reg_way   := s2_way
+    s2_reg_rdata := s2_rdata
+    s2_reg_dirty := s2_dirty
+    s2_reg_tag_r := s2_tag_r
+    s2_reg_dat_w := s2_dat_w
+  }
+
+  replace_way := Cat(plru0(s2_idx), Mux(plru0(s2_idx) === 0.U, plru1(s2_idx), plru2(s2_idx)))
+  val wb_addr = Cat(1.U, s2_reg_tag_r, s2_idx, Fill(4, 0.U))
+  val wdata1 = RegInit(UInt(64.W), 0.U)
+  val wdata2 = RegInit(UInt(64.W), 0.U)
+
+  /* ----- Pipeline Ctrl Signals ----- */
+
+  val init = RegInit(true.B)
+  when (in.req.valid) {
+    init := false.B
+  }
+
+  val s2_hit_real = Mux(RegNext(pipeline_fire), s2_hit, s2_reg_hit)
+  val s2_dirty_real = Mux(RegNext(pipeline_fire), s2_dirty, s2_reg_dirty)
+
+  val hit_ready = s2_hit_real && Mux(s2_wen, state === s_complete, state === s_idle)
+  val miss_ready = (state === s_complete)
+  // val no_req_ready = (state === s_idle) && RegNext(!in.req.valid)
+
+  pipeline_valid := in.req.fire()
+  pipeline_ready := hit_ready || miss_ready || init
+
+  // handshake signals with IF unit
+  in.req.ready := pipeline_ready
+  in.resp.valid := s2_hit_real || (state === s_miss_ok_r)
   in.resp.bits.rdata := 0.U
 
+  // handshake signals with memory
   out.req.valid := (state === s_miss_req_r) || (state === s_miss_req_w1) || (state === s_miss_req_w2)
   out.req.bits.id := id.U
-  out.req.bits.addr := Mux(state === s_miss_req_r, Cat(reg_addr(31, 4), Fill(4, 0.U)), Cat(reg_wb_addr(31, 4), Fill(4, 0.U)))
+  out.req.bits.addr := Mux(state === s_miss_req_r, Cat(s2_addr(31, 4), Fill(4, 0.U)), Cat(wb_addr(31, 4), Fill(4, 0.U)))
   out.req.bits.aen := (state === s_miss_req_r) || (state === s_miss_req_w1)
   out.req.bits.ren := (state === s_miss_req_r)
-  out.req.bits.wdata := Mux(state === s_miss_req_w1, reg_rdata_raw(63, 0), reg_rdata_raw(127, 64))
+  out.req.bits.wdata := Mux(state === s_miss_req_w1, s2_reg_dat_w(63, 0), s2_reg_dat_w(127, 64))
   out.req.bits.wmask := "hff".U(8.W)
   out.req.bits.wlast := (state === s_miss_req_w2)
   out.req.bits.wen := (state === s_miss_req_w1) || (state === s_miss_req_w2)
   out.req.bits.len := 1.U
   out.resp.ready := (state === s_miss_wait_r) || (state === s_miss_wait_w)
 
-  val wdata1 = RegInit(UInt(64.W), 0.U)
-  val wdata2 = RegInit(UInt(64.W), 0.U)
+  if ((Settings.DebugMsgICache && id == 1) || (Settings.DebugMsgDCache && id == 2)) {
+    when (in.req.fire()) {
+      printf("%d: [$ %d] [IN -REQ ] addr=%x wen=%x wdata=%x\n", DebugTimer(), id.U, in.req.bits.addr, in.req.bits.wen, in.req.bits.wdata)
+    }
+    when (in.resp.fire()) {
+      printf("%d: [$ %d] [IN -RESP] addr=%x wen=%x rdata=%x\n", DebugTimer(), id.U, s2_addr, s2_wen, in.resp.bits.rdata)
+    }
+    when (RegNext(pipeline_fire)) {
+      printf("%d: [$ %d] hit=%x idx=%d way=%d rdata=%x dirty=%x replace_way=%d tag_r=%x dat_w=%x\n", DebugTimer(), id.U, s2_hit, s2_idx, s2_way, s2_rdata, s2_dirty, replace_way, s2_tag_r, s2_dat_w)
+    }
+    when (out.req.fire()) {
+      printf("%d: [$ %d] [OUT-REQ ] addr=%x aen=%x wen=%x wdata=%x\n", DebugTimer(), id.U, out.req.bits.addr, out.req.bits.aen, out.req.bits.wen, out.req.bits.wdata)
+    }
+    when (out.resp.fire()) {
+      printf("%d: [$ %d] [OUT-RESP] rdata=%x\n", DebugTimer(), id.U, out.resp.bits.rdata)
+    }
+  }
+
+  // state machine
 
   switch (state) {
     is (s_idle) {
-      reg_addr := addr
-      when (in.req.fire()) {
-        when (hit) {
+      when (RegNext(pipeline_fire)) {
+        in.resp.bits.rdata := Mux(s2_offs === 1.U, s2_rdata(127, 64), s2_rdata(63, 0))
+      } .otherwise {
+        in.resp.bits.rdata := Mux(s2_offs === 1.U, s2_reg_rdata(127, 64), s2_reg_rdata(63, 0))
+      }
+      when (RegNext(pipeline_fire)) {
+        when (s2_hit) {
+          updatePlruTree(s2_idx, s2_way)
+        }
+        when (s2_hit && s2_wen) {
           for (i <- 0 until 4) {
-            when (sram_idx === i.U) {
+            when (s2_way === i.U) {
               sram(i).io.en := true.B
-              sram(i).io.addr := Cat(set_idx, hit_idx)
+              sram(i).io.wen := true.B
+              sram(i).io.addr := s2_idx
+              sram(i).io.wdata := Mux(s2_offs === 1.U, 
+                                      Cat(MaskData(s2_rdata(127, 64), s2_wdata, MaskExpand(s2_wmask)), s2_rdata(63, 0)),
+                                      Cat(s2_rdata(127, 64), MaskData(s2_rdata(63, 0), s2_wdata, MaskExpand(s2_wmask))))
+              meta(i).io.idx := s2_idx
+              meta(i).io.dirty_wen := true.B
+              meta(i).io.dirty_w := true.B
             }
           }
-          reg_hit_idx := hit_idx
-          state := Mux(in.req.bits.wen, s_hit_w, s_hit_r)
-        } .otherwise {
+          state := s_hit_w
+        } .elsewhen (!s2_hit) {
           state := s_miss_req_r
-          // before writing back, get the data in current cacheline
-          for (i <- 0 until 4) {
-            when (sram_idx === i.U) {
-              meta(i).io.replace_set_idx := set_idx
-              sram(i).io.en := true.B
-              sram(i).io.addr := Cat(set_idx, meta(i).io.replace_entry_idx)
-            }
-          }
-          reg_wb_en := wb_en
-          reg_wb_addr := wb_addr
         }
-      }
-    }
-    is (s_hit_r) {
-      when (last_state === s_idle) {
-        reg_rdata_raw := rdata_raw
-      }
-      when (in.resp.fire()) {
-        in.resp.bits.rdata := Mux(last_state === s_idle, rdata, reg_rdata)
-        // update plru
-        for (i <- 0 until 4) {
-          when (reg_sram_idx === i.U) {
-            meta(i).io.plru_update := true.B
-            meta(i).io.plru_set_idx := reg_set_idx
-            meta(i).io.plru_entry_idx := reg_hit_idx
-          }
-        }
-        state := s_idle
       }
     }
     is (s_hit_w) {
-      when (last_state === s_idle) {
-        for (i <- 0 until 4) {
-          when (reg_sram_idx === i.U) {
-            sram(i).io.en := true.B
-            sram(i).io.wen := true.B
-            sram(i).io.addr := Cat(reg_set_idx, reg_hit_idx)
-            sram(i).io.wdata := Mux(reg_dword_offs.asBool(),
-              Cat(MaskData(rdata_raw(127, 64), in.req.bits.wdata, MaskExpand(in.req.bits.wmask)), rdata_raw(63, 0)),
-              Cat(rdata_raw(127, 64), MaskData(rdata_raw(63, 0), in.req.bits.wdata, MaskExpand(in.req.bits.wmask)))
-            )
-            MaskData(rdata, in.req.bits.wdata, MaskExpand(in.req.bits.wmask))
-            // mark as dirty
-            meta(i).io.dirty_en := true.B
-            meta(i).io.dirty_set_idx := reg_set_idx
-            meta(i).io.dirty_entry_idx := reg_hit_idx
-          }
-        }
-      }
       when (in.resp.fire()) {
-        // update plru
-        for (i <- 0 until 4) {
-          when (reg_sram_idx === i.U) {
-            meta(i).io.plru_update := true.B
-            meta(i).io.plru_set_idx := reg_set_idx
-            meta(i).io.plru_entry_idx := reg_hit_idx
-          }
-        }
-        state := s_idle
+        state := s_complete
       }
     }
     is (s_miss_req_r) {
-      when (last_state === s_idle) {
-        reg_rdata_raw := rdata_raw
-      }
       when (out.req.fire()) {
         state := s_miss_wait_r
       }
@@ -317,28 +295,36 @@ class Cache(id: Int) extends Module {
       }
     }
     is (s_miss_ok_r) {
-      in.resp.bits.rdata := Mux(in.req.bits.wen, 0.U, Mux(dword_offs.asBool(), wdata2, wdata1))
-      for (i <- 0 until 4) {
-        when (reg_sram_idx === i.U) {
-          sram(i).io.en := true.B
-          sram(i).io.wen := true.B
-          sram(i).io.addr := Cat(reg_set_idx, meta(i).io.replace_entry_idx)
-          when (in.req.bits.wen) {
-            sram(i).io.wdata := Mux(reg_dword_offs.asBool(),
-              Cat(MaskData(wdata2, in.req.bits.wdata, MaskExpand(in.req.bits.wmask)), wdata1),
-              Cat(wdata2, MaskData(wdata1, in.req.bits.wdata, MaskExpand(in.req.bits.wmask)))
-            )
-          } .otherwise {
-            sram(i).io.wdata := Cat(wdata2, wdata1)
+      // s2_reg_rdata := Cat(wdata2, wdata1)
+      // s2_reg_hit := true.B
+      in.resp.bits.rdata := Mux(s2_offs.asBool(), wdata2, wdata1)
+      when (in.resp.fire()) {
+        for (i <- 0 until 4) {
+          when (replace_way === i.U) {
+            sram(i).io.en := true.B
+            sram(i).io.wen := true.B
+            sram(i).io.addr := s2_idx
+            when (s2_wen) {
+              sram(i).io.wdata := Mux(s2_offs === 1.U, 
+                                      Cat(MaskData(wdata2, s2_wdata, MaskExpand(s2_wmask)), wdata1),
+                                      Cat(wdata2, MaskData(wdata1, s2_wdata, MaskExpand(s2_wmask))))
+            } .otherwise {
+              sram(i).io.wdata := Cat(wdata2, wdata1)
+            }
+            // write allocate
+            meta(i).io.idx := s2_idx
+            meta(i).io.tag_wen := true.B
+            meta(i).io.tag_w := s2_tag
+            meta(i).io.dirty_wen := true.B
+            meta(i).io.dirty_w := s2_wen
           }
-          // write allocate
-          meta(i).io.replace_en := true.B
-          meta(i).io.replace_set_idx := reg_set_idx
-          meta(i).io.replace_tag := reg_tag
-          meta(i).io.replace_en_dirty := true.B
+        }
+        when (s2_reg_dirty) {
+          state := s_miss_req_w1
+        } .otherwise {
+          state := s_complete
         }
       }
-      state := Mux(reg_wb_en, s_miss_req_w1, s_idle)
     }
     is (s_miss_req_w1) {
       when (out.req.fire()) {
@@ -351,8 +337,9 @@ class Cache(id: Int) extends Module {
       }
     }
     is (s_miss_wait_w) {
+      s2_wen := false.B
       when (out.resp.fire()) {
-        state := s_idle
+        state := s_complete
       }
     }
   }

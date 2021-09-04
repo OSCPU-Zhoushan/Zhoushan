@@ -10,6 +10,18 @@ trait SramParameters {
   val SramDataWidth = 128
 }
 
+class S011HD1P_X32Y2D128 extends BlackBox with HasBlackBoxResource with SramParameters {
+  val io = IO(new Bundle {
+    val CLK = Input(Clock())
+    val CEN = Input(Bool())
+    val WEN = Input(Bool())
+    val A = Input(UInt(SramAddrWidth.W))
+    val D = Input(UInt(SramDataWidth.W))
+    val Q = Output(UInt(SramDataWidth.W))
+  })
+  addResource("/vsrc/S011HD1P_X32Y2D128.v")
+}
+
 class Sram(id: Int) extends Module with SramParameters {
   val io = IO(new Bundle {
     val en = Input(Bool())
@@ -19,26 +31,21 @@ class Sram(id: Int) extends Module with SramParameters {
     val rdata = Output(UInt(SramDataWidth.W))
   })
 
-  val sram = SyncReadMem(SramDepth, UInt(SramDataWidth.W))
-
-  when (io.en) {
-    when (io.wen) {
-      sram.write(io.addr, io.wdata)
-      io.rdata := DontCare
-    } .otherwise {
-      io.rdata := sram.read(io.addr)
-    }
-  } .otherwise {
-    io.rdata := DontCare
-  }
+  val sram = Module(new S011HD1P_X32Y2D128)
+  sram.io.CLK := clock
+  sram.io.CEN := !io.en
+  sram.io.WEN := !io.wen
+  sram.io.A := io.addr
+  sram.io.D := io.wdata
+  io.rdata := sram.io.Q
 
   if (Settings.DebugMsgSram) {
     when (io.en) {
       when (io.wen) {
-        printf("%d: SRAM[%d] addr=%x wdata=%x\n", DebugTimer(), id.U, io.addr, io.wdata)
+        printf("%d: [SRAM %d] addr=%x wdata=%x\n", DebugTimer(), id.U, io.addr, io.wdata)
       } .otherwise {
         when (id.U >= 20.U) {
-          printf("%d: SRAM[%d] addr=%x rdata=%x\n", DebugTimer(), id.U, io.addr, io.rdata)
+          printf("%d: [SRAM %d] addr=%x rdata=%x\n", DebugTimer(), id.U, io.addr, io.rdata)
         }
       }
     }
