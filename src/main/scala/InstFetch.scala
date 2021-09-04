@@ -40,6 +40,9 @@ class InstFetch extends InstFetchModule {
 
   val s1_mis = io.jmp_packet.mis
   val s1_mis_pc = Mux(io.jmp_packet.jmp, io.jmp_packet.jmp_pc, io.jmp_packet.inst_pc + 4.U)
+  val s1_reg_mis = RegInit(false.B)
+
+  val s1_clear_once = RegInit(true.B)
 
   bp.io.pc := s1_pc
 
@@ -48,11 +51,12 @@ class InstFetch extends InstFetchModule {
   val s2_pc = RegInit(pc_init)
   val s2_pc_valid = RegInit(false.B)
 
-  val s2_pred_br = WireInit(false.B)
-  val s2_pred_pc = WireInit(UInt(32.W), 0.U)
+  val s2_pred_br = bp.io.pred_br
+  val s2_pred_pc = bp.io.pred_pc
   val s2_reg_pred_br = RegInit(false.B)
   val s2_reg_pred_pc = RegInit(UInt(32.W), 0.U)
   val s2_reg_pred_valid = RegInit(false.B)
+
   val s2_inst = WireInit(UInt(32.W), 0.U)
   val s2_valid = WireInit(false.B)
 
@@ -66,21 +70,24 @@ class InstFetch extends InstFetchModule {
   val pipeline_valid = req.valid
   val pipeline_ready = resp.fire() || init
   val pipeline_fire  = pipeline_valid && pipeline_ready
-  val pipeline_clear = s1_mis || bp.io.pred_br
 
-  when (pipeline_clear) {
-    s1_pc := Mux(s1_mis, s1_mis_pc, bp.io.pred_pc)
+  when (s1_mis) {
+    s1_pc := s1_mis_pc
+    s1_reg_mis := true.B
+  } .elsewhen (s2_pred_br && !s1_reg_mis && s1_clear_once) {
+    s1_pc := s2_pred_pc
+    s1_clear_once := false.B
   } .elsewhen (req.fire()) {
     s1_pc := s1_pc + 4.U
+    s1_reg_mis := false.B
+    s1_clear_once := true.B
   }
 
-  when (pipeline_clear) {
+  when (s1_mis || (s2_pred_br && !stall)) {
     s2_pc_valid := false.B
   } .elsewhen (pipeline_fire) {
     s2_pc := s1_pc
     s2_pc_valid := !s1_mis
-    s2_pred_br := bp.io.pred_br
-    s2_pred_pc := bp.io.pred_pc
     s2_reg_pred_valid := false.B
   } .elsewhen (!pipeline_fire && RegNext(pipeline_fire)) {
     s2_reg_pred_br := s2_pred_br
@@ -95,7 +102,7 @@ class InstFetch extends InstFetchModule {
   req.bits.wdata := 0.U
   req.bits.wmask := 0.U
   req.bits.wen := false.B
-  req.valid := !stall && !pipeline_clear
+  req.valid := !stall && !s1_mis && !s2_pred_br
 
   resp.ready := !stall
 
