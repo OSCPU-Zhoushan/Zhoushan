@@ -54,7 +54,7 @@ class InstFetch extends InstFetchModule {
   val s2_reg_pred_pc = RegInit(UInt(32.W), 0.U)
   val s2_reg_pred_valid = RegInit(false.B)
   val s2_inst = WireInit(UInt(32.W), 0.U)
-  val s2_inst_valid = WireInit(false.B)
+  val s2_valid = WireInit(false.B)
 
   /* ----- Pipeline Ctrl Signals ----- */
 
@@ -63,18 +63,18 @@ class InstFetch extends InstFetchModule {
     init := false.B
   }
 
-  val pipeline_valid = req.fire()
+  val pipeline_valid = req.valid
   val pipeline_ready = resp.fire() || init
   val pipeline_fire  = pipeline_valid && pipeline_ready
-  val pipeline_clear = s1_mis
+  val pipeline_clear = s1_mis || bp.io.pred_br
 
   when (pipeline_clear) {
-    s1_pc := s1_mis_pc
-  } .elsewhen (pipeline_fire) {
+    s1_pc := Mux(s1_mis, s1_mis_pc, bp.io.pred_pc)
+  } .elsewhen (req.fire()) {
     s1_pc := s1_pc + 4.U
   }
 
-  when(pipeline_clear) {
+  when (pipeline_clear) {
     s2_pc_valid := false.B
   } .elsewhen (pipeline_fire) {
     s2_pc := s1_pc
@@ -95,21 +95,21 @@ class InstFetch extends InstFetchModule {
   req.bits.wdata := 0.U
   req.bits.wmask := 0.U
   req.bits.wen := false.B
-  req.valid := !stall && !s1_mis
+  req.valid := !stall && !pipeline_clear
 
   resp.ready := !stall
 
   // update inst when resp.fire()
 
-  s2_inst_valid := false.B
-  when (pipeline_fire) {
+  s2_valid := false.B
+  when (resp.fire()) {
     s2_inst := Mux(s2_pc(2), resp.bits.rdata(63, 32), resp.bits.rdata(31, 0))
-    s2_inst_valid := !pipeline_clear && s2_pc_valid
+    s2_valid := !s1_mis && s2_pc_valid
   }
 
   io.out.pc := s2_pc
   io.out.inst := s2_inst
-  io.out.valid := s2_inst_valid
+  io.out.valid := s2_valid
 
   io.out.pred_br := Mux(s2_reg_pred_valid, s2_reg_pred_br, s2_pred_br)
   io.out.pred_pc := Mux(s2_reg_pred_valid, s2_reg_pred_pc, s2_pred_pc)
