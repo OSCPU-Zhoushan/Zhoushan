@@ -25,6 +25,7 @@ class Core extends Module {
 
   val ibuf = Module(new InstBuffer)
   ibuf.io.in <> fetch.io.out
+  ibuf.io.flush := flush
 
   /* ----- Stage 3 - Instruction Decode (ID) ----- */
 

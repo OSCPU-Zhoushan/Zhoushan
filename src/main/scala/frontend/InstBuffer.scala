@@ -14,11 +14,13 @@ class InstBuffer extends Module {
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(new InstPacket))
     val out = Decoupled(new InstPacket)
+    val flush = Input(Bool())
   })
 
-  val queue = Module(new Queue(gen = new InstPacket, entries = 8, pipe = true, flow = true))
+  val fifo = Module(new Fifo(gen = new InstPacket, entries = 8, pipe = true, flow = true, useSyncReadMem = true, hasFlush = true))
 
-  queue.io.enq <> io.in
-  queue.io.deq <> io.out
+  fifo.io.enq <> io.in
+  fifo.io.deq <> io.out
+  fifo.io.flush.get := io.flush
 
 }
