@@ -44,15 +44,13 @@ class InstFetch extends InstFetchModule {
 
   val s1_clear_once = RegInit(true.B)
 
-  bp.io.pc := s1_pc
-
   /* ----- IF Stage 2 ---------------- */
 
   val s2_pc = RegInit(pc_init)
   val s2_pc_valid = RegInit(false.B)
 
-  val s2_pred_br = bp.io.pred_br
-  val s2_pred_pc = bp.io.pred_pc
+  val s2_pred_br = Mux(bp.io.pred_valid, bp.io.pred_br, false.B)
+  val s2_pred_pc = Mux(bp.io.pred_valid, bp.io.pred_pc, 0.U)
   val s2_reg_pred_br = RegInit(false.B)
   val s2_reg_pred_pc = RegInit(UInt(32.W), 0.U)
   val s2_reg_pred_valid = RegInit(false.B)
@@ -71,16 +69,17 @@ class InstFetch extends InstFetchModule {
   val pipeline_ready = resp.fire() || init
   val pipeline_fire  = pipeline_valid && pipeline_ready
 
+  bp.io.pc := s1_pc
+  bp.io.pc_en := !s1_mis && !s2_pred_br
+
   when (s1_mis) {
     s1_pc := s1_mis_pc
     s1_reg_mis := true.B
-  } .elsewhen (s2_pred_br && !s1_reg_mis && s1_clear_once) {
+  } .elsewhen (s2_pred_br && !s1_reg_mis) {
     s1_pc := s2_pred_pc
-    s1_clear_once := false.B
   } .elsewhen (req.fire()) {
     s1_pc := s1_pc + 4.U
     s1_reg_mis := false.B
-    s1_clear_once := true.B
   }
 
   when (s1_mis || (s2_pred_br && !stall)) {

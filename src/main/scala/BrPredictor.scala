@@ -6,11 +6,13 @@ import chisel3.util._
 class BrPredictorIO extends Bundle {
   // from IF stage
   val pc = Input(UInt(32.W))
+  val pc_en = Input(Bool())
   // from EX stage
   val jmp_packet = Input(new JmpPacket)
   // prediction result
   val pred_br = Output(Bool())
   val pred_pc = Output(UInt(32.W))
+  val pred_valid = Output(Bool())
 }
 
 trait BpParameters {
@@ -162,5 +164,6 @@ class BrPredictor extends Module with BpParameters {
 
   io.pred_br := pred_br
   io.pred_pc := pred_pc
+  io.pred_valid := RegNext(io.pc_en)
 
 }
