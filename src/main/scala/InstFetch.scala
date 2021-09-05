@@ -24,82 +24,54 @@ abstract class InstFetchModule extends Module {
 
 class InstFetch extends InstFetchModule {
   val io = IO(new InstFetchIO)
+  val stall = io.stall
 
   val req = io.imem.req
   val resp = io.imem.resp
 
-  val stall = io.stall
-  val reg_stall = RegNext(stall)
-
-  val pc_init = "h80000000".U(32.W)
-  val pc_next = RegInit(pc_init)
-  val pc = RegInit(pc_init)
-  val pc_valid = RegInit(false.B)
-
-  val inst = WireInit(UInt(32.W), 0.U)
-  val inst_valid = WireInit(false.B)
-
-  val bp = Module(new BrPredictor)
-  val bp_pred_pc = bp.io.pred_pc
-  val pred_br = RegInit(false.B)
-  val pred_pc = RegInit(UInt(32.W), 0.U)
-
   val mis = io.jmp_packet.mis
   val mis_pc = Mux(io.jmp_packet.jmp, io.jmp_packet.jmp_pc, io.jmp_packet.inst_pc + 4.U)
+
   val reg_mis = RegInit(false.B)
-  val reg_mis_pc = RegInit(UInt(32.W), 0.U)
-  when (io.jmp_packet.mis && !resp.fire()) {
+  when (mis) {
     reg_mis := true.B
-    reg_mis_pc := mis_pc
+  } .elsewhen (resp.fire() && !mis) {
+    reg_mis := false.B
   }
 
-  req.bits.addr := pc_next
-  req.bits.ren := true.B          // read-only imem
+  val bp = Module(new BrPredictor)
+  bp.io.jmp_packet <> io.jmp_packet
+
+  val pc_init = "h80000000".U(32.W)
+  val pc = RegInit(pc_init)
+  val pc_update = mis || req.fire()
+
+  val npc_s = pc + 4.U
+  val npc_p = bp.io.pred_pc
+  val npc = Mux(mis, mis_pc, Mux(bp.io.pred_valid && bp.io.pred_br, npc_p, npc_s))
+
+  bp.io.pc_en := req.fire()
+  bp.io.pc := npc
+
+  when (pc_update) {
+    pc := npc
+  }
+
+  req.bits.addr := pc
+  req.bits.ren := true.B
   req.bits.wdata := 0.U
   req.bits.wmask := 0.U
   req.bits.wen := false.B
-  req.valid := !stall && !io.jmp_packet.mis
-  
-  resp.ready := !stall
-  
-  /* Branch predictor logic */
+  req.bits.user := Cat(bp.io.pred_valid && bp.io.pred_br && !mis, npc, pc)
+  req.valid := !stall
 
-  bp.io.pc := pc_next
-  bp.io.jmp_packet <> io.jmp_packet
+  resp.ready := !stall || mis
 
-  // update pc when req.fire()
-
-  when (req.fire() || io.jmp_packet.mis) {
-    pc := pc_next
-    pred_br := bp.io.pred_br
-    pred_pc := bp.io.pred_pc
-    pc_valid := true.B
-    when (io.jmp_packet.mis) {
-      pc_next := mis_pc
-      pc_valid := false.B
-    } .elsewhen (reg_mis) {
-      pc_next := reg_mis_pc
-      pc_valid := false.B
-      reg_mis := false.B
-    } .otherwise {
-      pc_next := bp_pred_pc
-    }
-  }
-
-  // update inst when 
-
-  inst_valid := false.B
-  when (resp.fire()) {
-    inst := Mux(pc(2), resp.bits.rdata(63, 32), resp.bits.rdata(31, 0))
-    inst_valid := !reg_mis && pc_valid
-  }
-
-  io.out.pc := pc
-  io.out.inst := inst
-  io.out.valid := inst_valid
-
-  io.out.pred_br := pred_br
-  io.out.pred_pc := pred_pc
+  io.out.pc := resp.bits.user(31, 0)
+  io.out.inst := Mux(io.out.pc(2), resp.bits.rdata(63, 32), resp.bits.rdata(31, 0))
+  io.out.pred_br := resp.bits.user(64)
+  io.out.pred_pc := resp.bits.user(63, 32)
+  io.out.valid := resp.valid && !mis && !reg_mis
 
 }
 
