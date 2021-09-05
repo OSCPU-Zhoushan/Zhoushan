@@ -49,7 +49,7 @@ class PipelineReg[T <: Packet](packet: T) extends Module {
     val stall = Input(Bool())
   })
 
-  val reg = Reg(packet)
+  val reg = RegInit(packet, 0.U.asTypeOf(packet))
 
   when (io.flush) {
     reg.flush()

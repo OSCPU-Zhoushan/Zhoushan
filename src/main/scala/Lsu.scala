@@ -43,10 +43,10 @@ class Lsu extends LsuModule with Ext {
   val s_idle :: s_req :: s_wait_r :: s_wait_w :: s_complete :: Nil = Enum(5)
   val state = RegInit(s_idle)
 
-  val reset_init = RegInit(true.B)
-  when (reset_init) {
+  val init = RegInit(true.B)
+  when (init) {
     state := s_idle
-    reset_init := false.B
+    init := false.B
   }
 
   val req = io.dmem.req
