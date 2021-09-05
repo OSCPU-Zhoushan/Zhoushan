@@ -77,7 +77,7 @@ class BranchTargetBuffer extends Module with BpParameters {
   val btb = SyncReadMem(BtbSize, new BtbEntry)
 
   val rdata = btb.read(io.raddr)
-  io.rhit := rdata.valid && (rdata.tag === io.rtag)
+  io.rhit := rdata.valid && (rdata.tag === RegNext(io.rtag))
   io.rtarget := rdata.target
 
   val wentry = Wire(new BtbEntry)
