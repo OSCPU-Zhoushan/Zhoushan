@@ -20,7 +20,7 @@ class CacheBusIO extends MemIO {
   val resp = Flipped(Decoupled(new CacheBusResp))
 }
 
-class CacheBus2SimpelAxi(id: Int) extends Module with AxiParameters {
+class CacheBus2CoreBus(id: Int) extends Module with AxiParameters {
   val io = IO(new Bundle {
     val in = Flipped(new CacheBusIO)
     val out = new CoreBusIO
