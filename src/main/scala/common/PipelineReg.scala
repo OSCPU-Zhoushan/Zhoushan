@@ -6,21 +6,6 @@ abstract class Packet extends Bundle {
   def flush() : Unit
 }
 
-class InstPacket extends Packet {
-  val pc = UInt(32.W)
-  val inst = UInt(32.W)
-  val pred_br = Bool()
-  val pred_pc = UInt(32.W)
-  val valid = Bool()
-  def flush() : Unit = {
-    pc := 0.U
-    inst := 0.U
-    pred_br := false.B
-    pred_pc := 0.U
-    valid := false.B
-  }
-}
-
 class ExPacket extends Packet {
   val uop = new MicroOp
   val rs1_data = UInt(64.W)

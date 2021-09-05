@@ -5,25 +5,22 @@ import chisel3.util._
 import zhoushan.Constant._
 import zhoushan.Instructions._
 
-  // val rd_en = Bool()
-  // val rs1_src = UInt(3.W)
-  // val rs2_src = UInt(3.W)
-  // val fu_code = UInt(2.W)
-  // val alu_code = UInt(4.W)
-
 class Decode extends Module {
   val io = IO(new Bundle {
-    val in = Input(new InstPacket)
+    val in = Flipped(Decoupled(new InstPacket))
+    val backend_ready = Input(Bool())
     val uop = Output(new MicroOp)
   })
 
-  val inst = io.in.inst
-  val pred_br = io.in.pred_br
-  val pred_pc = io.in.pred_pc
+  io.in.ready := io.backend_ready
+
+  val inst = io.in.bits.inst
+  val pred_br = io.in.bits.pred_br
+  val pred_pc = io.in.bits.pred_pc
   val uop = Wire(new MicroOp)
 
-  uop.pc := io.in.pc
-  uop.npc := io.in.pc + 4.U
+  uop.pc := io.in.bits.pc
+  uop.npc := io.in.bits.pc + 4.U
   uop.inst := inst
   
   uop.rs1_addr := inst(19, 15)
