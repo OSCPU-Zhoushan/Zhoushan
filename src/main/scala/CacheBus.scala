@@ -3,16 +3,22 @@ package zhoushan
 import chisel3._
 import chisel3.util._
 
-class CacheBusReq extends Bundle with AxiParameters {
+trait CacheBusParameters {
+  val CacheBusUserWidth = 65
+}
+
+class CacheBusReq extends Bundle with AxiParameters with CacheBusParameters {
   val addr = Output(UInt(AxiAddrWidth.W))
   val ren = Output(Bool())
   val wdata = Output(UInt(AxiDataWidth.W))
   val wmask = Output(UInt((AxiDataWidth / 8).W))
   val wen = Output(Bool())
+  val user = Output(UInt(CacheBusUserWidth.W))
 }
 
-class CacheBusResp extends Bundle with AxiParameters {
+class CacheBusResp extends Bundle with AxiParameters with CacheBusParameters {
   val rdata = Output(UInt(AxiDataWidth.W))
+  val user = Output(UInt(CacheBusUserWidth.W))
 }
 
 class CacheBusIO extends MemIO {
@@ -44,4 +50,5 @@ class CacheBus2CoreBus(id: Int) extends Module with AxiParameters {
   out.resp.ready      := in.resp.ready
   in.resp.valid       := out.resp.valid
   in.resp.bits.rdata  := out.resp.bits.rdata
+  in.resp.bits.user   := 0.U
 }

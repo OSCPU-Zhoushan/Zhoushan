@@ -29,96 +29,49 @@ class InstFetch extends InstFetchModule {
   val req = io.imem.req
   val resp = io.imem.resp
 
-  val pc_init = "h80000000".U(32.W)
+  val mis = io.jmp_packet.mis
+  val mis_pc = Mux(io.jmp_packet.jmp, io.jmp_packet.jmp_pc, io.jmp_packet.inst_pc + 4.U)
+
+  val reg_mis = RegInit(false.B)
+  when (mis) {
+    reg_mis := true.B
+  } .elsewhen (resp.fire() && !mis) {
+    reg_mis := false.B
+  }
 
   val bp = Module(new BrPredictor)
   bp.io.jmp_packet <> io.jmp_packet
 
-  /* ----- IF Stage 1 ---------------- */
+  val pc_init = "h80000000".U(32.W)
+  val pc = RegInit(pc_init)
+  val pc_update = mis || req.fire()
 
-  val s1_pc = RegInit(pc_init)
+  val npc_s = pc + 4.U
+  val npc_p = bp.io.pred_pc
+  val npc = Mux(mis, mis_pc, Mux(bp.io.pred_valid && bp.io.pred_br, npc_p, npc_s))
 
-  val s1_mis = io.jmp_packet.mis
-  val s1_mis_pc = Mux(io.jmp_packet.jmp, io.jmp_packet.jmp_pc, io.jmp_packet.inst_pc + 4.U)
-  val s1_reg_mis = RegInit(false.B)
+  bp.io.pc_en := req.fire()
+  bp.io.pc := npc
 
-  val s1_clear_once = RegInit(true.B)
-
-  /* ----- IF Stage 2 ---------------- */
-
-  val s2_pc = RegInit(pc_init)
-  val s2_pc_valid = RegInit(false.B)
-
-  val s2_pred_br = Mux(bp.io.pred_valid, bp.io.pred_br, false.B)
-  val s2_pred_pc = Mux(bp.io.pred_valid, bp.io.pred_pc, 0.U)
-  val s2_reg_pred_br = RegInit(false.B)
-  val s2_reg_pred_pc = RegInit(UInt(32.W), 0.U)
-  val s2_reg_pred_valid = RegInit(false.B)
-
-  val s2_inst = WireInit(UInt(32.W), 0.U)
-  val s2_valid = WireInit(false.B)
-
-  /* ----- Pipeline Ctrl Signals ----- */
-
-  val init = RegInit(true.B)
-  when (req.valid) {
-    init := false.B
+  when (pc_update) {
+    pc := npc
   }
 
-  val pipeline_valid = req.valid
-  val pipeline_ready = resp.fire() || init
-  val pipeline_fire  = pipeline_valid && pipeline_ready
-
-  bp.io.pc := s1_pc
-  bp.io.pc_en := !s1_mis && !s2_pred_br
-
-  when (s1_mis) {
-    s1_pc := s1_mis_pc
-    s1_reg_mis := true.B
-  } .elsewhen (s2_pred_br && !s1_reg_mis) {
-    s1_pc := s2_pred_pc
-  } .elsewhen (req.fire()) {
-    s1_pc := s1_pc + 4.U
-    s1_reg_mis := false.B
-  }
-
-  when (s1_mis || (s2_pred_br && !stall)) {
-    s2_pc_valid := false.B
-  } .elsewhen (pipeline_fire) {
-    s2_pc := s1_pc
-    s2_pc_valid := !s1_mis
-    s2_reg_pred_valid := false.B
-  } .elsewhen (!pipeline_fire && RegNext(pipeline_fire)) {
-    s2_reg_pred_br := s2_pred_br
-    s2_reg_pred_pc := s2_pred_pc
-    s2_reg_pred_valid := true.B
-  }
-
-  // handshake signals with I cache
-
-  req.bits.addr := s1_pc
+  req.bits.addr := pc
   req.bits.ren := true.B
   req.bits.wdata := 0.U
   req.bits.wmask := 0.U
   req.bits.wen := false.B
-  req.valid := !stall && !s1_mis && !s2_pred_br
+  req.bits.user := Cat(bp.io.pred_valid && bp.io.pred_br && !mis, npc, pc)
+  req.valid := !stall
 
-  resp.ready := !stall
+  resp.ready := !stall || mis
 
-  // update inst when resp.fire()
-
-  s2_valid := false.B
-  when (resp.fire()) {
-    s2_inst := Mux(s2_pc(2), resp.bits.rdata(63, 32), resp.bits.rdata(31, 0))
-    s2_valid := !s1_mis && s2_pc_valid
-  }
-
-  io.out.pc := s2_pc
-  io.out.inst := s2_inst
-  io.out.valid := s2_valid
-
-  io.out.pred_br := Mux(s2_reg_pred_valid, s2_reg_pred_br, s2_pred_br)
-  io.out.pred_pc := Mux(s2_reg_pred_valid, s2_reg_pred_pc, s2_pred_pc)
+  io.out.pc := resp.bits.user(31, 0)
+  io.out.inst := Mux(io.out.pc(2), resp.bits.rdata(63, 32), resp.bits.rdata(31, 0))
+  io.out.pred_br := resp.bits.user(64)
+  io.out.pred_pc := resp.bits.user(63, 32)
+  io.out.valid := resp.valid && !mis && !reg_mis
 
 }
 

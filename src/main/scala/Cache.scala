@@ -125,6 +125,7 @@ class Cache(id: Int) extends Module with SramParameters {
   val s1_wen   = in.req.bits.wen
   val s1_wdata = in.req.bits.wdata
   val s1_wmask = in.req.bits.wmask
+  val s1_user  = in.req.bits.user
 
   when (pipeline_fire) {
     sram.map { case s => {
@@ -149,6 +150,7 @@ class Cache(id: Int) extends Module with SramParameters {
   val s2_wen   = RegInit(false.B)
   val s2_wdata = RegInit(0.U(64.W))
   val s2_wmask = RegInit(0.U(8.W))
+  val s2_user  = RegInit(0.U(s1_user.getWidth.W))
 
   val hit = WireInit(VecInit(Seq.fill(4)(false.B)))
   (hit zip (tag_out zip valid_out)).map { case (h, (t, v)) => {
@@ -173,6 +175,7 @@ class Cache(id: Int) extends Module with SramParameters {
     s2_wen   := s1_wen
     s2_wdata := s1_wdata
     s2_wmask := s1_wmask
+    s2_user  := s1_user
     state := s_idle
   } .elsewhen (!pipeline_fire && RegNext(pipeline_fire)) {
     s2_reg_hit   := s2_hit
@@ -209,6 +212,7 @@ class Cache(id: Int) extends Module with SramParameters {
   in.req.ready := pipeline_ready
   in.resp.valid := s2_hit_real || (state === s_miss_ok_r)
   in.resp.bits.rdata := 0.U
+  in.resp.bits.user := s2_user
 
   // handshake signals with memory
   out.req.valid := (state === s_miss_req_r) || (state === s_miss_req_w1) || (state === s_miss_req_w2)
