@@ -138,8 +138,8 @@ class Cache(id: Int) extends Module with SramParameters {
 
   /* ----- Cache Stage 2 ------------- */
 
-  val s_idle        :: s_hit_w       :: s_miss_req_r  :: s_miss_wait_r :: s_miss_ok_r :: s1  = Enum(10)
-  val s_miss_req_w1 :: s_miss_req_w2 :: s_miss_wait_w :: s_miss_ok_w   :: s_complete  :: Nil = s1
+  val s_idle        :: s_hit_w       :: s_miss_req_r  :: s_miss_wait_r :: s_miss_ok_r :: s1 = Enum(9)
+  val s_miss_req_w1 :: s_miss_req_w2 :: s_miss_wait_w :: s_complete    :: Nil               = s1
   val state = RegInit(s_idle)
 
   val s2_addr  = RegInit(0.U(32.W))
@@ -295,8 +295,6 @@ class Cache(id: Int) extends Module with SramParameters {
       }
     }
     is (s_miss_ok_r) {
-      // s2_reg_rdata := Cat(wdata2, wdata1)
-      // s2_reg_hit := true.B
       in.resp.bits.rdata := Mux(s2_offs.asBool(), wdata2, wdata1)
       when (in.resp.fire()) {
         for (i <- 0 until 4) {
