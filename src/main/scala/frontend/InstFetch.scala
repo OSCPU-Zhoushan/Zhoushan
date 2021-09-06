@@ -7,7 +7,7 @@ class InstFetch extends Module {
   val io = IO(new Bundle {
     val imem = new CacheBusIO
     val jmp_packet = Input(new JmpPacket)
-    val out = Decoupled(new InstPacketVec(1))
+    val out = Decoupled(new InstPacketVec)
   })
 
   val req = io.imem.req

@@ -10,13 +10,18 @@ class InstPacket extends Bundle {
   val pred_pc = Output(UInt(32.W))
 }
 
-class InstPacketVec(enq_width: Int) extends Bundle {
+class InstPacketVec extends Bundle with ZhoushanConfig {
+  val enq_width = FetchWidth
   val vec = Vec(enq_width, Valid(new InstPacket))
 }
 
-class InstBuffer(entries: Int, enq_width: Int, deq_width: Int) extends Module {
+class InstBuffer extends Module with ZhoushanConfig {
+  val entries = InstBufferSize
+  val enq_width = FetchWidth
+  val deq_width = DecodeWidth
+
   val io = IO(new Bundle {
-    val in = Flipped(Decoupled(new InstPacketVec(enq_width)))
+    val in = Flipped(Decoupled(new InstPacketVec))
     val out = Vec(deq_width, Decoupled(new InstPacket))
     val flush = Input(Bool())
   })
@@ -54,8 +59,7 @@ class InstBuffer(entries: Int, enq_width: Int, deq_width: Int) extends Module {
     if (i == 0) {
       offset(i) := 0.U
     } else {
-      offset(i) := 0.U  // todo
-      // offset(i) := PopCount(io.in.bits.vec(i - 1, 0).map(_.valid))
+      offset(i) := PopCount(io.in.bits.vec(0).valid)  // todo: this only works for 2-way
     }
   }
 

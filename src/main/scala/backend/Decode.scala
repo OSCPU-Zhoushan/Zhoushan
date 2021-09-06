@@ -5,19 +5,19 @@ import chisel3.util._
 import zhoushan.Constant._
 import zhoushan.Instructions._
 
-class Decode(decode_width: Int) extends Module {
+class Decode extends Module with ZhoushanConfig {
   val io = IO(new Bundle {
-    val in = Vec(decode_width, Flipped(Decoupled(new InstPacket)))
+    val in = Vec(DecodeWidth, Flipped(Decoupled(new InstPacket)))
     val backend_ready = Input(Bool())
     val uop = Output(new MicroOp)   // todo: 2-way in the future
   })
 
-  val decoder = for (i <- 0 until decode_width) yield {
+  val decoder = for (i <- 0 until DecodeWidth) yield {
     val decoder = Module(new Decoder)
     decoder
   }
 
-  for (i <- 0 until decode_width) {
+  for (i <- 0 until DecodeWidth) {
     decoder(i).io.in <> io.in(i)
     decoder(i).io.backend_ready := io.backend_ready
     io.uop := decoder(i).io.uop
