@@ -23,13 +23,13 @@ class Core extends Module {
 
   /* ----- Stage 2 - Instruction Buffer (IB) ----- */
 
-  val ibuf = Module(new InstBuffer)
+  val ibuf = Module(new InstBuffer(8, 1, 1))
   ibuf.io.in <> fetch.io.out
   ibuf.io.flush := flush
 
   /* ----- Stage 3 - Instruction Decode (ID) ----- */
 
-  val decode = Module(new Decode)
+  val decode = Module(new Decode(1))
   decode.io.in <> ibuf.io.out
   decode.io.backend_ready := !stall
 

@@ -7,7 +7,7 @@ class InstFetch extends Module {
   val io = IO(new Bundle {
     val imem = new CacheBusIO
     val jmp_packet = Input(new JmpPacket)
-    val out = Decoupled(new InstPacket)
+    val out = Decoupled(new InstPacketVec(1))
   })
 
   val req = io.imem.req
@@ -43,20 +43,21 @@ class InstFetch extends Module {
     pc := npc
   }
 
-  req.bits.addr := pc
-  req.bits.ren := true.B
+  req.bits.addr  := pc
+  req.bits.ren   := true.B
   req.bits.wdata := 0.U
   req.bits.wmask := 0.U
-  req.bits.wen := false.B
-  req.bits.user := Cat(bp.io.pred_valid && bp.io.pred_br && !mis, npc, pc)
-  req.valid := io.out.ready
+  req.bits.wen   := false.B
+  req.bits.user  := Cat(bp.io.pred_valid && bp.io.pred_br && !mis, npc, pc)
+  req.valid      := io.out.ready
 
   resp.ready := io.out.ready || mis
 
-  io.out.bits.pc := resp.bits.user(31, 0)
-  io.out.bits.inst := Mux(io.out.bits.pc(2), resp.bits.rdata(63, 32), resp.bits.rdata(31, 0))
-  io.out.bits.pred_br := resp.bits.user(64)
-  io.out.bits.pred_pc := resp.bits.user(63, 32)
-  io.out.valid := resp.valid && !mis && !reg_mis
+  io.out.bits.vec(0).bits.pc      := resp.bits.user(31, 0)
+  io.out.bits.vec(0).bits.inst    := Mux(io.out.bits.vec(0).bits.pc(2), resp.bits.rdata(63, 32), resp.bits.rdata(31, 0))
+  io.out.bits.vec(0).bits.pred_br := resp.bits.user(64)
+  io.out.bits.vec(0).bits.pred_pc := resp.bits.user(63, 32)
+  io.out.bits.vec(0).valid        := resp.valid && !mis && !reg_mis
+  io.out.valid                    := resp.valid && !mis && !reg_mis
 
 }
