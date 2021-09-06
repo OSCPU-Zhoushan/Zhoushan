@@ -21,6 +21,8 @@ class InstFetch extends Module {
     reg_mis := true.B
   } .elsewhen (resp.fire() && !mis) {
     reg_mis := false.B
+  } .elsewhen (RegNext(resp.fire() && !req.fire() && mis)) {
+    reg_mis := false.B
   }
 
   val bp = Module(new BrPredictor)
