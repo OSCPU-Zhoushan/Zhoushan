@@ -17,23 +17,21 @@ class Core extends Module {
 
   val fetch = Module(new InstFetch)
 
-  // val cb2sa1 = Module(new CacheBus2SimpelAxi(1))
-  // cb2sa1.in <> fetch.io.imem
-  // cb2sa1.out <> io.imem
-
   val icache = Module(new Cache(1))
   icache.io.in <> fetch.io.imem
   icache.io.out <> io.imem
 
-  val if_id_reg = Module(new PipelineReg(new InstPacket))
-  if_id_reg.io.in <> fetch.io.out
-  if_id_reg.io.stall := stall
-  if_id_reg.io.flush := flush
+  /* ----- Stage 2 - Instruction Buffer (IB) ----- */
 
-  /* ----- Stage 2 - Instruction Decode (ID) ----- */
+  val ibuf = Module(new InstBuffer)
+  ibuf.io.in <> fetch.io.out
+  ibuf.io.flush := flush
+
+  /* ----- Stage 3 - Instruction Decode (ID) ----- */
 
   val decode = Module(new Decode)
-  decode.io.in <> if_id_reg.io.out
+  decode.io.in <> ibuf.io.out
+  decode.io.backend_ready := !stall
 
   val rf = Module(new RegFile)
   rf.io.rs1_addr := decode.io.uop.rs1_addr
@@ -46,7 +44,7 @@ class Core extends Module {
   id_ex_reg.io.stall := stall
   id_ex_reg.io.flush := flush
 
-  /* ----- Stage 3 - Execution (EX) -------------- */
+  /* ----- Stage 4 - Execution (EX) -------------- */
 
   val execution = Module(new Execution)
   execution.io.uop := id_ex_reg.io.out.uop
@@ -54,12 +52,8 @@ class Core extends Module {
   val ex_rs1_data = WireInit(0.U(64.W))
   val ex_rs2_data = WireInit(0.U(64.W))
 
-  execution.io.rs1_data := ex_rs1_data // id_ex_reg.io.out.rs1_data
-  execution.io.rs2_data := ex_rs2_data // id_ex_reg.io.out.rs2_data
-
-  // val cb2sa2 = Module(new CacheBus2SimpelAxi(2))
-  // cb2sa2.in <> execution.io.dmem
-  // cb2sa2.out <> io.dmem
+  execution.io.rs1_data := ex_rs1_data
+  execution.io.rs2_data := ex_rs2_data
 
   val crossbar1to2 = Module(new CacheBusCrossbar1to2)
   crossbar1to2.io.in <> execution.io.dmem
@@ -71,7 +65,7 @@ class Core extends Module {
   val clint = Module(new Clint)
   clint.io.in <> crossbar1to2.io.out(1)
 
-  /* ----- Stage 4 - Commit (CM) ----------------- */
+  /* ----- Stage 5 - Commit (CM) ----------------- */
 
   rf.io.rd_addr := execution.io.uop.rd_addr
   rf.io.rd_data := execution.io.result
@@ -100,7 +94,6 @@ class Core extends Module {
   /* ----- Pipeline Control Signals -------------- */
 
   fetch.io.jmp_packet <> execution.io.jmp_packet
-  fetch.io.stall := stall
   flush := execution.io.jmp_packet.mis
   stall := execution.io.busy
 
