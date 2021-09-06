@@ -101,7 +101,7 @@ class InstBuffer extends Module with ZhoushanConfig {
   // flush
 
   when (io.flush) {
-    enq_ready := false.B
+    enq_ready := true.B
     enq_vec := VecInit((0 until enq_width).map(_.U(addr_width.W)))
     deq_vec := VecInit((0 until deq_width).map(_.U(addr_width.W)))
   }
