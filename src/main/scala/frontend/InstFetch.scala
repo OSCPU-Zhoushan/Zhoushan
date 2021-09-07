@@ -13,11 +13,18 @@ class InstFetch extends Module with ZhoushanConfig {
   val req = io.imem.req
   val resp = io.imem.resp
 
+  val empty = RegInit(false.B)
+  when (resp.fire() && !req.fire()) {
+    empty := true.B
+  } .elsewhen (req.fire()) {
+    empty := false.B
+  }
+
   val mis = io.jmp_packet.mis
   val mis_pc = Mux(io.jmp_packet.jmp, io.jmp_packet.jmp_pc, io.jmp_packet.inst_pc + 4.U)
 
   val reg_mis = RegInit(false.B)
-  when (mis) {
+  when (mis && !empty) {
     reg_mis := true.B
   } .elsewhen (resp.fire() && !mis) {
     reg_mis := false.B
@@ -82,6 +89,6 @@ class InstFetch extends Module with ZhoushanConfig {
   out_vec(0).bits.pred_pc := Mux(out_vec(0).bits.pred_br, resp.bits.user(63, 32), 0.U)
   out_vec(0).valid        := resp.bits.user(64).asBool()
 
-  io.out.valid            := resp.valid && !mis && !reg_mis
+  io.out.valid            := resp.valid && !mis && !reg_mis && RegNext(!mis)
 
 }
