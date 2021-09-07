@@ -14,9 +14,10 @@ class InstFetch extends Module with ZhoushanConfig {
   val resp = io.imem.resp
 
   val empty = RegInit(false.B)
-  when (resp.fire() && !req.fire()) {
+  when (resp.fire()) {
     empty := true.B
-  } .elsewhen (req.fire()) {
+  }
+  when (req.fire()) {
     empty := false.B
   }
 
