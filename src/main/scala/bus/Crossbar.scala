@@ -5,7 +5,6 @@ import chisel3.util._
 
 class CoreBusCrossbar2to1 extends Module {
   val io = IO(new Bundle {
-    // val id = Vec(2, UInt(AxiParameters.AxiIdWidth.W))
     val in = Flipped(Vec(2, new CoreBusIO))
     val out = new CoreBusIO
   })
