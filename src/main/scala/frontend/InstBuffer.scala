@@ -59,7 +59,8 @@ class InstBuffer extends Module with ZhoushanConfig {
     if (i == 0) {
       offset(i) := 0.U
     } else {
-      offset(i) := PopCount(io.in.bits.vec(0).valid)  // todo: this only works for 2-way
+      // todo: currently only support 2-way
+      offset(i) := PopCount(io.in.bits.vec(0).valid)
     }
   }
 

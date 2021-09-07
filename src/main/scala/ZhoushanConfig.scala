@@ -1,7 +1,7 @@
 package zhoushan
 
 trait ZhoushanConfig {
-  val FetchWidth = 1
+  val FetchWidth = 2
   val InstBufferSize = 8
   val DecodeWidth = 1
 }

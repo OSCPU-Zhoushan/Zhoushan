@@ -3,7 +3,7 @@ package zhoushan
 import chisel3._
 import chisel3.util._
 
-class InstFetch extends Module {
+class InstFetch extends Module with ZhoushanConfig {
   val io = IO(new Bundle {
     val imem = new CacheBusIO
     val jmp_packet = Input(new JmpPacket)
@@ -26,38 +26,62 @@ class InstFetch extends Module {
   }
 
   val bp = Module(new BrPredictor)
+  val pred_br = Cat(bp.io.pred_br.reverse) & Fill(2, bp.io.pred_valid && !mis).asUInt()
   bp.io.jmp_packet <> io.jmp_packet
 
   val pc_init = "h80000000".U(32.W)
   val pc = RegInit(pc_init)
-  val pc_update = mis || req.fire()
+  val pc_base = Cat(pc(31, 3), Fill(3, 0.U))
+  val pc_valid = RegInit("b11".U(2.W))
 
-  val npc_s = pc + 4.U
-  val npc_p = bp.io.pred_pc
-  val npc = Mux(mis, mis_pc, Mux(bp.io.pred_valid && bp.io.pred_br, npc_p, npc_s))
+  val npc_s = pc_base + (4 * FetchWidth).U  // next pc sequential
+  val npc_p = bp.io.pred_pc                 // next pc predicted
+  val npc = Mux(mis, mis_pc, Mux(pred_br.orR, npc_p, npc_s))
+  val npc_valid = WireInit("b11".U(2.W))
+  when (mis) {
+    when (mis_pc(2) === 1.U) {
+      npc_valid := "b10".U
+    }
+  } .elsewhen (pred_br.orR) {
+    when (npc_p(2) === 1.U) {
+      npc_valid := "b10".U
+    }
+  }
 
   bp.io.pc_en := req.fire()
   bp.io.pc := npc
 
+  val pc_update = mis || req.fire()
+
   when (pc_update) {
     pc := npc
+    pc_valid := npc_valid
   }
 
-  req.bits.addr  := pc
+  req.bits.addr  := pc_base
   req.bits.ren   := true.B
   req.bits.wdata := 0.U
   req.bits.wmask := 0.U
   req.bits.wen   := false.B
-  req.bits.user  := Cat(bp.io.pred_valid && bp.io.pred_br && !mis, npc, pc)
+  req.bits.user  := Cat(pred_br, pc_valid, npc, pc_base)
   req.valid      := io.out.ready
 
   resp.ready := io.out.ready || mis
 
-  io.out.bits.vec(0).bits.pc      := resp.bits.user(31, 0)
-  io.out.bits.vec(0).bits.inst    := Mux(io.out.bits.vec(0).bits.pc(2), resp.bits.rdata(63, 32), resp.bits.rdata(31, 0))
-  io.out.bits.vec(0).bits.pred_br := resp.bits.user(64)
-  io.out.bits.vec(0).bits.pred_pc := resp.bits.user(63, 32)
-  io.out.bits.vec(0).valid        := resp.valid && !mis && !reg_mis
-  io.out.valid                    := resp.valid && !mis && !reg_mis
+  val out_vec = io.out.bits.vec
+
+  out_vec(1).bits.pc      := resp.bits.user(31, 0) + 4.U
+  out_vec(1).bits.inst    := resp.bits.rdata(63, 32)
+  out_vec(1).bits.pred_br := resp.bits.user(67)
+  out_vec(1).bits.pred_pc := Mux(out_vec(1).bits.pred_br, resp.bits.user(63, 32), 0.U)
+  out_vec(1).valid        := !io.out.bits.vec(0).bits.pred_br && resp.bits.user(65).asBool()
+
+  out_vec(0).bits.pc      := resp.bits.user(31, 0)
+  out_vec(0).bits.inst    := resp.bits.rdata(31, 0)
+  out_vec(0).bits.pred_br := resp.bits.user(66) && out_vec(0).valid
+  out_vec(0).bits.pred_pc := Mux(out_vec(0).bits.pred_br, resp.bits.user(63, 32), 0.U)
+  out_vec(0).valid        := resp.bits.user(64).asBool()
+
+  io.out.valid            := resp.valid && !mis && !reg_mis
 
 }
