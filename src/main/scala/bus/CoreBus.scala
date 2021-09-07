@@ -73,28 +73,43 @@ class CoreBus2Axi extends Module with AxiParameters {
   out.ar.bits.cache := 0.U
   out.ar.bits.qos   := 0.U
 
-  /* ----- CoreBus -> AXI4 -- Response -------------------------- */
-
-  out.b.ready := in.resp.ready
-  // in.resp.valid <- out.b.valid
-
-  out.r.ready := in.resp.ready
-  // in.resp.valid <- out.r.valid
-
   /* ----- CoreBus Input Ctrl Signal Logic ---------------------- */
 
   // in.req.ready  <- out.aw.ready/out.ar.ready/out.w.ready
+
+  in.req.ready := Mux(in.req.bits.aen,
+                      Mux(in.req.bits.wen, out.aw.ready && out.w.ready, out.ar.ready),
+                      Mux(in.req.bits.wen, out.w.ready, false.B))
+
   // in.resp.valid <- out.b.valid/out.r.valid
-  // Currently we are using a conservative logic here
-  // todo: optimize the logic by implementing a state machine
-  in.req.ready       := Mux(in.req.bits.aen,
-                          Mux(in.req.bits.wen, out.aw.ready && out.w.ready, out.ar.ready),
-                          Mux(in.req.bits.wen, out.w.ready, false.B))
-  in.resp.valid      := out.b.valid || out.r.valid
-  in.resp.bits.id    := Mux(out.b.valid, out.b.bits.id,
-                        Mux(out.r.valid, out.r.bits.id, 0.U))
-  in.resp.bits.rdata := out.r.bits.data
-  in.resp.bits.wresp := out.b.valid
-  in.resp.bits.rlast := out.r.valid & out.r.bits.last
+
+  val b_valid = out.b.valid
+  val r_valid = out.r.valid
+
+  when (b_valid) {
+    out.b.ready := in.resp.ready
+    out.r.ready := false.B
+    in.resp.valid := out.b.valid
+    in.resp.bits.id := out.b.bits.id
+    in.resp.bits.rdata := 0.U
+    in.resp.bits.wresp := out.b.valid
+    in.resp.bits.rlast := false.B
+  } .elsewhen (r_valid) {
+    out.b.ready := false.B
+    out.r.ready := in.resp.ready
+    in.resp.valid := out.r.valid
+    in.resp.bits.id := out.r.bits.id
+    in.resp.bits.rdata := out.r.bits.data
+    in.resp.bits.wresp := false.B
+    in.resp.bits.rlast := out.r.bits.last
+  } .otherwise {
+    out.b.ready := false.B
+    out.r.ready := false.B
+    in.resp.valid := false.B
+    in.resp.bits.id := 0.U
+    in.resp.bits.rdata := 0.U
+    in.resp.bits.wresp := false.B
+    in.resp.bits.rlast := false.B
+  }
 
 }
