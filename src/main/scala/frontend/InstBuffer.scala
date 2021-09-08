@@ -10,8 +10,7 @@ class InstPacket extends Bundle {
   val pred_bpc = Output(UInt(32.W))
 }
 
-class InstPacketVec extends Bundle with ZhoushanConfig {
-  val vec_width = FetchWidth
+class InstPacketVec(vec_width: Int) extends Bundle with ZhoushanConfig {
   val vec = Vec(vec_width, Valid(new InstPacket))
 }
 
@@ -21,8 +20,8 @@ class InstBuffer extends Module with ZhoushanConfig {
   val deq_width = DecodeWidth
 
   val io = IO(new Bundle {
-    val in = Flipped(Decoupled(new InstPacketVec))
-    val out = Vec(deq_width, Decoupled(new InstPacket))
+    val in = Flipped(Decoupled(new InstPacketVec(enq_width)))
+    val out = Decoupled(new InstPacketVec(deq_width))
     val flush = Input(Bool())
   })
 
@@ -69,11 +68,11 @@ class InstBuffer extends Module with ZhoushanConfig {
   val enq_ready = RegInit(true.B)
 
   val num_enq = Mux(io.in.fire(), PopCount(io.in.bits.vec.map(_.valid)), 0.U)
-  val num_deq = PopCount(io.out.map(_.fire()))
+  val num_deq = PopCount(io.out.fire())
 
   val num_try_deq = Mux(count >= deq_width.U, deq_width.U, count)
   val num_after_enq = count +& num_enq
-  val next_valid_entry = Mux(io.out(0).ready, num_after_enq - num_try_deq, num_after_enq)
+  val next_valid_entry = Mux(io.out.ready, num_after_enq - num_try_deq, num_after_enq)
 
   enq_ready := (entries - enq_width).U >= next_valid_entry
 
@@ -114,9 +113,11 @@ class InstBuffer extends Module with ZhoushanConfig {
 
   for (i <- 0 until deq_width) {
     val deq = buf.read(getIdx(next_deq_vec(i)))
-    io.out(i).bits := deq
-    io.out(i).valid := valid_vec(i)
+    io.out.bits.vec(i).bits := deq
+    io.out.bits.vec(i).valid := valid_vec(i)
   }
+
+  io.out.valid := Cat(valid_vec).orR
 
   // flush
 

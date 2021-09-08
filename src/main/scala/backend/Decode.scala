@@ -7,7 +7,7 @@ import zhoushan.Instructions._
 
 class Decode extends Module with ZhoushanConfig {
   val io = IO(new Bundle {
-    val in = Vec(DecodeWidth, Flipped(Decoupled(new InstPacket)))
+    val in = Flipped(Decoupled(new InstPacketVec(DecodeWidth)))
     val backend_ready = Input(Bool())
     val uop = Output(new MicroOp)   // todo: 2-way in the future
   })
@@ -18,34 +18,34 @@ class Decode extends Module with ZhoushanConfig {
   }
 
   for (i <- 0 until DecodeWidth) {
-    decoder(i).io.in <> io.in(i)
-    decoder(i).io.backend_ready := io.backend_ready
+    decoder(i).io.in <> io.in.bits.vec(i).bits
+    decoder(i).io.in_valid := io.in.valid && io.in.bits.vec(i).valid
     io.uop := decoder(i).io.uop
   }
+
+  io.in.ready := io.backend_ready
 }
 
 class Decoder extends Module {
   val io = IO(new Bundle {
-    val in = Flipped(Decoupled(new InstPacket))
-    val backend_ready = Input(Bool())
+    val in = Flipped(new InstPacket)
+    val in_valid = Input(Bool())
     val uop = Output(new MicroOp)
   })
 
-  io.in.ready := io.backend_ready
-
-  val inst = io.in.bits.inst
+  val inst = io.in.inst
   val uop = WireInit(0.U.asTypeOf(new MicroOp))
 
-  uop.pc := io.in.bits.pc
-  uop.npc := io.in.bits.pc + 4.U
+  uop.pc := io.in.pc
+  uop.npc := io.in.pc + 4.U
   uop.inst := inst
   
   uop.rs1_addr := inst(19, 15)
   uop.rs2_addr := inst(24, 20)
   uop.rd_addr := inst(11, 7)
 
-  uop.pred_br := io.in.bits.pred_br
-  uop.pred_bpc := io.in.bits.pred_bpc
+  uop.pred_br := io.in.pred_br
+  uop.pred_bpc := io.in.pred_bpc
   
   val ctrl = ListLookup(inst,
                   //   v  fu_code alu_code  jmp_code  mem_code mem_size   csr_code   w  rs1_src       rs2_src  rd_en  imm_type  
@@ -153,6 +153,6 @@ class Decoder extends Module {
     IMM_CSR -> imm_csr
   ))
 
-  io.uop := Mux(io.in.valid, uop, 0.U.asTypeOf(new MicroOp))
+  io.uop := Mux(io.in_valid, uop, 0.U.asTypeOf(new MicroOp))
 
 }

@@ -8,7 +8,7 @@ class InstFetch extends Module with ZhoushanConfig {
     val imem = new CacheBusIO
     // JmpPackek defined in MicroOp.scala, used for pc redirection
     val jmp_packet = Input(new JmpPacket)
-    val out = Decoupled(new InstPacketVec)        // to instruction buffer
+    val out = Decoupled(new InstPacketVec(FetchWidth))  // to instruction buffer
   })
 
   val req = io.imem.req
