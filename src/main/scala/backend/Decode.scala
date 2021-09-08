@@ -140,6 +140,7 @@ class Decoder extends Module {
   uop.rs1_paddr := 0.U
   uop.rs2_paddr := 0.U
   uop.rd_paddr := 0.U
+  uop.rob_addr := 0.U
 
   val imm_i = Cat(Fill(21, inst(31)), inst(30, 20))
   val imm_s = Cat(Fill(21, inst(31)), inst(30, 25), inst(11, 7))

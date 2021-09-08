@@ -91,10 +91,7 @@ class InstBuffer extends Module with ZhoushanConfig {
 
   for (i <- 0 until enq_width) {
     val enq = Wire(new InstPacket)
-    enq.pc      := io.in.bits.vec(i).bits.pc
-    enq.inst    := io.in.bits.vec(i).bits.inst
-    enq.pred_br := io.in.bits.vec(i).bits.pred_br
-    enq.pred_pc := io.in.bits.vec(i).bits.pred_pc
+    enq := io.in.bits.vec(i).bits
 
     when (io.in.bits.vec(i).valid && io.in.fire() && !io.flush) {
       buf.write(getIdx(enq_vec(offset(i))), enq)
@@ -117,10 +114,7 @@ class InstBuffer extends Module with ZhoushanConfig {
 
   for (i <- 0 until deq_width) {
     val deq = buf.read(getIdx(next_deq_vec(i)))
-    io.out(i).bits.pc      := deq.pc
-    io.out(i).bits.inst    := deq.inst
-    io.out(i).bits.pred_br := deq.pred_br
-    io.out(i).bits.pred_pc := deq.pred_pc
+    io.out(i).bits := deq
     io.out(i).valid := valid_vec(i)
   }
 
