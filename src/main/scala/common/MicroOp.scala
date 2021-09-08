@@ -104,7 +104,10 @@ class MicroOp extends Bundle {
   val rs2_paddr = UInt(6.W)
   val rd_paddr  = UInt(6.W)
 
-  def nop() : Unit = {
+  // re-order buffer related
+  val rob_addr  = UInt(4.W)
+
+  def nop(): Unit = {
     valid     := false.B
     pc        := 0.U
     npc       := 0.U
@@ -128,11 +131,16 @@ class MicroOp extends Bundle {
     rs1_paddr := 0.U
     rs2_paddr := 0.U
     rd_paddr  := 0.U
+    rob_addr  := 0.U
   }
 }
 
 object MicroOp {
   def nop() : Unit = (new MicroOp).nop()
+}
+
+class MicroOpVec(width: Int) extends Bundle {
+  val vec = Vec(width, Output(new MicroOp))
 }
 
 class JmpPacket extends Bundle {
