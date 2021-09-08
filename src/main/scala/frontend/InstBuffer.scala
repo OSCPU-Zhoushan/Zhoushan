@@ -11,8 +11,8 @@ class InstPacket extends Bundle {
 }
 
 class InstPacketVec extends Bundle with ZhoushanConfig {
-  val width = FetchWidth
-  val vec = Vec(width, Valid(new InstPacket))
+  val vec_width = FetchWidth
+  val vec = Vec(vec_width, Valid(new InstPacket))
 }
 
 class InstBuffer extends Module with ZhoushanConfig {
