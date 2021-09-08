@@ -190,7 +190,7 @@ class Cache(id: Int) extends Module with SramParameters {
   (hit zip (tag_out zip valid_out)).map { case (h, (t, v)) => {
     h := (t === s2_tag) && v
   }}
-  val s2_hit = hit(0) || hit(1) || hit(2) || hit(3)  // todo
+  val s2_hit = Cat(hit).orR
   val s2_way = OHToUInt(hit)
   val s2_rdata = sram_out(s2_way)
   val s2_dirty = dirty_out(replace_way)

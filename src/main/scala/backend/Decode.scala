@@ -36,7 +36,7 @@ class Decoder extends Module {
   val inst = io.in.bits.inst
   val pred_br = io.in.bits.pred_br
   val pred_pc = io.in.bits.pred_pc
-  val uop = Wire(new MicroOp)
+  val uop = WireInit(0.U.asTypeOf(new MicroOp))
 
   uop.pc := io.in.bits.pc
   uop.npc := io.in.bits.pc + 4.U
@@ -136,11 +136,6 @@ class Decoder extends Module {
   uop.rs1_src := rs1_src
   uop.rs2_src := rs2_src
   uop.rd_en := rd_en
-
-  uop.rs1_paddr := 0.U
-  uop.rs2_paddr := 0.U
-  uop.rd_paddr := 0.U
-  uop.rob_addr := 0.U
 
   val imm_i = Cat(Fill(21, inst(31)), inst(30, 20))
   val imm_s = Cat(Fill(21, inst(31)), inst(30, 25), inst(11, 7))
