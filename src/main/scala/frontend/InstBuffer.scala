@@ -7,7 +7,7 @@ class InstPacket extends Bundle {
   val pc = Output(UInt(32.W))
   val inst = Output(UInt(32.W))
   val pred_br = Output(Bool())
-  val pred_pc = Output(UInt(32.W))
+  val pred_bpc = Output(UInt(32.W))
 }
 
 class InstPacketVec extends Bundle with ZhoushanConfig {

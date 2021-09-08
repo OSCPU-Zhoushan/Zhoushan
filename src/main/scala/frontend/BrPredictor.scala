@@ -92,7 +92,7 @@ class BrPredictor extends Module with BpParameters with ZhoushanConfig {
     val jmp_packet = Input(new JmpPacket)
     // prediction result
     val pred_br = Vec(FetchWidth, Output(Bool()))
-    val pred_pc = Output(UInt(32.W))
+    val pred_bpc = Output(UInt(32.W))
     val pred_valid = Output(Bool())
   })
 
@@ -111,7 +111,7 @@ class BrPredictor extends Module with BpParameters with ZhoushanConfig {
   val jmp_packet = io.jmp_packet
 
   val pred_br = WireInit(VecInit(Seq.fill(FetchWidth)(false.B)))
-  val pred_pc = WireInit(VecInit(Seq.fill(FetchWidth)(0.U(32.W))))
+  val pred_bpc = WireInit(VecInit(Seq.fill(FetchWidth)(0.U(32.W))))
 
   // BHT definition
   val bht = RegInit(VecInit(Seq.fill(BhtSize)(0.U(BhtWidth.W))))
@@ -171,14 +171,14 @@ class BrPredictor extends Module with BpParameters with ZhoushanConfig {
   for (i <- 0 until FetchWidth) {
     when (jmp_packet.valid && jmp_packet.mis) {
       pred_br(i) := false.B
-      pred_pc(i) := Mux(jmp_packet.jmp, jmp_packet.jmp_pc, jmp_packet.inst_pc + 4.U)
+      pred_bpc(i) := Mux(jmp_packet.jmp, jmp_packet.jmp_pc, jmp_packet.inst_pc + 4.U)
     } .otherwise {
       when (pht_rdirect(i)) {
         pred_br(i) := btb_rhit(i)   // equivalent to Mux(btb_rhit, pht_rdirect, false.B)
-        pred_pc(i) := Mux(btb_rhit(i), btb_rtarget(i), RegNext(npc))
+        pred_bpc(i) := Mux(btb_rhit(i), btb_rtarget(i), RegNext(npc))
       } .otherwise {
         pred_br(i) := false.B
-        pred_pc(i) := RegNext(npc)
+        pred_bpc(i) := RegNext(npc)
       }
     }
   }
@@ -186,10 +186,10 @@ class BrPredictor extends Module with BpParameters with ZhoushanConfig {
   for (i <- 0 until FetchWidth) {
     io.pred_br(i) := Mux(pc_en(i), pred_br(i), false.B)
   }
-  io.pred_pc := MuxLookup(Cat(pred_br.reverse), 0.U, Array(
-    "b11".U -> pred_pc(0),
-    "b01".U -> pred_pc(0),
-    "b10".U -> pred_pc(1)
+  io.pred_bpc := MuxLookup(Cat(pred_br.reverse), 0.U, Array(
+    "b11".U -> pred_bpc(0),
+    "b01".U -> pred_bpc(0),
+    "b10".U -> pred_bpc(1)
   ))
   io.pred_valid := RegNext(io.pc_en)
 

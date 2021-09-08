@@ -78,7 +78,7 @@ class Execution extends Module with Ext {
   io.busy := busy
   io.intr := intr
 
-  val mis_predict = Mux(jmp, (uop.pred_br && (jmp_pc =/= uop.pred_pc)) || !uop.pred_br, uop.pred_br)
+  val mis_predict = Mux(jmp, (uop.pred_br && (jmp_pc =/= uop.pred_bpc)) || !uop.pred_br, uop.pred_br)
 
   io.jmp_packet.valid := (uop.fu_code === FU_JMP) || csr.io.jmp || csr.io.intr
   io.jmp_packet.inst_pc := uop.pc

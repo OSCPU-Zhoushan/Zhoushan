@@ -149,7 +149,7 @@ class Rob extends Module with ZhoushanConfig {
       io.jmp_packet.jmp     := uop_commit.real_br
       io.jmp_packet.jmp_pc  := uop_commit.real_bpc
       io.jmp_packet.mis     := Mux(uop_commit.real_br, 
-                                   (uop_commit.pred_br && (uop_commit.real_bpc =/= uop_commit.pred_pc)) || !uop_commit.pred_br,
+                                   (uop_commit.pred_br && (uop_commit.real_bpc =/= uop_commit.pred_bpc)) || !uop_commit.pred_br,
                                    uop_commit.pred_br)
     }
   }
