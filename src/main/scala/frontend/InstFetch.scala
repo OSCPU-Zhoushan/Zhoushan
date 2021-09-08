@@ -6,14 +6,15 @@ import chisel3.util._
 class InstFetch extends Module with ZhoushanConfig {
   val io = IO(new Bundle {
     val imem = new CacheBusIO
+    // JmpPackek defined in MicroOp.scala, used for pc redirection
     val jmp_packet = Input(new JmpPacket)
-    val out = Decoupled(new InstPacketVec)
+    val out = Decoupled(new InstPacketVec)        // to instruction buffer
   })
 
   val req = io.imem.req
   val resp = io.imem.resp
 
-  val empty = RegInit(false.B)
+  val empty = RegInit(false.B)                    // whether IF pipeline is empty
   when (resp.fire()) {
     empty := true.B
   }
@@ -21,10 +22,10 @@ class InstFetch extends Module with ZhoushanConfig {
     empty := false.B
   }
 
-  val mis = io.jmp_packet.mis
+  val mis = io.jmp_packet.mis                     // branch mis-predict
   val mis_pc = Mux(io.jmp_packet.jmp, io.jmp_packet.jmp_pc, io.jmp_packet.inst_pc + 4.U)
 
-  val reg_mis = RegInit(false.B)
+  val reg_mis = RegInit(false.B)                  // store branch mis-predict status
   when (mis && !empty) {
     reg_mis := true.B
   } .elsewhen (resp.fire() && !mis) {
@@ -39,11 +40,14 @@ class InstFetch extends Module with ZhoushanConfig {
 
   val pc_init = "h80000000".U(32.W)
   val pc = RegInit(pc_init)
-  val pc_base = Cat(pc(31, 3), Fill(3, 0.U))
+  val pc_base = Cat(pc(31, 3), Fill(3, 0.U))      // 64-bit aligned pc_base
   val pc_valid = RegInit("b11".U(2.W))
 
-  val npc_s = pc_base + (4 * FetchWidth).U  // next pc sequential
-  val npc_p = bp.io.pred_pc                 // next pc predicted
+  val npc_s = pc_base + (4 * FetchWidth).U        // next pc sequential
+  val npc_p = bp.io.pred_pc                       // next pc predicted
+
+  // update pc by npc
+  // priority: redirection > branch prediction = sequential pc
   val npc = Mux(mis, mis_pc, Mux(pred_br.orR, npc_p, npc_s))
   val npc_valid = WireInit("b11".U(2.W))
   when (mis) {
@@ -66,6 +70,9 @@ class InstFetch extends Module with ZhoushanConfig {
     pc_valid := npc_valid
   }
 
+  // send the request to I$
+  // store pc_base, npc, pc_valid, pred_br info in user field
+  // restore the info when resp, and send to instruction buffer
   req.bits.addr  := pc_base
   req.bits.ren   := true.B
   req.bits.wdata := 0.U

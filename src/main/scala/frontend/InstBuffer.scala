@@ -26,6 +26,31 @@ class InstBuffer extends Module with ZhoushanConfig {
     val flush = Input(Bool())
   })
 
+  /* InstBuffer (based on a circular queue)
+   *
+   *   Case 1 (Size = 16, Count = 5)
+   *   0              f
+   *   ------XXXXX-----
+   *         ^    ^
+   *         |    enq_ptr = 0xb (flag = 0)
+   *         deq_ptr = 0x6 (flag = 0)
+   *
+   *   enq_vec = (0x0b, 0x0c)
+   *   deq_vec = (0x06, 0x07)
+   *
+   *
+   *   Case 2 (Size = 16, Count = 7)
+   *   0              f
+   *   XXX---------XXXX
+   *      ^        ^
+   *      |        deq_ptr = 0xc (flag = 0)
+   *      enq_ptr = 0x3 (flag = 1)
+   *
+   *   enq_vec = (0x13, 0x14)
+   *   deq_vec = (0x0c, 0x0d)
+   *
+   */
+
   val idx_width = log2Ceil(entries)
   val addr_width = idx_width + 1  // MSB is flag bit
   def getIdx(x: UInt): UInt = x(idx_width - 1, 0)
