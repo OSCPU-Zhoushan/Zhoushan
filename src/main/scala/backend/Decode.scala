@@ -48,7 +48,7 @@ class Decode extends Module with ZhoushanConfig {
     }
   } .elsewhen (io.out.ready) {
     for (i <- 0 until IssueWidth) {
-      out_uop(i) := Mux(reg_valid, reg_uop(i), decoder(i).io.uop)
+      out_uop(i) := Mux(reg_valid && !io.in.valid, reg_uop(i), decoder(i).io.uop)
     }
   }
 
