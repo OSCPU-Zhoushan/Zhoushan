@@ -9,7 +9,7 @@ trait BpParameters {
   val BhtAddrSize = log2Up(BhtSize)     // 6
   val PhtWidth = 8
   val PhtIndexSize = log2Up(PhtWidth)   // 3 
-  val PhtSize = 256
+  val PhtSize = 256                     // todo: should be 64
   val PhtAddrSize = log2Up(PhtSize)     // 8
   val BtbSize = 64
   val BtbAddrSize = log2Up(BtbSize)     // 6

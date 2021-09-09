@@ -8,8 +8,8 @@ import zhoushan.Instructions._
 class Decode extends Module with ZhoushanConfig {
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(new InstPacketVec(DecodeWidth)))
-    val backend_ready = Input(Bool())
-    val uop = Output(new MicroOp)   // todo: 2-way in the future
+    val out = Decoupled(new MicroOpVec(DecodeWidth))
+    val flush = Input(Bool())
   })
 
   val decoder = for (i <- 0 until DecodeWidth) yield {
@@ -20,10 +20,31 @@ class Decode extends Module with ZhoushanConfig {
   for (i <- 0 until DecodeWidth) {
     decoder(i).io.in <> io.in.bits.vec(i).bits
     decoder(i).io.in_valid := io.in.valid && io.in.bits.vec(i).valid
-    io.uop := decoder(i).io.uop
   }
 
-  io.in.ready := io.backend_ready
+  // pipeline registers
+
+  val out_uop = RegInit(VecInit(Seq.fill(IssueWidth)(0.U.asTypeOf(new MicroOp))))
+  val out_valid = RegInit(false.B)
+
+  io.in.ready := io.out.ready
+  when (io.flush) {
+    for (i <- 0 until IssueWidth) {
+      out_uop(i) := 0.U.asTypeOf(new MicroOp)
+    }
+    out_valid := false.B
+  } .elsewhen (io.out.ready && io.in.valid) {
+    for (i <- 0 until IssueWidth) {
+      out_uop(i) := decoder(i).io.uop
+    }
+    out_valid := true.B
+  } .otherwise {
+    out_valid := false.B
+  }
+
+  io.out.valid := out_valid
+  io.out.bits.vec := out_uop
+
 }
 
 class Decoder extends Module {

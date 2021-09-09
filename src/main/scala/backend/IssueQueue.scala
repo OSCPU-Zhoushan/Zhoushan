@@ -2,60 +2,29 @@ package zhoushan
 
 import chisel3._
 import chisel3.util._
+import zhoushan.Constant._
 
-class InstPacket extends Bundle {
-  val pc = Output(UInt(32.W))
-  val inst = Output(UInt(32.W))
-  val pred_br = Output(Bool())
-  val pred_bpc = Output(UInt(32.W))
+class MicroOpVec(vec_width: Int) extends Bundle {
+  val vec = Vec(vec_width, Output(new MicroOp))
 }
 
-class InstPacketVec(vec_width: Int) extends Bundle with ZhoushanConfig {
-  val vec = Vec(vec_width, Valid(new InstPacket))
-}
-
-class InstBuffer extends Module with ZhoushanConfig {
-  val entries = InstBufferSize
-  val enq_width = FetchWidth
-  val deq_width = DecodeWidth
+class IssueQueue extends Module with ZhoushanConfig {
+  val entries = IssueQueueSize
+  val enq_width = DecodeWidth
+  val deq_width = IssueWidth
 
   val io = IO(new Bundle {
-    val in = Flipped(Decoupled(new InstPacketVec(enq_width)))
-    val out = Decoupled(new InstPacketVec(deq_width))
+    val in = Flipped(Decoupled(new MicroOpVec(enq_width)))
+    val out = Decoupled(new MicroOpVec(deq_width))
     val flush = Input(Bool())
   })
-
-  /* InstBuffer (based on a circular queue)
-   *
-   *   Case 1 (Size = 16, Count = 5)
-   *   0              f
-   *   ------XXXXX-----
-   *         ^    ^
-   *         |    enq_ptr = 0xb (flag = 0)
-   *         deq_ptr = 0x6 (flag = 0)
-   *
-   *   enq_vec = (0x0b, 0x0c)
-   *   deq_vec = (0x06, 0x07)
-   *
-   *
-   *   Case 2 (Size = 16, Count = 7)
-   *   0              f
-   *   XXX---------XXXX
-   *      ^        ^
-   *      |        deq_ptr = 0xc (flag = 0)
-   *      enq_ptr = 0x3 (flag = 1)
-   *
-   *   enq_vec = (0x13, 0x14)
-   *   deq_vec = (0x0c, 0x0d)
-   *
-   */
 
   val idx_width = log2Ceil(entries)
   val addr_width = idx_width + 1  // MSB is flag bit
   def getIdx(x: UInt): UInt = x(idx_width - 1, 0)
   def getFlag(x: UInt): Bool = x(addr_width - 1).asBool()
 
-  val buf = SyncReadMem(entries, new InstPacket, SyncReadMem.WriteFirst)
+  val buf = SyncReadMem(entries, new MicroOp, SyncReadMem.WriteFirst)
 
   val enq_vec = RegInit(VecInit((0 until enq_width).map(_.U(addr_width.W))))
   val deq_vec = RegInit(VecInit((0 until deq_width).map(_.U(addr_width.W))))
@@ -89,10 +58,10 @@ class InstBuffer extends Module with ZhoushanConfig {
   }
 
   for (i <- 0 until enq_width) {
-    val enq = Wire(new InstPacket)
-    enq := io.in.bits.vec(i).bits
+    val enq = Wire(new MicroOp)
+    enq := io.in.bits.vec(i)
 
-    when (io.in.bits.vec(i).valid && io.in.fire() && !io.flush) {
+    when (enq.valid && io.in.fire() && !io.flush) {
       buf.write(getIdx(enq_vec(offset(i))), enq)
     }
   }
@@ -107,14 +76,24 @@ class InstBuffer extends Module with ZhoushanConfig {
 
   // deq
 
+  val ready_vec = WireInit(VecInit(Seq.fill(deq_width)(false.B)))
+
+  // currently we only consider 2-way in-order superscalar issue
+  val uop0 = io.out.bits.vec(0)
+  ready_vec(0) := true.B
+  val uop1 = io.out.bits.vec(1)
+  val uop1_rs1_from_uop0_rd = uop0.rd_en && (uop1.rs1_src === RS_FROM_RF) && (uop1.rs1_addr === uop0.rd_addr)
+  val uop1_rs2_from_uop0_rd = uop0.rd_en && (uop1.rs2_src === RS_FROM_RF) && (uop1.rs2_addr === uop0.rd_addr)
+  ready_vec(1) := (uop1.fu_code === FU_ALU) && !uop1_rs1_from_uop0_rd && !uop1_rs2_from_uop0_rd
+
   val valid_vec = Mux(count >= deq_width.U, ((1 << deq_width) - 1).U, UIntToOH(count)(deq_width - 1, 0) - 1.U)
   val next_deq_vec = VecInit(deq_vec.map(_ + num_deq))
   deq_vec := next_deq_vec
 
   for (i <- 0 until deq_width) {
     val deq = buf.read(getIdx(next_deq_vec(i)))
-    io.out.bits.vec(i).bits := deq
-    io.out.bits.vec(i).valid := valid_vec(i)
+    io.out.bits.vec(i) := deq
+    io.out.bits.vec(i).valid := deq.valid && valid_vec(i) && ready_vec(i)
   }
 
   io.out.valid := Cat(io.out.bits.vec.map(_.valid)).orR

@@ -110,10 +110,6 @@ class MicroOp extends Bundle {
   val rob_addr  = UInt(4.W)
 }
 
-class MicroOpVec(width: Int) extends Bundle {
-  val vec = Vec(width, Output(new MicroOp))
-}
-
 class JmpPacket extends Bundle {
   val valid = Bool()
   val inst_pc = UInt(32.W)

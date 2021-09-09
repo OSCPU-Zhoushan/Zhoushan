@@ -5,7 +5,7 @@ import chisel3.util._
 import chisel3.util.experimental._
 import zhoushan.Constant._
 
-class Lsu extends Module with Ext {
+class Lsu extends Module {
   val io = IO(new Bundle {
     val uop = Input(new MicroOp)
     val in1 = Input(UInt(64.W))
@@ -36,7 +36,7 @@ class Lsu extends Module with Ext {
   val req = io.dmem.req
   val resp = io.dmem.resp
 
-  val addr = (in1 + signExt32_64(uop.imm))(31, 0)
+  val addr = (in1 + SignExt32_64(uop.imm))(31, 0)
   val addr_offset = addr(2, 0)
   val wdata = in2
   val reg_addr = RegInit(0.U(32.W))
