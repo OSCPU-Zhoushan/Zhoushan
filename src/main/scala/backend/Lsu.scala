@@ -21,7 +21,7 @@ class Lsu extends Module {
   val in1 = io.in1
   val in2 = io.in2
   val is_mem = (uop.fu_code === FU_MEM)
-  val reg_is_load = (reg_uop.mem_code === MEM_LD || uop.mem_code === MEM_LDU)
+  val reg_is_load = (reg_uop.mem_code === MEM_LD || reg_uop.mem_code === MEM_LDU)
   val reg_is_store = (reg_uop.mem_code === MEM_ST)
 
   val s_idle :: s_req :: s_wait_r :: s_wait_w :: s_complete :: Nil = Enum(5)
@@ -66,7 +66,7 @@ class Lsu extends Module {
   req.bits.wmask := mask & ((wmask << reg_addr_offset)(7, 0))
   req.bits.wen := reg_is_store
   req.bits.user := 0.U
-  req.valid := uop.valid && (state === s_req) &&
+  req.valid := reg_uop.valid && (state === s_req) &&
                (reg_is_load || reg_is_store) && !io.intr
 
   resp.ready := (state === s_wait_r) || (state === s_wait_w)
