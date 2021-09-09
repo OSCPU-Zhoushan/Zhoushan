@@ -52,7 +52,7 @@ class RegFile extends Module with ZhoushanConfig {
     out_valid := false.B
   } .elsewhen (io.out.ready && io.in.valid) {
     for (i <- 0 until IssueWidth) {
-      out_uop(i) := io.in.bits.vec(i)
+      out_uop(i) := Mux(io.in.bits.vec(i).valid, io.in.bits.vec(i), 0.U.asTypeOf(new MicroOp))
       out_rs1_data(i) := rs1_data(i)
       out_rs2_data(i) := rs2_data(i)
     }

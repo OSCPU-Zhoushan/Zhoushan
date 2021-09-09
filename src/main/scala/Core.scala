@@ -130,7 +130,7 @@ class Core extends Module with ZhoushanConfig {
       dt_ic.io.isRVC    := false.B
       dt_ic.io.scFailed := false.B
       dt_ic.io.wen      := uop_commit(i).rd_en
-      dt_ic.io.wdata    := execution.io.rd_data(i)
+      dt_ic.io.wdata    := RegNext(execution.io.rd_data(i))
       dt_ic.io.wdest    := uop_commit(i).rd_addr
     }
   }

@@ -70,13 +70,16 @@ class Execution extends Module with ZhoushanConfig {
   when (pipe0.io.jmp_packet.mis) {
     for (i <- 0 until IssueWidth) {
       if (i == 0) {
-        out_uop(i) := io.in.bits.vec(0)
+        out_uop(i) := io.in.bits.vec(i)
+        out_rd_en(i) := io.in.bits.vec(i).rd_en
+        out_rd_addr(i) := io.in.bits.vec(i).rd_addr
+        out_rd_data(i) := pipe0.io.result
       } else {
         out_uop(i) := 0.U.asTypeOf(new MicroOp)
+        out_rd_en(i) := false.B
+        out_rd_addr(i) := 0.U
+        out_rd_data(i) := 0.U
       }
-      out_rd_en(i) := false.B
-      out_rd_addr(i) := 0.U
-      out_rd_data(i) := 0.U
     }
   } .elsewhen (!pipe0.io.busy) {
     for (i <- 0 until IssueWidth) {
