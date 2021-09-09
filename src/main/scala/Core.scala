@@ -95,7 +95,7 @@ class Core extends Module with ZhoushanConfig {
         ex_rs1_data(i) := RegNext(execution.io.rd_data(j))
       }
       when (ex_rs2_from_cm(i)(j)) {
-        ex_rs1_data(i) := RegNext(execution.io.rd_data(j))
+        ex_rs2_data(i) := RegNext(execution.io.rd_data(j))
       }
     }
   }
