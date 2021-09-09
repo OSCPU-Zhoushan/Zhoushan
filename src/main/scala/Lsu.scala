@@ -37,7 +37,7 @@ class Lsu extends LsuModule with Ext {
   val in1 = io.in1
   val in2 = io.in2
   val is_mem = (uop.fu_code === FU_MEM)
-  val reg_is_load = (reg_uop.mem_code === MEM_LD || uop.mem_code === MEM_LDU)
+  val reg_is_load = (reg_uop.mem_code === MEM_LD || reg_uop.mem_code === MEM_LDU)
   val reg_is_store = (reg_uop.mem_code === MEM_ST)
 
   val s_idle :: s_req :: s_wait_r :: s_wait_w :: s_complete :: Nil = Enum(5)
@@ -76,19 +76,13 @@ class Lsu extends LsuModule with Ext {
     MEM_DWORD -> "b11111111".U(8.W)
   ))
 
-  // val wmask64 = Cat(Fill(8, wmask(7)), Fill(8, wmask(6)),
-  //                   Fill(8, wmask(5)), Fill(8, wmask(4)),
-  //                   Fill(8, wmask(3)), Fill(8, wmask(2)),
-  //                   Fill(8, wmask(1)), Fill(8, wmask(0)))
-  // val in2_masked = in2 & wmask64
-
   req.bits.addr := Cat(reg_addr(31, 3), Fill(3, 0.U))
   req.bits.ren := reg_is_load
   req.bits.wdata := (reg_wdata << (reg_addr_offset << 3))(63, 0)
   req.bits.wmask := mask & ((wmask << reg_addr_offset)(7, 0))
   req.bits.wen := reg_is_store
   req.bits.user := 0.U
-  req.valid := uop.valid && (state === s_req) &&
+  req.valid := reg_uop.valid && (state === s_req) &&
                (reg_is_load || reg_is_store) && !io.intr
 
   resp.ready := (state === s_wait_r) || (state === s_wait_w)
