@@ -30,10 +30,10 @@ class Execution extends Module with ZhoushanConfig {
     }
   }
 
-  val in1_0 = Wire(Vec(2, UInt(64.W)))
-  val in2_0 = Wire(Vec(2, UInt(64.W)))
-  val in1 = Wire(Vec(2, UInt(64.W)))
-  val in2 = Wire(Vec(2, UInt(64.W)))
+  val in1_0 = Wire(Vec(IssueWidth, UInt(64.W)))
+  val in2_0 = Wire(Vec(IssueWidth, UInt(64.W)))
+  val in1 = Wire(Vec(IssueWidth, UInt(64.W)))
+  val in2 = Wire(Vec(IssueWidth, UInt(64.W)))
 
   for (i <- 0 until IssueWidth) {
     in1_0(i) := MuxLookup(uop(i).rs1_src, 0.U, Array(
