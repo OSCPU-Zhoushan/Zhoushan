@@ -39,7 +39,8 @@ class IssueQueue extends Module with ZhoushanConfig {
   val num_enq = Mux(io.in.fire(), PopCount(io.in.bits.vec.map(_.valid)), 0.U)
   val num_deq = Mux(io.out.fire(), PopCount(io.out.bits.vec.map(_.valid)), 0.U)
 
-  val num_try_deq = Mux(count >= deq_width.U, deq_width.U, count)
+  // even though deq_width = 2, we may deq only 1 instruction each time
+  val num_try_deq = Mux(count >= 1.U, 1.U, count)
   val num_after_enq = count +& num_enq
   val next_valid_entry = Mux(io.out.ready, num_after_enq - num_try_deq, num_after_enq)
 

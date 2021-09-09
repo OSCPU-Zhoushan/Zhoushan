@@ -21,6 +21,15 @@ class Execution extends Module with ZhoushanConfig {
   })
 
   val uop = Mux(io.in.valid, io.in.bits.vec, VecInit(Seq.fill(IssueWidth)(0.U.asTypeOf(new MicroOp))))
+  val reg_uop = RegInit(VecInit(Seq.fill(IssueWidth)(0.U.asTypeOf(new MicroOp))))
+  val reg_valid = RegNext(!io.in.ready) && io.in.ready
+
+  when (io.in.valid) {
+    for (i <- 0 until IssueWidth) {
+      reg_uop(i) := uop(i)
+    }
+  }
+
   val in1_0 = Wire(Vec(2, UInt(64.W)))
   val in2_0 = Wire(Vec(2, UInt(64.W)))
   val in1 = Wire(Vec(2, UInt(64.W)))
@@ -58,6 +67,11 @@ class Execution extends Module with ZhoushanConfig {
   pipe1.io.in1 := in1(1)
   pipe1.io.in2 := in2(1)
 
+  val reg_pipe1_result = RegInit(0.U(64.W))
+  when (pipe0.io.busy && io.in.valid) {
+    reg_pipe1_result := pipe1.io.result
+  }
+
   io.in.ready := !pipe0.io.busy
 
   // pipeline registers
@@ -70,9 +84,9 @@ class Execution extends Module with ZhoushanConfig {
   when (pipe0.io.jmp_packet.mis) {
     for (i <- 0 until IssueWidth) {
       if (i == 0) {
-        out_uop(i) := io.in.bits.vec(i)
-        out_rd_en(i) := io.in.bits.vec(i).rd_en
-        out_rd_addr(i) := io.in.bits.vec(i).rd_addr
+        out_uop(i) := Mux(reg_valid, reg_uop(i), uop(i))
+        out_rd_en(i) := Mux(reg_valid, reg_uop(i).rd_en, uop(i).rd_en)
+        out_rd_addr(i) := Mux(reg_valid, reg_uop(i).rd_addr, uop(i).rd_addr)
         out_rd_data(i) := pipe0.io.result
       } else {
         out_uop(i) := 0.U.asTypeOf(new MicroOp)
@@ -83,12 +97,19 @@ class Execution extends Module with ZhoushanConfig {
     }
   } .elsewhen (!pipe0.io.busy) {
     for (i <- 0 until IssueWidth) {
-      out_uop(i) := io.in.bits.vec(i)
-      out_rd_en(i) := io.in.bits.vec(i).rd_en
-      out_rd_addr(i) := io.in.bits.vec(i).rd_addr
+      out_uop(i) := Mux(reg_valid, reg_uop(i), uop(i))
+      out_rd_en(i) := Mux(reg_valid, reg_uop(i).rd_en, uop(i).rd_en)
+      out_rd_addr(i) := Mux(reg_valid, reg_uop(i).rd_addr, uop(i).rd_addr)
     }
     out_rd_data(0) := pipe0.io.result
-    out_rd_data(1) := pipe1.io.result
+    out_rd_data(1) := Mux(reg_valid, reg_pipe1_result, pipe1.io.result)
+  } .otherwise {
+    for (i <- 0 until IssueWidth) {
+      out_uop(i) := 0.U.asTypeOf(new MicroOp)
+      out_rd_en(i) := 0.U
+      out_rd_addr(i) := 0.U
+      out_rd_data(i) := 0.U
+    }
   }
 
   io.out.vec := out_uop
