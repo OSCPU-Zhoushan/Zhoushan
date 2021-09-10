@@ -369,6 +369,7 @@ class Cache(id: Int) extends Module with SramParameters {
         when (s2_reg_dirty) {
           state := s_miss_req_w1
         } .otherwise {
+          updatePlruTree(s2_idx, replace_way)
           state := s_complete
         }
       }
@@ -386,6 +387,7 @@ class Cache(id: Int) extends Module with SramParameters {
     is (s_miss_wait_w) {
       s2_wen := false.B
       when (out.resp.fire()) {
+        updatePlruTree(s2_idx, replace_way)
         state := s_complete
       }
     }
