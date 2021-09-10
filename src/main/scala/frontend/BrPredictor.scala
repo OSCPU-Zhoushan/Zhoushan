@@ -9,8 +9,8 @@ trait BpParameters {
   val BhtAddrSize = log2Up(BhtSize)     // 6
   val PhtWidth = 8
   val PhtIndexSize = log2Up(PhtWidth)   // 3 
-  val PhtSize = 256                     // todo: should be 64
-  val PhtAddrSize = log2Up(PhtSize)     // 8
+  val PhtSize = 64                      // 2 ^ BhtWidth
+  val PhtAddrSize = log2Up(PhtSize)     // 6 <- BhtWidth
   val BtbSize = 64
   val BtbAddrSize = log2Up(BtbSize)     // 6
   val BtbTagSize = 8
@@ -27,21 +27,45 @@ class PatternHistoryTable extends Module with BpParameters with ZhoushanConfig {
     val wjmp = Input(Bool())
   })
 
-  def defaultState() : UInt = 1.U(2.W)
-  val pht = RegInit(VecInit(Seq.fill(PhtWidth)(VecInit(Seq.fill(PhtSize)(defaultState())))))
-
-  for (i <- 0 until FetchWidth) {
-    io.rdirect(i) := pht(io.rindex(i))(io.raddr(i))(1).asBool()
+  val pht = for (j <- 0 until PhtWidth) yield {
+    val pht = SyncReadMem(PhtSize, UInt(2.W), SyncReadMem.WriteFirst)
+    pht
   }
 
-  val pht_wstate = pht(io.windex)(io.waddr)
+  for (i <- 0 until FetchWidth) {
+    val pht_rdata = WireInit(VecInit(Seq.fill(PhtWidth)(0.U(2.W))))
+    for (j <- 0 until PhtWidth) {
+      pht_rdata(j) := pht(j).read(io.raddr(i))
+    }
+    io.rdirect(i) := false.B
+    for (j <- 0 until PhtWidth) {
+      when (RegNext(io.rindex(i)) === j.U) {
+        io.rdirect(i) := pht_rdata(j)(1).asBool()
+      }
+    }
+  }
+
+  val pht_wstate_r = WireInit(UInt(2.W), 0.U)   // first read PHT state
+  val pht_wstate_w = WireInit(UInt(2.W), 0.U)   // then write PHT state
   when (io.wen) {
-    pht_wstate := MuxLookup(pht_wstate, defaultState(), Array(
-      0.U -> Mux(io.wjmp, 1.U, 0.U),   // strongly not taken
-      1.U -> Mux(io.wjmp, 2.U, 0.U),   // weakly not taken
-      2.U -> Mux(io.wjmp, 3.U, 1.U),   // weakly taken
-      3.U -> Mux(io.wjmp, 3.U, 2.U)    // strongly taken
-    ))
+    for (j <- 0 until PhtWidth) {
+      when (io.windex === j.U) {
+        pht_wstate_r := pht(j).read(io.waddr)
+      }
+    }
+  }
+  pht_wstate_w := MuxLookup(pht_wstate_r, 0.U, Array(
+    0.U -> Mux(RegNext(io.wjmp), 1.U, 0.U),   // strongly not taken
+    1.U -> Mux(RegNext(io.wjmp), 2.U, 0.U),   // weakly not taken
+    2.U -> Mux(RegNext(io.wjmp), 3.U, 1.U),   // weakly taken
+    3.U -> Mux(RegNext(io.wjmp), 3.U, 2.U)    // strongly taken
+  ))
+  when (RegNext(io.wen)) {
+    for (j <- 0 until PhtWidth) {
+      when (RegNext(io.windex === j.U)) {
+        pht(j).write(RegNext(io.waddr), pht_wstate_w)
+      }
+    }
   }
 
 }
@@ -64,7 +88,7 @@ class BranchTargetBuffer extends Module with BpParameters with ZhoushanConfig {
     val wtarget = Input(UInt(32.W))
   })
 
-  val btb = SyncReadMem(BtbSize, new BtbEntry)
+  val btb = SyncReadMem(BtbSize, new BtbEntry, SyncReadMem.WriteFirst)
 
   val rdata = WireInit(VecInit(Seq.fill(FetchWidth)(0.U.asTypeOf(new BtbEntry))))
   for (i <- 0 until FetchWidth) {
@@ -134,11 +158,11 @@ class BrPredictor extends Module with BpParameters with ZhoushanConfig {
   def phtIndex(x: UInt) : UInt = x(7 + PhtIndexSize, 8)
 
   // PHT read logic
-  val pht_rdirect = RegInit(VecInit(Seq.fill(FetchWidth)(false.B)))
+  val pht_rdirect = WireInit(VecInit(Seq.fill(FetchWidth)(false.B)))
   for (i <- 0 until FetchWidth) {
     pht.io.raddr(i) := phtAddr(bht_rdata(i), pc(i))
     pht.io.rindex(i) := phtIndex(pc(i))
-    pht_rdirect(i) := pht.io.rdirect(i)   // delay for 1 cycle to sync with BTB
+    pht_rdirect(i) := pht.io.rdirect(i)
   }
 
   // PHT update logic
