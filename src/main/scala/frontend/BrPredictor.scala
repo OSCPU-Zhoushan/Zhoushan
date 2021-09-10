@@ -267,7 +267,7 @@ class BrPredictor extends Module with BpParameters with ZhoushanConfig {
   val ras = Module(new ReturnAddressStack)
 
   // RAS push logic
-  val ras_push_vec = Cat(btb_rras_type.map(isRasPush(_)).reverse) & Cat(btb_rhit.reverse)
+  val ras_push_vec = Cat(btb_rras_type.map(isRasPush(_)).reverse) & Cat(btb_rhit.reverse) & Cat(pc_en.reverse)
   val ras_push_idx = PriorityEncoder(ras_push_vec)
   ras.io.push_en := ras_push_vec.orR || (jmp_packet.mis && isRasPush(jmp_packet.ras_type))
   ras.io.push_pc := 0.U
@@ -281,7 +281,7 @@ class BrPredictor extends Module with BpParameters with ZhoushanConfig {
   }
 
   // RAS pop logic
-  val ras_pop_vec = Cat(btb_rras_type.map(isRasPop(_)).reverse) & Cat(btb_rhit.reverse)
+  val ras_pop_vec = Cat(btb_rras_type.map(isRasPop(_)).reverse) & Cat(btb_rhit.reverse) & Cat(pc_en.reverse)
   val ras_pop_idx = PriorityEncoder(ras_pop_vec)
   ras.io.pop_en := ras_pop_vec.orR || (jmp_packet.mis && isRasPop(jmp_packet.ras_type))
   val ras_ret_en = Wire(Vec(FetchWidth, Bool()))
