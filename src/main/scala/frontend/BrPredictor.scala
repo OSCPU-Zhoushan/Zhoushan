@@ -56,12 +56,10 @@ class PatternHistoryTable extends Module with BpParameters with ZhoushanConfig {
   val pht_wdata_w = WireInit(UInt(2.W), 0.U)  // then write PHT state
 
   // stage 1
-  when (RegNext(io.wen)) {
-    for (j <- 0 until PhtWidth) {
-      pht_wdata(j) := pht(j).read(io.waddr)
-    }
+  for (j <- 0 until PhtWidth) {
+    pht_wdata(j) := pht(j).read(io.waddr)
   }
-  
+
   // stage 2
   when (RegNext(io.wen)) {
     for (j <- 0 until PhtWidth) {
