@@ -88,6 +88,7 @@ sealed class BtbEntry extends Bundle with BpParameters {
   val valid = Bool()
   val tag = UInt(BtbTagSize.W)
   val target = UInt(32.W)
+  val ras_type = UInt(2.W)
 }
 
 class BranchTargetBuffer extends Module with BpParameters with ZhoushanConfig {
@@ -96,10 +97,12 @@ class BranchTargetBuffer extends Module with BpParameters with ZhoushanConfig {
     val rtag = Vec(FetchWidth, Input(UInt(BtbTagSize.W)))
     val rhit = Vec(FetchWidth, Output(Bool()))
     val rtarget = Vec(FetchWidth, Output(UInt(32.W)))
+    val rras_type = Vec(FetchWidth, Output(UInt(2.W)))
     val waddr = Input(UInt(BtbAddrSize.W))
     val wen = Input(Bool())
     val wtag = Input(UInt(BtbTagSize.W))
     val wtarget = Input(UInt(32.W))
+    val wras_type = Input(UInt(2.W))
   })
 
   val btb = SyncReadMem(BtbSize, new BtbEntry, SyncReadMem.WriteFirst)
@@ -109,12 +112,14 @@ class BranchTargetBuffer extends Module with BpParameters with ZhoushanConfig {
     rdata(i) := btb.read(io.raddr(i))
     io.rhit(i) := rdata(i).valid && (rdata(i).tag === RegNext(io.rtag(i)))
     io.rtarget(i) := rdata(i).target
+    io.rras_type(i) := rdata(i).ras_type(i)
   }
 
   val wentry = Wire(new BtbEntry)
   wentry.valid := true.B
   wentry.tag := io.wtag
   wentry.target := io.wtarget
+  wentry.ras_type := io.wras_type
   when (io.wen) {
     btb.write(io.waddr, wentry)
   }
@@ -193,11 +198,13 @@ class BrPredictor extends Module with BpParameters with ZhoushanConfig {
   // BTB read logic
   val btb_rhit = WireInit(VecInit(Seq.fill(FetchWidth)(false.B)))
   val btb_rtarget = WireInit(VecInit(Seq.fill(FetchWidth)(0.U(32.W))))
+  val btb_rras_type = WireInit(VecInit(Seq.fill(FetchWidth)(0.U(2.W))))
   for (i <- 0 until FetchWidth) {
     btb.io.raddr(i) := btbAddr(pc(i))
     btb.io.rtag(i) := btbTag(pc(i))
     btb_rhit(i) := btb.io.rhit(i)
     btb_rtarget(i) := btb.io.rtarget(i)
+    btb_rras_type(i) := btb.io.rras_type(i)
   }
 
   // BTB update logic
@@ -205,6 +212,7 @@ class BrPredictor extends Module with BpParameters with ZhoushanConfig {
   btb.io.wen := jmp_packet.valid && jmp_packet.jmp
   btb.io.wtag := btbTag(jmp_packet.inst_pc)
   btb.io.wtarget := jmp_packet.jmp_pc
+  btb.io.wras_type := jmp_packet.ras_type
 
   for (i <- 0 until FetchWidth) {
     when (jmp_packet.valid && jmp_packet.mis) {

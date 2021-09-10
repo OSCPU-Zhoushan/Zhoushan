@@ -3,6 +3,7 @@ package zhoushan
 import chisel3._
 import chisel3.util._
 import zhoushan.Constant._
+import zhoushan.RasConstant._
 
 class Execution extends Module with ZhoushanConfig {
   val io = IO(new Bundle {
@@ -179,6 +180,25 @@ class ExPipe0 extends Module {
   io.jmp_packet.jmp := jmp
   io.jmp_packet.jmp_pc := jmp_pc
   io.jmp_packet.mis := io.jmp_packet.valid && mis_predict
+
+  // ref: riscv-spec-20191213 page 21-22
+  val rd_link = (uop.rd_addr === 1.U || uop.rd_addr === 5.U)
+  val rs1_link = (uop.rs1_addr === 1.U || uop.rs1_addr === 5.U)
+  val ras_type = WireInit(RAS_X)
+  when (uop.jmp_code === JMP_JAL) {
+    when (rd_link) {
+      ras_type := RAS_PUSH
+    }
+  }
+  when (uop.jmp_code === JMP_JALR) {
+    ras_type := MuxLookup(Cat(rd_link.asUInt(), rs1_link.asUInt()), RAS_X, Array(
+      "b00".U -> RAS_X,
+      "b01".U -> RAS_POP,
+      "b10".U -> RAS_PUSH,
+      "b11".U -> Mux(uop.rd_addr === uop.rs1_addr, RAS_PUSH, RAS_POP_THEN_PUSH)
+    ))
+  }
+  io.jmp_packet.ras_type := ras_type
 }
 
 class ExPipe1 extends Module {

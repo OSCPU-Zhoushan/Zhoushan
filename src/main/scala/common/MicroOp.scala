@@ -110,10 +110,18 @@ class MicroOp extends Bundle {
   val rob_addr  = UInt(4.W)
 }
 
+object RasConstant {
+  val RAS_X             = 0.asUInt(2.W)
+  val RAS_PUSH          = 1.asUInt(2.W)
+  val RAS_POP           = 2.asUInt(2.W)
+  val RAS_POP_THEN_PUSH = 3.asUInt(2.W)
+}
+
 class JmpPacket extends Bundle {
   val valid = Bool()
   val inst_pc = UInt(32.W)
   val jmp = Bool()
   val jmp_pc = UInt(32.W)
   val mis = Bool()
+  val ras_type = UInt(2.W)
 }
