@@ -154,7 +154,6 @@ class ReturnAddressStack extends Module with BpParameters with ZhoushanConfig {
 
   val stack_top_pc = ras.read(sp)
 
-  val pop_pc = WireInit(0.U(32.W))
   when (io.pop_en && !is_empty) {
     sp := sp_dec
   }
@@ -165,6 +164,12 @@ class ReturnAddressStack extends Module with BpParameters with ZhoushanConfig {
     sp := sp_inc
     when (is_full) {
       fp := fp + 1.U
+    }
+  }
+
+  if (Settings.DebugBranchPredictorRas) {
+    when (io.pop_en || io.push_en) {
+      printf("%d: [RAS] pop=%x pop_pc=%x push=%x push_pc=%x fp=%x sp=%x\n", DebugTimer(), io.pop_en, io.top_pc, io.push_en, io.push_pc, fp, sp)
     }
   }
 
@@ -264,27 +269,30 @@ class BrPredictor extends Module with BpParameters with ZhoushanConfig {
   // RAS push logic
   val ras_push_vec = Cat(btb_rras_type.map(isRasPush(_)).reverse) & Cat(btb_rhit.reverse)
   val ras_push_idx = PriorityEncoder(ras_push_vec)
-  ras.io.push_en := ras_push_vec.orR
+  ras.io.push_en := ras_push_vec.orR || (jmp_packet.mis && isRasPush(jmp_packet.ras_type))
   ras.io.push_pc := 0.U
   for (i <- 0 until FetchWidth) {
     when (ras_push_idx === i.U) {
       ras.io.push_pc := pc(i) + 4.U
     }
   }
+  when (jmp_packet.mis && isRasPush(jmp_packet.ras_type)) {
+    ras.io.push_pc := jmp_packet.inst_pc + 4.U
+  }
 
   // RAS pop logic
   val ras_pop_vec = Cat(btb_rras_type.map(isRasPop(_)).reverse) & Cat(btb_rhit.reverse)
   val ras_pop_idx = PriorityEncoder(ras_pop_vec)
-  ras.io.pop_en := ras_pop_vec.orR
-  val ras_pop_en = Wire(Vec(FetchWidth, Bool()))
-  val ras_pop_pc = Wire(Vec(FetchWidth, UInt(32.W)))
+  ras.io.pop_en := ras_pop_vec.orR || (jmp_packet.mis && isRasPop(jmp_packet.ras_type))
+  val ras_ret_en = Wire(Vec(FetchWidth, Bool()))
+  val ras_ret_pc = Wire(Vec(FetchWidth, UInt(32.W)))
   for (i <- 0 until FetchWidth) {
-    when (ras.io.pop_en && ras_pop_idx === i.U) {
-      ras_pop_en(i) := true.B
-      ras_pop_pc(i) := ras.io.top_pc
+    when (ras_pop_vec.orR && ras_pop_idx === i.U && !(jmp_packet.mis && isRasPop(jmp_packet.ras_type))) {
+      ras_ret_en(i) := true.B
+      ras_ret_pc(i) := ras.io.top_pc
     } .otherwise {
-      ras_pop_en(i) := false.B
-      ras_pop_pc(i) := 0.U
+      ras_ret_en(i) := false.B
+      ras_ret_pc(i) := 0.U
     }
   }
 
@@ -294,9 +302,9 @@ class BrPredictor extends Module with BpParameters with ZhoushanConfig {
       pred_br(i) := false.B
       pred_bpc(i) := Mux(jmp_packet.jmp, jmp_packet.jmp_pc, jmp_packet.inst_pc + 4.U)
     } .otherwise {
-      when (ras_pop_en(i)) {
+      when (ras_ret_en(i)) {
         pred_br(i) := true.B
-        pred_bpc(i) := ras_pop_pc(i)
+        pred_bpc(i) := ras_ret_pc(i)
       } .elsewhen (pht_rdirect(i)) {
         pred_br(i) := btb_rhit(i)   // equivalent to Mux(btb_rhit, pht_rdirect, false.B)
         pred_bpc(i) := Mux(btb_rhit(i), btb_rtarget(i), RegNext(npc))
