@@ -2,6 +2,7 @@ package zhoushan
 
 import chisel3._
 import chisel3.util._
+import zhoushan.RasConstant._
 
 trait BpParameters {
   val BhtWidth = 6
@@ -14,6 +15,8 @@ trait BpParameters {
   val BtbSize = 64
   val BtbAddrSize = log2Up(BtbSize)     // 6
   val BtbTagSize = 8
+  val RasSize = 16
+  val RasPtrSize = log2Up(RasSize)      // 4
 }
 
 class PatternHistoryTable extends Module with BpParameters with ZhoushanConfig {
@@ -126,6 +129,47 @@ class BranchTargetBuffer extends Module with BpParameters with ZhoushanConfig {
 
 }
 
+class ReturnAddressStack extends Module with BpParameters with ZhoushanConfig {
+  val io = IO(new Bundle {
+    val pop_en = Input(Bool())
+    val top_pc = Output(UInt(32.W))
+    val push_en = Input(Bool())
+    val push_pc = Input(UInt(32.W))
+  })
+
+  def getAddr(x: UInt): UInt = x(RasPtrSize - 1, 0)
+  def getFlag(x: UInt): Bool = x(RasPtrSize).asBool()
+
+  // we chooose ReadFirst to support "pop, then push" (rv unprivileged spec page 22)
+  val ras = SyncReadMem(RasSize, UInt(32.W), SyncReadMem.ReadFirst)
+
+  val fp = RegInit(UInt((RasPtrSize + 1).W), 0.U)   // frame pointer (base)
+  val sp = RegInit(UInt((RasPtrSize + 1).W), 0.U)   // stack pointer (top)
+
+  val sp_inc = sp + 1.U
+  val sp_dec = sp - 1.U
+
+  val is_empty = (fp === sp)
+  val is_full = (getAddr(fp) === getAddr(sp_inc)) && (getFlag(fp) =/= getFlag(sp_inc))
+
+  val stack_top_pc = ras.read(sp)
+
+  val pop_pc = WireInit(0.U(32.W))
+  when (io.pop_en && !is_empty) {
+    sp := sp_dec
+  }
+  io.top_pc := stack_top_pc
+  
+  when (io.push_en) {
+    ras.write(sp_inc, io.push_pc)
+    sp := sp_inc
+    when (is_full) {
+      fp := fp + 1.U
+    }
+  }
+
+}
+
 class BrPredictor extends Module with BpParameters with ZhoushanConfig {
   val io = IO(new Bundle {
     // from IF stage
@@ -214,12 +258,46 @@ class BrPredictor extends Module with BpParameters with ZhoushanConfig {
   btb.io.wtarget := jmp_packet.jmp_pc
   btb.io.wras_type := jmp_packet.ras_type
 
+  // RAS definition
+  val ras = Module(new ReturnAddressStack)
+
+  // RAS push logic
+  val ras_push_vec = Cat(btb_rras_type.map(isRasPush(_)).reverse) & Cat(btb_rhit.reverse)
+  val ras_push_idx = PriorityEncoder(ras_push_vec)
+  ras.io.push_en := ras_push_vec.orR
+  ras.io.push_pc := 0.U
+  for (i <- 0 until FetchWidth) {
+    when (ras_push_idx === i.U) {
+      ras.io.push_pc := pc(i) + 4.U
+    }
+  }
+
+  // RAS pop logic
+  val ras_pop_vec = Cat(btb_rras_type.map(isRasPop(_)).reverse) & Cat(btb_rhit.reverse)
+  val ras_pop_idx = PriorityEncoder(ras_pop_vec)
+  ras.io.pop_en := ras_pop_vec.orR
+  val ras_pop_en = Wire(Vec(FetchWidth, Bool()))
+  val ras_pop_pc = Wire(Vec(FetchWidth, UInt(32.W)))
+  for (i <- 0 until FetchWidth) {
+    when (ras.io.pop_en && ras_pop_idx === i.U) {
+      ras_pop_en(i) := true.B
+      ras_pop_pc(i) := ras.io.top_pc
+    } .otherwise {
+      ras_pop_en(i) := false.B
+      ras_pop_pc(i) := 0.U
+    }
+  }
+
+  // update pred results
   for (i <- 0 until FetchWidth) {
     when (jmp_packet.valid && jmp_packet.mis) {
       pred_br(i) := false.B
       pred_bpc(i) := Mux(jmp_packet.jmp, jmp_packet.jmp_pc, jmp_packet.inst_pc + 4.U)
     } .otherwise {
-      when (pht_rdirect(i)) {
+      when (ras_pop_en(i)) {
+        pred_br(i) := true.B
+        pred_bpc(i) := ras_pop_pc(i)
+      } .elsewhen (pht_rdirect(i)) {
         pred_br(i) := btb_rhit(i)   // equivalent to Mux(btb_rhit, pht_rdirect, false.B)
         pred_bpc(i) := Mux(btb_rhit(i), btb_rtarget(i), RegNext(npc))
       } .otherwise {

@@ -115,6 +115,9 @@ object RasConstant {
   val RAS_PUSH          = 1.asUInt(2.W)
   val RAS_POP           = 2.asUInt(2.W)
   val RAS_POP_THEN_PUSH = 3.asUInt(2.W)
+
+  def isRasPush(x: UInt): Bool = x(0) === 1.U
+  def isRasPop(x: UInt): Bool = x(1) === 1.U
 }
 
 class JmpPacket extends Bundle {
