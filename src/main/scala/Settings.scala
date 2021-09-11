@@ -8,6 +8,7 @@ object Settings {
   val DebugMsgICache = false
   val DebugMsgDCache = false
   val DebugBranchPredictorRas = false
+  val DebugBranchPredictorBtb = false
   val ClintAddrBase = 0x02000000
   val ClintAddrSize = 0x10000
 }

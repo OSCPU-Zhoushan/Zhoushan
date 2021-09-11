@@ -97,6 +97,7 @@ sealed class BtbEntry extends Bundle with BpParameters {
 class BranchTargetBuffer extends Module with BpParameters with ZhoushanConfig {
   val io = IO(new Bundle {
     val raddr = Vec(FetchWidth, Input(UInt(BtbAddrSize.W)))
+    val ren = Vec(FetchWidth, Input(Bool()))
     val rtag = Vec(FetchWidth, Input(UInt(BtbTagSize.W)))
     val rhit = Vec(FetchWidth, Output(Bool()))
     val rtarget = Vec(FetchWidth, Output(UInt(32.W)))
@@ -132,7 +133,12 @@ class BranchTargetBuffer extends Module with BpParameters with ZhoushanConfig {
         io.rhit(i) := true.B
         io.rtarget(i) := rdata(j).target
         io.rras_type(i) := rdata(j).ras_type
-        updateLru(io.raddr(i), j.U)
+        when (io.ren(i)) {
+          updateLru(io.raddr(i), j.U)
+          if (Settings.DebugBranchPredictorBtb) {
+            printf("%d: [BTB] addr=%d way=%x\n", DebugTimer(), io.raddr(i), j.U)
+          }
+        }
       }
     }
   }
@@ -148,6 +154,9 @@ class BranchTargetBuffer extends Module with BpParameters with ZhoushanConfig {
       when (wway === j.U) {
         btb(j).write(io.waddr, wentry)
         updateLru(io.waddr, j.U)
+        if (Settings.DebugBranchPredictorBtb) {
+          printf("%d: [BTB] addr=%d way=%x\n", DebugTimer(), io.waddr, j.U)
+        }
       }
     }
     if (Settings.DebugBranchPredictorRas) {
@@ -287,6 +296,7 @@ class BrPredictor extends Module with BpParameters with ZhoushanConfig {
   val btb_rras_type = WireInit(VecInit(Seq.fill(FetchWidth)(0.U(2.W))))
   for (i <- 0 until FetchWidth) {
     btb.io.raddr(i) := btbAddr(pc(i))
+    btb.io.ren(i) := pc_en(i)
     btb.io.rtag(i) := btbTag(pc(i))
     btb_rhit(i) := btb.io.rhit(i)
     btb_rtarget(i) := btb.io.rtarget(i)
