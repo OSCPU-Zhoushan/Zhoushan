@@ -88,7 +88,6 @@ class PatternHistoryTable extends Module with BpParameters with ZhoushanConfig {
 }
 
 sealed class BtbEntry extends Bundle with BpParameters {
-  val valid = Bool()
   val tag = UInt(BtbTagSize.W)
   val target = UInt(32.W)
   val ras_type = UInt(2.W)
@@ -117,6 +116,8 @@ class BranchTargetBuffer extends Module with BpParameters with ZhoushanConfig {
     btb
   }
 
+  val valid = RegInit(VecInit(Seq.fill(4)(VecInit(Seq.fill(BtbSize / 4)(false.B)))))
+
   // plru0 == 0 --> way 0/1, == 1 --> way 2/3
   val plru0 = RegInit(VecInit(Seq.fill(BtbSize / 4)(0.U)))
   // plru1 == 0 --> way 0,   == 1 --> way 1
@@ -135,12 +136,14 @@ class BranchTargetBuffer extends Module with BpParameters with ZhoushanConfig {
 
   for (i <- 0 until FetchWidth) {
     val rdata = WireInit(VecInit(Seq.fill(4)(0.U.asTypeOf(new BtbEntry))))
+    val rvalid = RegInit(VecInit(Seq.fill(4)(false.B)))
     io.rhit(i) := false.B
     io.rtarget(i) := 0.U
     io.rras_type(i) := RAS_X
     for (j <- 0 until 4) {
       rdata(j) := btb(j).read(io.raddr(i))
-      when (rdata(j).valid && (rdata(j).tag === RegNext(io.rtag(i)))) {
+      rvalid(j) := valid(j)(io.raddr(i))
+      when (rvalid(j) && (rdata(j).tag === RegNext(io.rtag(i)))) {
         io.rhit(i) := true.B
         io.rtarget(i) := rdata(j).target
         io.rras_type(i) := rdata(j).ras_type
@@ -155,7 +158,6 @@ class BranchTargetBuffer extends Module with BpParameters with ZhoushanConfig {
   }
 
   val wentry = Wire(new BtbEntry)
-  wentry.valid := true.B
   wentry.tag := io.wtag
   wentry.target := io.wtarget
   wentry.ras_type := io.wras_type
@@ -165,6 +167,7 @@ class BranchTargetBuffer extends Module with BpParameters with ZhoushanConfig {
     for (j <- 0 until 4) {
       when (replace_way === j.U) {
         btb(j).write(io.waddr, wentry)
+        valid(j)(io.waddr) := true.B
         updatePlruTree(io.waddr, j.U)
         if (Settings.DebugBranchPredictorBtb) {
           printf("%d: [BTB] addr=%d way=%x\n", DebugTimer(), io.waddr, j.U)
