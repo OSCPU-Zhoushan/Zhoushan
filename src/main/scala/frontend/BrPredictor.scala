@@ -13,7 +13,7 @@ trait BpParameters {
   val PhtSize = 64                      // 2 ^ BhtWidth
   val PhtAddrSize = log2Up(PhtSize)     // 6 <- BhtWidth
   val BtbSize = 64
-  val BtbAddrSize = log2Up(BtbSize)     // 6
+  val BtbAddrSize = log2Up(BtbSize) - 1 // 5 (-1 due to 2-way associative)
   val BtbTagSize = 8
   val RasSize = 16
   val RasPtrSize = log2Up(RasSize)      // 4
@@ -110,14 +110,31 @@ class BranchTargetBuffer extends Module with BpParameters with ZhoushanConfig {
     val wpc = Input(UInt(32.W))
   })
 
-  val btb = SyncReadMem(BtbSize, new BtbEntry, SyncReadMem.WriteFirst)
+  // 2-way associative btb
+  val btb = for (i <- 0 until 2) yield {
+    val btb = SyncReadMem(BtbSize / 2, new BtbEntry, SyncReadMem.WriteFirst)
+    btb
+  }
 
-  val rdata = WireInit(VecInit(Seq.fill(FetchWidth)(0.U.asTypeOf(new BtbEntry))))
+  val lru = RegInit(VecInit(Seq.fill(BtbSize / 2)(0.U)))
+  def updateLru(idx: UInt, way: UInt) = {
+    lru(idx) := ~way
+  }
+
   for (i <- 0 until FetchWidth) {
-    rdata(i) := btb.read(io.raddr(i))
-    io.rhit(i) := rdata(i).valid && (rdata(i).tag === RegNext(io.rtag(i)))
-    io.rtarget(i) := rdata(i).target
-    io.rras_type(i) := rdata(i).ras_type
+    val rdata = WireInit(VecInit(Seq.fill(FetchWidth)(0.U.asTypeOf(new BtbEntry))))
+    io.rhit(i) := false.B
+    io.rtarget(i) := 0.U
+    io.rras_type(i) := RAS_X
+    for (j <- 0 until 2) {
+      rdata(j) := btb(j).read(io.raddr(i))
+      when (rdata(j).valid && (rdata(j).tag === RegNext(io.rtag(i)))) {
+        io.rhit(i) := true.B
+        io.rtarget(i) := rdata(j).target
+        io.rras_type(i) := rdata(j).ras_type
+        updateLru(io.raddr(i), j.U)
+      }
+    }
   }
 
   val wentry = Wire(new BtbEntry)
@@ -125,8 +142,14 @@ class BranchTargetBuffer extends Module with BpParameters with ZhoushanConfig {
   wentry.tag := io.wtag
   wentry.target := io.wtarget
   wentry.ras_type := io.wras_type
+  val wway = lru(io.waddr)
   when (io.wen) {
-    btb.write(io.waddr, wentry)
+    for (j <- 0 until 2) {
+      when (wway === j.U) {
+        btb(j).write(io.waddr, wentry)
+        updateLru(io.waddr, j.U)
+      }
+    }
     if (Settings.DebugBranchPredictorRas) {
       when (wentry.ras_type =/= RAS_X) {
         printf("%d: [BTB] pc=%x ras_type=%x\n", DebugTimer(), io.wpc, io.wras_type)
