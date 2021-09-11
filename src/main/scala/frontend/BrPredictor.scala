@@ -13,7 +13,7 @@ trait BpParameters {
   val PhtSize = 64                      // 2 ^ BhtWidth
   val PhtAddrSize = log2Up(PhtSize)     // 6 <- BhtWidth
   val BtbSize = 64
-  val BtbAddrSize = log2Up(BtbSize) - 1 // 5 (-1 due to 2-way associative)
+  val BtbAddrSize = log2Up(BtbSize) - 2 // 4 (-2 due to 4-way associative)
   val BtbTagSize = 8
   val RasSize = 16
   val RasPtrSize = log2Up(RasSize)      // 4
@@ -111,30 +111,41 @@ class BranchTargetBuffer extends Module with BpParameters with ZhoushanConfig {
     val wpc = Input(UInt(32.W))
   })
 
-  // 2-way associative btb
-  val btb = for (i <- 0 until 2) yield {
-    val btb = SyncReadMem(BtbSize / 2, new BtbEntry, SyncReadMem.WriteFirst)
+  // 4-way associative btb
+  val btb = for (i <- 0 until 4) yield {
+    val btb = SyncReadMem(BtbSize / 4, new BtbEntry, SyncReadMem.WriteFirst)
     btb
   }
 
-  val lru = RegInit(VecInit(Seq.fill(BtbSize / 2)(0.U)))
-  def updateLru(idx: UInt, way: UInt) = {
-    lru(idx) := ~way
+  // plru0 == 0 --> way 0/1, == 1 --> way 2/3
+  val plru0 = RegInit(VecInit(Seq.fill(BtbSize / 4)(0.U)))
+  // plru1 == 0 --> way 0,   == 1 --> way 1
+  val plru1 = RegInit(VecInit(Seq.fill(BtbSize / 4)(0.U)))
+  // plru2 == 0 --> way 2,   == 1 --> way 3
+  val plru2 = RegInit(VecInit(Seq.fill(BtbSize / 4)(0.U)))
+
+  def updatePlruTree(idx: UInt, way: UInt) = {
+    plru0(idx) := ~way(1)
+    when (way(1) === 0.U) {
+      plru1(idx) := ~way(0)
+    } .otherwise {
+      plru2(idx) := ~way(0)
+    }
   }
 
   for (i <- 0 until FetchWidth) {
-    val rdata = WireInit(VecInit(Seq.fill(FetchWidth)(0.U.asTypeOf(new BtbEntry))))
+    val rdata = WireInit(VecInit(Seq.fill(4)(0.U.asTypeOf(new BtbEntry))))
     io.rhit(i) := false.B
     io.rtarget(i) := 0.U
     io.rras_type(i) := RAS_X
-    for (j <- 0 until 2) {
+    for (j <- 0 until 4) {
       rdata(j) := btb(j).read(io.raddr(i))
       when (rdata(j).valid && (rdata(j).tag === RegNext(io.rtag(i)))) {
         io.rhit(i) := true.B
         io.rtarget(i) := rdata(j).target
         io.rras_type(i) := rdata(j).ras_type
         when (io.ren(i)) {
-          updateLru(io.raddr(i), j.U)
+          updatePlruTree(io.raddr(i), j.U)
           if (Settings.DebugBranchPredictorBtb) {
             printf("%d: [BTB] addr=%d way=%x\n", DebugTimer(), io.raddr(i), j.U)
           }
@@ -148,12 +159,13 @@ class BranchTargetBuffer extends Module with BpParameters with ZhoushanConfig {
   wentry.tag := io.wtag
   wentry.target := io.wtarget
   wentry.ras_type := io.wras_type
-  val wway = lru(io.waddr)
+  val replace_way = Cat(plru0(io.waddr), 
+                        Mux(plru0(io.waddr) === 0.U, plru1(io.waddr), plru2(io.waddr)))
   when (io.wen) {
-    for (j <- 0 until 2) {
-      when (wway === j.U) {
+    for (j <- 0 until 4) {
+      when (replace_way === j.U) {
         btb(j).write(io.waddr, wentry)
-        updateLru(io.waddr, j.U)
+        updatePlruTree(io.waddr, j.U)
         if (Settings.DebugBranchPredictorBtb) {
           printf("%d: [BTB] addr=%d way=%x\n", DebugTimer(), io.waddr, j.U)
         }
