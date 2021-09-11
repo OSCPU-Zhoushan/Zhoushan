@@ -106,6 +106,8 @@ class BranchTargetBuffer extends Module with BpParameters with ZhoushanConfig {
     val wtag = Input(UInt(BtbTagSize.W))
     val wtarget = Input(UInt(32.W))
     val wras_type = Input(UInt(2.W))
+    // debug info
+    val wpc = Input(UInt(32.W))
   })
 
   val btb = SyncReadMem(BtbSize, new BtbEntry, SyncReadMem.WriteFirst)
@@ -115,7 +117,7 @@ class BranchTargetBuffer extends Module with BpParameters with ZhoushanConfig {
     rdata(i) := btb.read(io.raddr(i))
     io.rhit(i) := rdata(i).valid && (rdata(i).tag === RegNext(io.rtag(i)))
     io.rtarget(i) := rdata(i).target
-    io.rras_type(i) := rdata(i).ras_type(i)
+    io.rras_type(i) := rdata(i).ras_type
   }
 
   val wentry = Wire(new BtbEntry)
@@ -125,6 +127,11 @@ class BranchTargetBuffer extends Module with BpParameters with ZhoushanConfig {
   wentry.ras_type := io.wras_type
   when (io.wen) {
     btb.write(io.waddr, wentry)
+    if (Settings.DebugBranchPredictorRas) {
+      when (wentry.ras_type =/= RAS_X) {
+        printf("%d: [BTB] pc=%x ras_type=%x\n", DebugTimer(), io.wpc, io.wras_type)
+      }
+    }
   }
 
 }
@@ -135,6 +142,10 @@ class ReturnAddressStack extends Module with BpParameters with ZhoushanConfig {
     val top_pc = Output(UInt(32.W))
     val push_en = Input(Bool())
     val push_pc = Input(UInt(32.W))
+    // debug info
+    val pop_src_pc = Input(UInt(32.W))
+    val push_src_pc = Input(UInt(32.W))
+    val mis_inst_pc = Input(UInt(32.W))
   })
 
   def getAddr(x: UInt): UInt = x(RasPtrSize - 1, 0)
@@ -152,15 +163,15 @@ class ReturnAddressStack extends Module with BpParameters with ZhoushanConfig {
   val is_empty = (fp === sp)
   val is_full = (getAddr(fp) === getAddr(sp_inc)) && (getFlag(fp) =/= getFlag(sp_inc))
 
-  val stack_top_pc = ras.read(sp)
+  val stack_top_pc = ras.read(sp - 1.U)
 
   when (io.pop_en && !is_empty) {
     sp := sp_dec
   }
-  io.top_pc := stack_top_pc
+  io.top_pc := Mux(RegNext(io.push_en), RegNext(io.push_pc), stack_top_pc)
   
   when (io.push_en) {
-    ras.write(sp_inc, io.push_pc)
+    ras.write(sp, io.push_pc)
     sp := sp_inc
     when (is_full) {
       fp := fp + 1.U
@@ -168,8 +179,11 @@ class ReturnAddressStack extends Module with BpParameters with ZhoushanConfig {
   }
 
   if (Settings.DebugBranchPredictorRas) {
-    when (io.pop_en || io.push_en) {
-      printf("%d: [RAS] pop=%x pop_pc=%x push=%x push_pc=%x fp=%x sp=%x\n", DebugTimer(), io.pop_en, io.top_pc, io.push_en, io.push_pc, fp, sp)
+    when (io.push_en) {
+      printf("%d: [RAS] fp=%x sp=%x push=%x push_pc=%x src_pc=%x mis_inst_pc=%x\n", DebugTimer(), fp, sp, io.push_en, io.push_pc, io.push_src_pc, io.mis_inst_pc)
+    }
+    when (io.pop_en) {
+      printf("%d: [RAS] fp=%x sp=%x pop=%x  pop_pc=%x  src_pc=%x mis_inst_pc=%x\n", DebugTimer(), fp, sp, io.pop_en, io.top_pc, io.pop_src_pc, io.mis_inst_pc)
     }
   }
 
@@ -262,18 +276,21 @@ class BrPredictor extends Module with BpParameters with ZhoushanConfig {
   btb.io.wtag := btbTag(jmp_packet.inst_pc)
   btb.io.wtarget := jmp_packet.jmp_pc
   btb.io.wras_type := jmp_packet.ras_type
+  btb.io.wpc := jmp_packet.inst_pc            // debug
 
   // RAS definition
   val ras = Module(new ReturnAddressStack)
 
   // RAS push logic
-  val ras_push_vec = Cat(btb_rras_type.map(isRasPush(_)).reverse) & Cat(btb_rhit.reverse) & Cat(pc_en.reverse)
+  val ras_push_vec = Cat(btb_rras_type.map(isRasPush(_)).reverse) & Cat(btb_rhit.reverse) & Cat(pht_rdirect.reverse) & Cat(pc_en.reverse)
   val ras_push_idx = PriorityEncoder(ras_push_vec)
-  ras.io.push_en := ras_push_vec.orR || (jmp_packet.mis && isRasPush(jmp_packet.ras_type))
+  ras.io.push_en := (ras_push_vec.orR && !jmp_packet.mis) || (jmp_packet.mis && isRasPush(jmp_packet.ras_type))
   ras.io.push_pc := 0.U
+  ras.io.push_src_pc := RegNext(io.pc)        // debug
+  ras.io.mis_inst_pc := jmp_packet.inst_pc    // debug
   for (i <- 0 until FetchWidth) {
     when (ras_push_idx === i.U) {
-      ras.io.push_pc := pc(i) + 4.U
+      ras.io.push_pc := RegNext(pc(i) + 4.U)
     }
   }
   when (jmp_packet.mis && isRasPush(jmp_packet.ras_type)) {
@@ -281,13 +298,14 @@ class BrPredictor extends Module with BpParameters with ZhoushanConfig {
   }
 
   // RAS pop logic
-  val ras_pop_vec = Cat(btb_rras_type.map(isRasPop(_)).reverse) & Cat(btb_rhit.reverse) & Cat(pc_en.reverse)
+  val ras_pop_vec = Cat(btb_rras_type.map(isRasPop(_)).reverse) & Cat(btb_rhit.reverse) & Cat(pht_rdirect.reverse) & Cat(pc_en.reverse)
   val ras_pop_idx = PriorityEncoder(ras_pop_vec)
-  ras.io.pop_en := ras_pop_vec.orR || (jmp_packet.mis && isRasPop(jmp_packet.ras_type))
+  ras.io.pop_en := (ras_pop_vec.orR && !jmp_packet.mis) || (jmp_packet.mis && isRasPop(jmp_packet.ras_type))
+  ras.io.pop_src_pc := RegNext(io.pc)         // debug
   val ras_ret_en = Wire(Vec(FetchWidth, Bool()))
   val ras_ret_pc = Wire(Vec(FetchWidth, UInt(32.W)))
   for (i <- 0 until FetchWidth) {
-    when (ras_pop_vec.orR && ras_pop_idx === i.U && !(jmp_packet.mis && isRasPop(jmp_packet.ras_type))) {
+    when (ras_pop_vec.orR && ras_pop_idx === i.U && !jmp_packet.mis) {
       ras_ret_en(i) := true.B
       ras_ret_pc(i) := ras.io.top_pc
     } .otherwise {
