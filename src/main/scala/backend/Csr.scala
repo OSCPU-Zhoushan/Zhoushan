@@ -101,14 +101,17 @@ class Csr extends Module {
   val s_idle :: s_wait :: Nil = Enum(2)
   val intr_state = RegInit(s_idle)
 
-  val intr = RegInit(Bool(), false.B)
-  val intr_pc = RegInit(UInt(32.W), 0.U)
-  val intr_no = RegInit(UInt(64.W), 0.U)
+  val intr = WireInit(Bool(), false.B)
+  val intr_pc = WireInit(UInt(32.W), 0.U)
+  val intr_no = WireInit(UInt(64.W), 0.U)
 
   val intr_global_en = (mstatus(3) === 1.U)
   val intr_clint_en = (mie(7) === 1.U && mip(7) === 1.U)
 
-  intr := false.B
+  val intr_mepc = uop.pc
+  val intr_mcause = "h8000000000000007".U
+  val intr_mstatus = Cat(mstatus(63, 8), mstatus(3), mstatus(6, 4), 0.U, mstatus(2, 0))
+
   switch (intr_state) {
     is (s_idle) {
       when (intr_global_en && intr_clint_en) {
@@ -117,9 +120,9 @@ class Csr extends Module {
     }
     is (s_wait) {
       when (uop.valid) {
-        mepc := uop.pc
-        mcause := "h8000000000000007".U
-        mstatus := Cat(mstatus(63, 8), mstatus(3), mstatus(6, 4), 0.U, mstatus(2, 0))
+        mepc := intr_mepc
+        mcause := intr_mcause
+        mstatus := intr_mstatus
         intr := true.B
         intr_no := 7.U
         intr_pc := Cat(mtvec(31, 2), Fill(2, 0.U))
@@ -175,21 +178,21 @@ class Csr extends Module {
     dt_ae.io.coreid       := 0.U
     dt_ae.io.intrNO       := Mux(intr, intr_no, 0.U)
     dt_ae.io.cause        := 0.U
-    dt_ae.io.exceptionPC  := Mux(intr, mepc, 0.U)
+    dt_ae.io.exceptionPC  := Mux(intr, intr_mepc, 0.U)
 
     val dt_cs = Module(new DifftestCSRState)
     dt_cs.io.clock          := clock
     dt_cs.io.coreid         := 0.U
     dt_cs.io.priviledgeMode := 3.U  // Machine mode
-    dt_cs.io.mstatus        := mstatus
+    dt_cs.io.mstatus        := Mux(intr, intr_mstatus, mstatus)
     dt_cs.io.sstatus        := 0.U
-    dt_cs.io.mepc           := mepc
+    dt_cs.io.mepc           := Mux(intr, intr_mepc, mepc)
     dt_cs.io.sepc           := 0.U
     dt_cs.io.mtval          := 0.U
     dt_cs.io.stval          := 0.U
     dt_cs.io.mtvec          := mtvec
     dt_cs.io.stvec          := 0.U
-    dt_cs.io.mcause         := mcause
+    dt_cs.io.mcause         := Mux(intr, intr_mcause, mcause)
     dt_cs.io.scause         := 0.U
     dt_cs.io.satp           := 0.U
     dt_cs.io.mip            := mip()

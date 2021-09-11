@@ -82,7 +82,14 @@ class Execution extends Module with ZhoushanConfig {
   val out_rd_addr = WireInit(VecInit(Seq.fill(IssueWidth)(0.U(5.W))))
   val out_rd_data = WireInit(VecInit(Seq.fill(IssueWidth)(0.U(64.W))))
 
-  when (pipe0.io.jmp_packet.mis) {
+  when (io.intr) {
+    for (i <- 0 until IssueWidth) {
+      out_uop(i) := 0.U.asTypeOf(new MicroOp)
+      out_rd_en(i) := 0.U
+      out_rd_addr(i) := 0.U
+      out_rd_data(i) := 0.U
+    }
+  } .elsewhen (pipe0.io.jmp_packet.mis) {
     for (i <- 0 until IssueWidth) {
       if (i == 0) {
         out_uop(i) := Mux(reg_valid, reg_uop(i), uop(i))
@@ -134,7 +141,7 @@ class ExPipe0 extends Module {
 
   val intr = WireInit(false.B)
 
-  val uop = Mux(intr, 0.U.asTypeOf(new MicroOp), io.uop)
+  val uop = io.uop
   val in1 = io.in1
   val in2 = io.in2
 
