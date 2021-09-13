@@ -5,30 +5,78 @@ import chisel3.util._
 import zhoushan.Constant._
 import zhoushan.Instructions._
 
-class Decode extends Module {
+class Decode extends Module with ZhoushanConfig {
   val io = IO(new Bundle {
-    val in = Flipped(Decoupled(new InstPacket))
-    val backend_ready = Input(Bool())
+    val in = Flipped(Decoupled(new InstPacketVec(DecodeWidth)))
+    val out = Decoupled(new MicroOpVec(DecodeWidth))
+    val flush = Input(Bool())
+  })
+
+  val decoder = for (i <- 0 until DecodeWidth) yield {
+    val decoder = Module(new Decoder)
+    decoder
+  }
+
+  for (i <- 0 until DecodeWidth) {
+    decoder(i).io.in <> io.in.bits.vec(i).bits
+    decoder(i).io.in_valid := io.in.valid && io.in.bits.vec(i).valid
+  }
+
+  // pipeline registers
+
+  val reg_uop = RegInit(VecInit(Seq.fill(IssueWidth)(0.U.asTypeOf(new MicroOp))))
+  val reg_valid = RegInit(false.B)
+
+  when (io.in.valid && !io.flush) {
+    for (i <- 0 until IssueWidth) {
+      reg_uop(i) := decoder(i).io.uop
+    }
+    reg_valid := !io.out.ready
+  } .elsewhen (io.flush) {
+    for (i <- 0 until IssueWidth) {
+      reg_uop(i) := 0.U.asTypeOf(new MicroOp)
+    }
+    reg_valid := false.B
+  }
+
+  val out_uop = RegInit(VecInit(Seq.fill(IssueWidth)(0.U.asTypeOf(new MicroOp))))
+
+  io.in.ready := io.out.ready
+  when (io.flush) {
+    for (i <- 0 until IssueWidth) {
+      out_uop(i) := 0.U.asTypeOf(new MicroOp)
+    }
+  } .elsewhen (io.out.ready) {
+    for (i <- 0 until IssueWidth) {
+      out_uop(i) := Mux(reg_valid && !io.in.valid, reg_uop(i), decoder(i).io.uop)
+    }
+  }
+
+  io.out.valid := Cat(out_uop.map(_.valid)).orR
+  io.out.bits.vec := out_uop
+
+}
+
+class Decoder extends Module {
+  val io = IO(new Bundle {
+    val in = Flipped(new InstPacket)
+    val in_valid = Input(Bool())
     val uop = Output(new MicroOp)
   })
 
-  io.in.ready := io.backend_ready
+  val inst = io.in.inst
+  val uop = WireInit(0.U.asTypeOf(new MicroOp))
 
-  val inst = io.in.bits.inst
-  val pred_br = io.in.bits.pred_br
-  val pred_pc = io.in.bits.pred_pc
-  val uop = Wire(new MicroOp)
-
-  uop.pc := io.in.bits.pc
-  uop.npc := io.in.bits.pc + 4.U
+  uop.pc := io.in.pc
+  uop.npc := io.in.pc + 4.U
   uop.inst := inst
   
   uop.rs1_addr := inst(19, 15)
   uop.rs2_addr := inst(24, 20)
   uop.rd_addr := inst(11, 7)
 
-  uop.pred_br := pred_br
-  uop.pred_pc := pred_pc
+  uop.pred_br := io.in.pred_br
+  uop.pred_bpc := io.in.pred_bpc
   
   val ctrl = ListLookup(inst,
                   //   v  fu_code alu_code  jmp_code  mem_code mem_size   csr_code   w  rs1_src       rs2_src  rd_en  imm_type  
@@ -118,10 +166,6 @@ class Decode extends Module {
   uop.rs2_src := rs2_src
   uop.rd_en := rd_en
 
-  uop.rs1_paddr := 0.U
-  uop.rs2_paddr := 0.U
-  uop.rd_paddr := 0.U
-
   val imm_i = Cat(Fill(21, inst(31)), inst(30, 20))
   val imm_s = Cat(Fill(21, inst(31)), inst(30, 25), inst(11, 7))
   val imm_b = Cat(Fill(20, inst(31)), inst(7), inst(30, 25), inst(11, 8), 0.U)
@@ -140,6 +184,6 @@ class Decode extends Module {
     IMM_CSR -> imm_csr
   ))
 
-  io.uop := Mux(io.in.valid, uop, 0.U.asTypeOf(new MicroOp))
+  io.uop := Mux(io.in_valid, uop, 0.U.asTypeOf(new MicroOp))
 
 }

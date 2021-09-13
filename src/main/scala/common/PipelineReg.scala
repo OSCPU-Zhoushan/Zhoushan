@@ -11,7 +11,7 @@ class ExPacket extends Packet {
   val rs1_data = UInt(64.W)
   val rs2_data = UInt(64.W)
   def flush() : Unit = {
-    uop.nop()
+    uop := 0.U.asTypeOf(new MicroOp)
     rs1_data := 0.U
     rs2_data := 0.U
   }
@@ -21,7 +21,7 @@ class CommitPacket extends Packet {
   val uop = new MicroOp
   val rd_data = UInt(64.W)
   def flush() : Unit = {
-    uop.nop()
+    uop := 0.U.asTypeOf(new MicroOp)
     rd_data := 0.U
   }
 }

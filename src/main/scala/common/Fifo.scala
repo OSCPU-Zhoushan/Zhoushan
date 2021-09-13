@@ -68,7 +68,7 @@ class Fifo[T <: Data](val gen: T,
   val full = ptr_match && maybe_full
   val do_enq = WireDefault(io.enq.fire())
   val do_deq = WireDefault(io.deq.fire())
-  val flush = io.flush.getOrElse(false.B) 
+  val flush = io.flush.getOrElse(false.B)
 
   // when flush is high, empty the queue
   // Semantically, any enqueues happen before the flush.

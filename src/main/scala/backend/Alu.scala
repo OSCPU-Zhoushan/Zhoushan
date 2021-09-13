@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 import zhoushan.Constant._
 
-class Alu extends Module with Ext {
+class Alu extends Module {
   val io = IO(new Bundle {
     val uop = Input(new MicroOp)
     val in1 = Input(UInt(64.W))
@@ -39,7 +39,7 @@ class Alu extends Module with Ext {
     ALU_SRA  -> (in1.asSInt() >> shamt).asUInt()
   ))
 
-  alu_out := Mux(uop.w_type, signExt32_64(alu_out_0(31, 0)), alu_out_0)
+  alu_out := Mux(uop.w_type, SignExt32_64(alu_out_0(31, 0)), alu_out_0)
 
   jmp := MuxLookup(uop.jmp_code, false.B, Array(
     JMP_JAL  -> true.B,
@@ -55,8 +55,8 @@ class Alu extends Module with Ext {
   jmp_pc := Mux(uop.jmp_code === JMP_JALR, in1(31, 0), uop.pc) + uop.imm
 
   npc_to_rd := MuxLookup(uop.jmp_code, 0.U, Array(
-    JMP_JAL  -> zeroExt32_64(uop.npc),
-    JMP_JALR -> zeroExt32_64(uop.npc)
+    JMP_JAL  -> ZeroExt32_64(uop.npc),
+    JMP_JALR -> ZeroExt32_64(uop.npc)
   ))
 
   io.out := alu_out | npc_to_rd

@@ -3,6 +3,13 @@ package zhoushan
 import chisel3._
 import chisel3.util._
 
+/* Simple RAM interface
+ *
+ * Deprecated in final version to be submitted to SoC team
+ * RAMHelper should only be used for simulation without AXI4 bus
+ *
+ */
+
 class RAMHelper extends BlackBox {
   val io = IO(new Bundle {
     val clk = Input(Clock())

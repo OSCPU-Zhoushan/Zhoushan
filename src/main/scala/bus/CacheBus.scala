@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 
 trait CacheBusParameters {
-  val CacheBusUserWidth = 65
+  val CacheBusUserWidth = 64 + ZhoushanConfig.FetchWidth * 2
 }
 
 class CacheBusReq extends Bundle with AxiParameters with CacheBusParameters {

@@ -101,14 +101,15 @@ class Csr extends Module {
   val s_idle :: s_wait :: Nil = Enum(2)
   val intr_state = RegInit(s_idle)
 
-  val intr = RegInit(Bool(), false.B)
-  val intr_pc = RegInit(UInt(32.W), 0.U)
+  val intr = WireInit(Bool(), false.B)
+  val intr_pc = WireInit(UInt(32.W), 0.U)
+  val intr_reg = RegInit(Bool(), false.B)
   val intr_no = RegInit(UInt(64.W), 0.U)
 
   val intr_global_en = (mstatus(3) === 1.U)
-  val intr_clint_en = (mie(7) === 1.U && mip(7) === 1.U)
+  val intr_clint_en = (mie(7) === 1.U)
 
-  intr := false.B
+  intr_reg := false.B
   switch (intr_state) {
     is (s_idle) {
       when (intr_global_en && intr_clint_en) {
@@ -116,13 +117,14 @@ class Csr extends Module {
       }
     }
     is (s_wait) {
-      when (uop.valid) {
+      when (uop.valid && mip(7) === 1.U) {
         mepc := uop.pc
         mcause := "h8000000000000007".U
         mstatus := Cat(mstatus(63, 8), mstatus(3), mstatus(6, 4), 0.U, mstatus(2, 0))
         intr := true.B
-        intr_no := 7.U
         intr_pc := Cat(mtvec(31, 2), Fill(2, 0.U))
+        intr_reg := true.B
+        intr_no := 7.U
         intr_state := s_idle
       }
     }
@@ -173,9 +175,9 @@ class Csr extends Module {
     val dt_ae = Module(new DifftestArchEvent)
     dt_ae.io.clock        := clock
     dt_ae.io.coreid       := 0.U
-    dt_ae.io.intrNO       := Mux(intr, intr_no, 0.U)
+    dt_ae.io.intrNO       := Mux(intr_reg, intr_no, 0.U)
     dt_ae.io.cause        := 0.U
-    dt_ae.io.exceptionPC  := Mux(intr, mepc, 0.U)
+    dt_ae.io.exceptionPC  := Mux(intr_reg, mepc, 0.U)
 
     val dt_cs = Module(new DifftestCSRState)
     dt_cs.io.clock          := clock

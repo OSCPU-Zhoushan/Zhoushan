@@ -23,8 +23,16 @@ class Meta extends Module {
     val valid_r = Output(Bool())
   })
 
+  // tag = addr(30, 10)
+  // addr(31) is skipped in that
+  //   1) only data in memory rather than MMIO could be stored in cache
+  //   2) address map: memory - 0x8000_0000 ~ 0xffff_ffff
   val tags = SyncReadMem(64, UInt(21.W))
+
   val valid = RegInit(VecInit(Seq.fill(64)(false.B)))
+
+  // dirty bit marks whether any bytes in the cacheline is written, but not
+  // written back to memory yet, only used in D$
   val dirty = RegInit(VecInit(Seq.fill(64)(false.B)))
 
   val idx = io.idx
@@ -48,6 +56,7 @@ class Meta extends Module {
 
 }
 
+// 2-stage pipeline 4KB cache
 class Cache(id: Int) extends Module with SramParameters {
   val io = IO(new Bundle {
     val in = Flipped(new CacheBusIO)
@@ -57,6 +66,8 @@ class Cache(id: Int) extends Module with SramParameters {
   val in = io.in
   val out = io.out
 
+  // 4 interleaving sram, each of which corresponds to a single cacheline of
+  // the 4-way associative cache
   val sram = for (i <- 0 until 4) yield {
     val sram = Module(new Sram(id * 10 + i))
     sram
@@ -64,6 +75,7 @@ class Cache(id: Int) extends Module with SramParameters {
 
   val sram_out = WireInit(VecInit(Seq.fill(4)(0.U(SramDataWidth.W))))
 
+  // 4 interleaving meta data array
   val meta = for (i <- 0 until 4) yield {
     val meta = Module(new Meta)
     meta
@@ -95,8 +107,11 @@ class Cache(id: Int) extends Module with SramParameters {
 
   /* ----- PLRU replacement ---------- */
 
+  // plru0 == 0 --> way 0/1, == 1 --> way 2/3
   val plru0 = RegInit(VecInit(Seq.fill(64)(0.U)))
+  // plru1 == 0 --> way 0,   == 1 --> way 1
   val plru1 = RegInit(VecInit(Seq.fill(64)(0.U)))
+  // plru2 == 0 --> way 2,   == 1 --> way 3
   val plru2 = RegInit(VecInit(Seq.fill(64)(0.U)))
 
   def updatePlruTree(idx: UInt, way: UInt) = {
@@ -108,6 +123,7 @@ class Cache(id: Int) extends Module with SramParameters {
     }
   }
 
+  // when a miss occurs, decide the victim cacheline in the current 4-way set
   val replace_way = Wire(UInt(2.W))
 
   /* ----- Pipeline Ctrl Signals ----- */
@@ -127,6 +143,9 @@ class Cache(id: Int) extends Module with SramParameters {
   val s1_wmask = in.req.bits.wmask
   val s1_user  = in.req.bits.user
 
+  // when pipeline fire, read the data in SRAM and meta data array
+  // the data will be returned at the next clock cycle, and passed to stage 2
+
   when (pipeline_fire) {
     sram.map { case s => {
       s.io.en := true.B
@@ -139,8 +158,20 @@ class Cache(id: Int) extends Module with SramParameters {
 
   /* ----- Cache Stage 2 ------------- */
 
-  val s_idle        :: s_hit_w       :: s_miss_req_r  :: s_miss_wait_r :: s_miss_ok_r :: s1 = Enum(9)
-  val s_miss_req_w1 :: s_miss_req_w2 :: s_miss_wait_w :: s_complete    :: Nil               = s1
+  /* 9-state FSM in cache stage 2
+   *
+   * read  hit:  idle
+   * write hit:  idle -> hit_w -> complete
+   * read  miss: idle -> miss_req_r -> miss_wait_r -> miss_ok_r -> complete
+   * write miss: idle -> miss_req_r -> miss_wait_r -> miss_ok_r -> ...
+   *             (not dirty) ... -> complete
+   *             (dirty)     ... -> miss_req_w1 -> miss_req_w2 -> miss_wait_w
+   *                         -> complete
+   */
+
+  val s_idle        :: s_hit_w       :: s_miss_req_r  :: s1  = Enum(9)
+  val s_miss_wait_r :: s_miss_ok_r   :: s_miss_req_w1 :: s2  = s1
+  val s_miss_req_w2 :: s_miss_wait_w :: s_complete    :: Nil = s2
   val state = RegInit(s_idle)
 
   val s2_addr  = RegInit(0.U(32.W))
@@ -152,11 +183,14 @@ class Cache(id: Int) extends Module with SramParameters {
   val s2_wmask = RegInit(0.U(8.W))
   val s2_user  = RegInit(0.U(s1_user.getWidth.W))
 
+  // 4-bit hit check vector, with one-hot encoding
+  // Example 1: hit on line 0, hit = (0, 0, 0, 1)
+  // Example 2: miss,          hit = (0, 0, 0, 0)
   val hit = WireInit(VecInit(Seq.fill(4)(false.B)))
   (hit zip (tag_out zip valid_out)).map { case (h, (t, v)) => {
     h := (t === s2_tag) && v
   }}
-  val s2_hit = hit(0) || hit(1) || hit(2) || hit(3)  // todo
+  val s2_hit = Cat(hit).orR
   val s2_way = OHToUInt(hit)
   val s2_rdata = sram_out(s2_way)
   val s2_dirty = dirty_out(replace_way)
@@ -171,6 +205,7 @@ class Cache(id: Int) extends Module with SramParameters {
   val s2_reg_dat_w = RegInit(0.U(128.W))
 
   when (pipeline_fire) {
+    // when pipeline fire, pass the data from stage 1 to stage 2
     s2_addr  := s1_addr
     s2_wen   := s1_wen
     s2_wdata := s1_wdata
@@ -178,6 +213,8 @@ class Cache(id: Int) extends Module with SramParameters {
     s2_user  := s1_user
     state := s_idle
   } .elsewhen (!pipeline_fire && RegNext(pipeline_fire)) {
+    // meanwhile, when the FSM is triggered in stage 2, we need to temporarily
+    // store the data in registers
     s2_reg_hit   := s2_hit
     s2_reg_way   := s2_way
     s2_reg_rdata := s2_rdata
@@ -186,10 +223,14 @@ class Cache(id: Int) extends Module with SramParameters {
     s2_reg_dat_w := s2_dat_w
   }
 
-  replace_way := Cat(plru0(s2_idx), Mux(plru0(s2_idx) === 0.U, plru1(s2_idx), plru2(s2_idx)))
+  replace_way := Cat(plru0(s2_idx), 
+                     Mux(plru0(s2_idx) === 0.U, plru1(s2_idx), plru2(s2_idx)))
+
+  // generate the write-back address by concatenating the tag stored in meta
+  // data array and s2_idx
   val wb_addr = Cat(1.U, s2_reg_tag_r, s2_idx, Fill(4, 0.U))
-  val wdata1 = RegInit(UInt(64.W), 0.U)
-  val wdata2 = RegInit(UInt(64.W), 0.U)
+  val wdata1 = RegInit(UInt(64.W), 0.U)           // cacheline(63, 0)
+  val wdata2 = RegInit(UInt(64.W), 0.U)           // cacheline(127, 64)
 
   /* ----- Pipeline Ctrl Signals ----- */
 
@@ -201,9 +242,9 @@ class Cache(id: Int) extends Module with SramParameters {
   val s2_hit_real = Mux(RegNext(pipeline_fire), s2_hit, s2_reg_hit)
   val s2_dirty_real = Mux(RegNext(pipeline_fire), s2_dirty, s2_reg_dirty)
 
-  val hit_ready = s2_hit_real && Mux(s2_wen, state === s_complete, state === s_idle)
+  val hit_ready = s2_hit_real && 
+                  Mux(s2_wen, state === s_complete, state === s_idle)
   val miss_ready = (state === s_complete)
-  // val no_req_ready = (state === s_idle) && RegNext(!in.req.valid)
 
   pipeline_valid := in.req.fire()
   pipeline_ready := hit_ready || miss_ready || init
@@ -217,10 +258,14 @@ class Cache(id: Int) extends Module with SramParameters {
   // handshake signals with memory
   out.req.valid := (state === s_miss_req_r) || (state === s_miss_req_w1) || (state === s_miss_req_w2)
   out.req.bits.id := id.U
-  out.req.bits.addr := Mux(state === s_miss_req_r, Cat(s2_addr(31, 4), Fill(4, 0.U)), Cat(wb_addr(31, 4), Fill(4, 0.U)))
+  out.req.bits.addr := Mux(state === s_miss_req_r, 
+                           Cat(s2_addr(31, 4), Fill(4, 0.U)), 
+                           Cat(wb_addr(31, 4), Fill(4, 0.U)))
   out.req.bits.aen := (state === s_miss_req_r) || (state === s_miss_req_w1)
   out.req.bits.ren := (state === s_miss_req_r)
-  out.req.bits.wdata := Mux(state === s_miss_req_w1, s2_reg_dat_w(63, 0), s2_reg_dat_w(127, 64))
+  out.req.bits.wdata := Mux(state === s_miss_req_w1, 
+                            s2_reg_dat_w(63, 0), 
+                            s2_reg_dat_w(127, 64))
   out.req.bits.wmask := "hff".U(8.W)
   out.req.bits.wlast := (state === s_miss_req_w2)
   out.req.bits.wen := (state === s_miss_req_w1) || (state === s_miss_req_w2)
@@ -324,6 +369,7 @@ class Cache(id: Int) extends Module with SramParameters {
         when (s2_reg_dirty) {
           state := s_miss_req_w1
         } .otherwise {
+          updatePlruTree(s2_idx, replace_way)
           state := s_complete
         }
       }
@@ -341,6 +387,7 @@ class Cache(id: Int) extends Module with SramParameters {
     is (s_miss_wait_w) {
       s2_wen := false.B
       when (out.resp.fire()) {
+        updatePlruTree(s2_idx, replace_way)
         state := s_complete
       }
     }

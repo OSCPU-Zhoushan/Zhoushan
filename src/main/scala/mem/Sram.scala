@@ -10,6 +10,7 @@ trait SramParameters {
   val SramDataWidth = 128
 }
 
+// ref: https://github.com/OSCPU/ysyxSoC
 class S011HD1P_X32Y2D128 extends BlackBox with HasBlackBoxResource with SramParameters {
   val io = IO(new Bundle {
     val CLK = Input(Clock())

@@ -97,42 +97,27 @@ class MicroOp extends Bundle {
 
   // branch prediction related
   val pred_br   = Bool()
-  val pred_pc   = UInt(32.W)
+  val pred_bpc  = UInt(32.W)
+  val real_br   = Bool()
+  val real_bpc  = UInt(32.W)
 
   // register renaming related
   val rs1_paddr = UInt(6.W)
   val rs2_paddr = UInt(6.W)
   val rd_paddr  = UInt(6.W)
 
-  def nop() : Unit = {
-    valid     := false.B
-    pc        := 0.U
-    npc       := 0.U
-    inst      := 0.U
-    fu_code   := Constant.FU_X
-    alu_code  := Constant.ALU_X
-    jmp_code  := Constant.JMP_X
-    mem_code  := Constant.MEM_X
-    mem_size  := Constant.MEM_X
-    csr_code  := Constant.CSR_X
-    w_type    := false.B
-    rs1_src   := Constant.RS_X
-    rs2_src   := Constant.RS_X
-    rs1_addr  := 0.U
-    rs2_addr  := 0.U
-    rd_addr   := 0.U
-    rd_en     := false.B
-    imm       := 0.U
-    pred_br   := false.B
-    pred_pc   := 0.U
-    rs1_paddr := 0.U
-    rs2_paddr := 0.U
-    rd_paddr  := 0.U
-  }
+  // re-order buffer related
+  val rob_addr  = UInt(4.W)
 }
 
-object MicroOp {
-  def nop() : Unit = (new MicroOp).nop()
+object RasConstant {
+  val RAS_X             = 0.asUInt(2.W)
+  val RAS_PUSH          = 1.asUInt(2.W)
+  val RAS_POP           = 2.asUInt(2.W)
+  val RAS_POP_THEN_PUSH = 3.asUInt(2.W)
+
+  def isRasPush(x: UInt): Bool = x(0) === 1.U
+  def isRasPop(x: UInt): Bool = x(1) === 1.U
 }
 
 class JmpPacket extends Bundle {
@@ -141,4 +126,6 @@ class JmpPacket extends Bundle {
   val jmp = Bool()
   val jmp_pc = UInt(32.W)
   val mis = Bool()
+  val intr = Bool()
+  val ras_type = UInt(2.W)
 }
