@@ -14,7 +14,7 @@ trait BpParameters {
   val PhtAddrSize = log2Up(PhtSize)     // 6 <- BhtWidth
   val BtbSize = 64
   val BtbAddrSize = log2Up(BtbSize) - 2 // 4 (-2 due to 4-way associative)
-  val BtbTagSize = 8
+  val BtbTagSize = 29 - BtbAddrSize     // 31 - BtbAddrSize - 2
   val RasSize = 16
   val RasPtrSize = log2Up(RasSize)      // 4
 }
@@ -261,7 +261,10 @@ class BrPredictor extends Module with BpParameters with ZhoushanConfig {
   pc_en(0) := io.pc_en && (io.pc(2) === 0.U)
   pc_en(1) := io.pc_en
 
-  val jmp_packet = io.jmp_packet
+  val jmp_packet = WireInit(0.U.asTypeOf(new JmpPacket))
+  jmp_packet := io.jmp_packet
+  // for interrupt, don't update branch predictor
+  jmp_packet.valid := io.jmp_packet.valid && !io.jmp_packet.intr
 
   val pred_br = WireInit(VecInit(Seq.fill(FetchWidth)(false.B)))
   val pred_bpc = WireInit(VecInit(Seq.fill(FetchWidth)(0.U(32.W))))
@@ -332,7 +335,7 @@ class BrPredictor extends Module with BpParameters with ZhoushanConfig {
   // RAS push logic
   val ras_push_vec = Cat(btb_rras_type.map(isRasPush(_)).reverse) & Cat(btb_rhit.reverse) & Cat(pht_rdirect.reverse) & Cat(pc_en.reverse)
   val ras_push_idx = PriorityEncoder(ras_push_vec)
-  ras.io.push_en := (ras_push_vec.orR && !jmp_packet.mis) || (jmp_packet.mis && isRasPush(jmp_packet.ras_type))
+  ras.io.push_en := ((ras_push_vec.orR && !jmp_packet.mis) || (jmp_packet.mis && isRasPush(jmp_packet.ras_type))) && jmp_packet.valid
   ras.io.push_pc := 0.U
   ras.io.push_src_pc := RegNext(io.pc)        // debug
   ras.io.mis_inst_pc := jmp_packet.inst_pc    // debug
@@ -348,7 +351,7 @@ class BrPredictor extends Module with BpParameters with ZhoushanConfig {
   // RAS pop logic
   val ras_pop_vec = Cat(btb_rras_type.map(isRasPop(_)).reverse) & Cat(btb_rhit.reverse) & Cat(pht_rdirect.reverse) & Cat(pc_en.reverse)
   val ras_pop_idx = PriorityEncoder(ras_pop_vec)
-  ras.io.pop_en := (ras_pop_vec.orR && !jmp_packet.mis) || (jmp_packet.mis && isRasPop(jmp_packet.ras_type))
+  ras.io.pop_en := ((ras_pop_vec.orR && !jmp_packet.mis) || (jmp_packet.mis && isRasPop(jmp_packet.ras_type))) && jmp_packet.valid
   ras.io.pop_src_pc := RegNext(io.pc)         // debug
   val ras_ret_en = Wire(Vec(FetchWidth, Bool()))
   val ras_ret_pc = Wire(Vec(FetchWidth, UInt(32.W)))

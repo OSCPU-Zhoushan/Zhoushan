@@ -77,7 +77,7 @@ class Core extends Module with ZhoushanConfig {
   val intr = execution.io.intr
   val uop_commit = Wire(Vec(IssueWidth, new MicroOp))
   for (i <- 0 until IssueWidth) {
-    uop_commit(i) := Mux(!intr, execution.io.out.vec(i), 0.U.asTypeOf(new MicroOp))
+    uop_commit(i) := execution.io.out.vec(i)
   }
   val ex_rs1_from_cm = WireInit(VecInit(Seq.fill(IssueWidth)(VecInit(Seq.fill(IssueWidth)(false.B)))))
   val ex_rs2_from_cm = WireInit(VecInit(Seq.fill(IssueWidth)(VecInit(Seq.fill(IssueWidth)(false.B)))))

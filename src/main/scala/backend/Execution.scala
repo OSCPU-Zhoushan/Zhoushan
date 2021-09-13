@@ -120,12 +120,10 @@ class Execution extends Module with ZhoushanConfig {
     }
   }
 
-  for (i <- 0 until IssueWidth) {
-    io.out.vec(i) := Mux(!pipe0.io.intr, out_uop(i), 0.U.asTypeOf(new MicroOp))
-    io.rd_en(i) := Mux(!pipe0.io.intr, out_rd_en(i), false.B)
-    io.rd_addr(i) := Mux(!pipe0.io.intr, out_rd_addr(i), 0.U)
-    io.rd_data(i) := Mux(!pipe0.io.intr, out_rd_data(i), 0.U)
-  }
+  io.out.vec := out_uop
+  io.rd_en := out_rd_en
+  io.rd_addr := out_rd_addr
+  io.rd_data := out_rd_data
 
 }
 
@@ -189,6 +187,7 @@ class ExPipe0 extends Module {
   io.jmp_packet.jmp := jmp
   io.jmp_packet.jmp_pc := jmp_pc
   io.jmp_packet.mis := io.jmp_packet.valid && mis_predict
+  io.jmp_packet.intr := intr
 
   // ref: riscv-spec-20191213 page 21-22
   val rd_link = (uop.rd_addr === 1.U || uop.rd_addr === 5.U)
