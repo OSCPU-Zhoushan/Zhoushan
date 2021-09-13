@@ -39,7 +39,7 @@ class Lsu extends Module {
   val is_load = (uop_real.mem_code === MEM_LD || uop_real.mem_code === MEM_LDU)
   val is_store = (uop_real.mem_code === MEM_ST)
 
-  val s_idle :: s_wait_r :: s_wait_w :: s_complete :: Nil = Enum(4)
+  val s_idle :: s_wait_r :: s_wait_w :: Nil = Enum(3)
   val state = RegInit(s_idle)
 
   val req = io.dmem.req
@@ -99,7 +99,7 @@ class Lsu extends Module {
    *
    */
 
-  val load_data = RegInit(UInt(64.W), 0.U)
+  val load_data = WireInit(UInt(64.W), 0.U)
 
   switch (state) {
     is (s_idle) {
@@ -114,23 +114,21 @@ class Lsu extends Module {
     is (s_wait_r) {
       when (resp.fire()) {
         load_data := resp.bits.rdata >> (addr_offset << 3)
-        state := s_complete
         if (Settings.DebugMsgLsu) {
           printf("%d: [LD] pc=%x addr=%x rdata=%x -> %x\n", DebugTimer(), uop_real.pc, addr, resp.bits.rdata, resp.bits.rdata >> (addr_offset << 3))
         }
+        completed := true.B
+        state := s_idle
       }
     }
     is (s_wait_w) {
       when (resp.fire()) {
-        state := s_complete
         if (Settings.DebugMsgLsu) {
           printf("%d: [ST] pc=%x addr=%x wdata=%x -> %x wmask=%x\n", DebugTimer(), uop_real.pc, addr, in2_real, req.bits.wdata, req.bits.wmask)
         }
+        completed := true.B
+        state := s_idle
       }
-    }
-    is (s_complete) {
-      state := s_idle
-      completed := true.B
     }
   }
 
@@ -160,7 +158,7 @@ class Lsu extends Module {
   ))
 
   io.out := load_out
-  io.busy := req.valid || (state === s_wait_r) || (state === s_wait_w)
+  io.busy := req.valid || (state === s_wait_r && !resp.fire()) || (state === s_wait_w && !resp.fire())
 
   // raise an addr_unaligned exception
   //    half  -> offset = 111
