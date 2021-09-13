@@ -120,10 +120,12 @@ class Execution extends Module with ZhoushanConfig {
     }
   }
 
-  io.out.vec := out_uop
-  io.rd_en := out_rd_en
-  io.rd_addr := out_rd_addr
-  io.rd_data := out_rd_data
+  for (i <- 0 until IssueWidth) {
+    io.out.vec(i) := Mux(!pipe0.io.intr, out_uop(i), 0.U.asTypeOf(new MicroOp))
+    io.rd_en(i) := Mux(!pipe0.io.intr, out_rd_en(i), false.B)
+    io.rd_addr(i) := Mux(!pipe0.io.intr, out_rd_addr(i), 0.U)
+    io.rd_data(i) := Mux(!pipe0.io.intr, out_rd_data(i), 0.U)
+  }
 
 }
 
