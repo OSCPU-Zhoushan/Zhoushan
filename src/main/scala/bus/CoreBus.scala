@@ -28,7 +28,7 @@ class CoreBusResp extends Bundle with CoreBusId with AxiParameters {
   val rlast = Output(Bool())
 }
 
-class CoreBusIO extends MemIO {
+class CoreBusIO extends Bundle {
   val req = Decoupled(new CoreBusReq)
   val resp = Flipped(Decoupled(new CoreBusResp))
 }

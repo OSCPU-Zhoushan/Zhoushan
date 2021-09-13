@@ -21,7 +21,7 @@ class CacheBusResp extends Bundle with AxiParameters with CacheBusParameters {
   val user = Output(UInt(CacheBusUserWidth.W))
 }
 
-class CacheBusIO extends MemIO {
+class CacheBusIO extends Bundle {
   val req = Decoupled(new CacheBusReq)
   val resp = Flipped(Decoupled(new CacheBusResp))
 }
