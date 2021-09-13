@@ -77,28 +77,6 @@ class Lsu extends Module {
 
   resp.ready := (state === s_wait_r) || (state === s_wait_w)
 
-  /* FSM to handle CoreBus bus status
-   *
-   *  Simplified FSM digram
-   *
-   *       ┌───────────────────────────────────────────────────┐
-   *       │                                                   │
-   *       │                  !resp_success                    │
-   *       │                        ┌─┐                        │
-   *       v                        | v                        │
-   *   ┌────────┐   reg_is_load  ┌──────────┐  resp_success    │
-   *   │ s_idle │    ┌─────────> │ s_wait_r │ ──┐              │
-   *   └────────┘    │           └──────────┘   │              │
-   *       |         │                          │    ┌────────────┐
-   *       |         │        !resp_success     ├──> │ s_complete │
-   *       |         │               ┌─┐        │    └────────────┘
-   *       v         │               | v        │
-   *   ┌────────┐    │           ┌──────────┐   │
-   *   │ s_req  │ ───┴─────────> │ s_wait_w │ ──┘
-   *   └────────┘   reg_is_store └──────────┘  resp_success
-   *
-   */
-
   val load_data = WireInit(UInt(64.W), 0.U)
 
   switch (state) {
