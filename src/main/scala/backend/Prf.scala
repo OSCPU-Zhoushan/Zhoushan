@@ -31,8 +31,8 @@ class Prf extends Module with ZhoushanConfig {
   val rs2_data = Wire(Vec(IssueWidth, UInt(64.W)))
 
   for (i <- 0 until IssueWidth) {
-    rs1_data(i) := Mux((rs1_paddr(i) =/= 0.U), rf(rs1_paddr(i)), 0.U)
-    rs2_data(i) := Mux((rs2_paddr(i) =/= 0.U), rf(rs2_paddr(i)), 0.U)
+    rs1_data(i) := Mux((rs1_paddr(i) =/= 0.U), prf(rs1_paddr(i)), 0.U)
+    rs2_data(i) := Mux((rs2_paddr(i) =/= 0.U), prf(rs2_paddr(i)), 0.U)
   }
 
   // pipeline registers

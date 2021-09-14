@@ -15,8 +15,12 @@ class IssueQueue extends Module with ZhoushanConfig {
 
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(new MicroOpVec(enq_width)))
-    val out = Decoupled(new MicroOpVec(deq_width))
+    val out = Vec(deq_width, Output(new MicroOp))
+    // from rename stage
+    val avail_list = Input(UInt(64.W))
     val flush = Input(Bool())
+    // from ex stage
+    val lsu_ready = Input(Bool())
   })
 
   val idx_width = log2Ceil(entries)
@@ -37,12 +41,12 @@ class IssueQueue extends Module with ZhoushanConfig {
   val enq_ready = RegInit(true.B)
 
   val num_enq = Mux(io.in.fire(), PopCount(io.in.bits.vec.map(_.valid)), 0.U)
-  val num_deq = Mux(io.out.fire(), PopCount(io.out.bits.vec.map(_.valid)), 0.U)
+  val num_deq = PopCount(io.out.map(_.valid))
 
-  // even though deq_width = 2, we may deq only 1 instruction each time
+  // even though deq_width = IssueWidth, we may deq only 1 instruction each time
   val num_try_deq = Mux(count >= 1.U, 1.U, count)
   val num_after_enq = count +& num_enq
-  val next_valid_entry = Mux(io.out.ready, num_after_enq - num_try_deq, num_after_enq)
+  val next_valid_entry = num_after_enq - num_try_deq
 
   enq_ready := (entries - enq_width).U >= next_valid_entry
 
@@ -77,15 +81,13 @@ class IssueQueue extends Module with ZhoushanConfig {
 
   // deq
 
-  val ready_vec = WireInit(VecInit(Seq.fill(deq_width)(false.B)))
-
-  // currently we only consider 2-way in-order superscalar issue
-  val uop0 = io.out.bits.vec(0)
-  ready_vec(0) := true.B
-  val uop1 = io.out.bits.vec(1)
-  val uop1_rs1_from_uop0_rd = uop0.rd_en && (uop1.rs1_src === RS_FROM_RF) && (uop1.rs1_addr === uop0.rd_addr)
-  val uop1_rs2_from_uop0_rd = uop0.rd_en && (uop1.rs2_src === RS_FROM_RF) && (uop1.rs2_addr === uop0.rd_addr)
-  ready_vec(1) := (uop1.fu_code === FU_ALU) && !uop1_rs1_from_uop0_rd && !uop1_rs2_from_uop0_rd
+  val issue_valid = WireInit(VecInit(Seq.fill(deq_width)(false.B)))
+  for (i <- 0 until IssueWidth) {
+    val rs1_avail = io.avail_list(io.out(i).rs1_paddr)
+    val rs2_avail = io.avail_list(io.out(i).rs2_paddr)
+    val fu_ready = Mux(io.out(i).fu_code === FU_MEM, io.lsu_ready, true.B)
+    issue_valid(i) := rs1_avail && rs2_avail && fu_ready
+  }
 
   val valid_vec = Mux(count >= deq_width.U, ((1 << deq_width) - 1).U, UIntToOH(count)(deq_width - 1, 0) - 1.U)
   val next_deq_vec = VecInit(deq_vec.map(_ + num_deq))
@@ -93,11 +95,9 @@ class IssueQueue extends Module with ZhoushanConfig {
 
   for (i <- 0 until deq_width) {
     val deq = buf.read(getIdx(next_deq_vec(i)))
-    io.out.bits.vec(i) := deq
-    io.out.bits.vec(i).valid := deq.valid && valid_vec(i) && ready_vec(i)
+    io.out(i) := deq
+    io.out(i).valid := deq.valid && valid_vec(i) && issue_valid(i)
   }
-
-  io.out.valid := Cat(io.out.bits.vec.map(_.valid)).orR
 
   // flush
 
