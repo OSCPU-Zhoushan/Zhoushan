@@ -7,8 +7,8 @@ import difftest._
 
 class Prf extends Module with ZhoushanConfig {
   val io = IO(new Bundle {
-    val in = Flipped(Decoupled(new MicroOpVec(IssueWidth)))
-    val out = Decoupled(new MicroOpVec(IssueWidth))
+    val in = Vec(IssueWidth, Input(new MicroOp))
+    val out = Vec(IssueWidth, Output(new MicroOp))
     val rs1_data = Vec(IssueWidth, Output(UInt(64.W)))
     val rs2_data = Vec(IssueWidth, Output(UInt(64.W)))
     val rd_en = Vec(IssueWidth, Input(Bool()))
@@ -25,8 +25,8 @@ class Prf extends Module with ZhoushanConfig {
     }
   }
 
-  val rs1_paddr = io.in.bits.vec.map(_.rs1_paddr)
-  val rs2_paddr = io.in.bits.vec.map(_.rs2_paddr)
+  val rs1_paddr = io.in.map(_.rs1_paddr)
+  val rs2_paddr = io.in.map(_.rs2_paddr)
   val rs1_data = Wire(Vec(IssueWidth, UInt(64.W)))
   val rs2_data = Wire(Vec(IssueWidth, UInt(64.W)))
 
@@ -42,32 +42,21 @@ class Prf extends Module with ZhoushanConfig {
   val out_rs2_data = RegInit(VecInit(Seq.fill(IssueWidth)(0.U(64.W))))
   val out_valid = RegInit(false.B)
 
-  io.in.ready := io.out.ready
   when (io.flush) {
     for (i <- 0 until IssueWidth) {
       out_uop(i) := 0.U.asTypeOf(new MicroOp)
       out_rs1_data(i) := 0.U
       out_rs2_data(i) := 0.U
     }
-    out_valid := false.B
-  } .elsewhen (io.out.ready && io.in.valid) {
+  } .otherwise {
     for (i <- 0 until IssueWidth) {
-      out_uop(i) := Mux(io.in.bits.vec(i).valid, io.in.bits.vec(i), 0.U.asTypeOf(new MicroOp))
+      out_uop(i) := Mux(io.in(i).valid, io.in(i), 0.U.asTypeOf(new MicroOp))
       out_rs1_data(i) := rs1_data(i)
       out_rs2_data(i) := rs2_data(i)
     }
-    out_valid := true.B
-  } .otherwise {
-    for (i <- 0 until IssueWidth) {
-      out_uop(i) := 0.U.asTypeOf(new MicroOp)
-      out_rs1_data(i) := 0.U
-      out_rs2_data(i) := 0.U
-    }
-    out_valid := false.B
   }
   
-  io.out.valid := out_valid
-  io.out.bits.vec := out_uop
+  io.out := out_uop
   io.rs1_data := out_rs1_data
   io.rs2_data := out_rs2_data
 
