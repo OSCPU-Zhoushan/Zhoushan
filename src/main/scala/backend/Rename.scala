@@ -121,7 +121,6 @@ class RenameTable extends Module with ZhoushanConfig {
   when ((io.in(1).rs2_addr === io.rd_addr(0)) && (io.rd_addr(0) =/= 0.U)) {
     io.rs2_paddr(1) := io.rd_paddr(0)
   }
-  
 
   when (io.cm_recover) {
     spec_table := arch_table
@@ -138,6 +137,7 @@ class RenameTable extends Module with ZhoushanConfig {
       }
     }
   }
+
 }
 
 class PrfStateTable extends Module with PrfStateConstant with ZhoushanConfig {
