@@ -6,7 +6,7 @@ trait ZhoushanConfig {
   val DecodeWidth = 2
   val RobSize = 16
   val IssueQueueSize = 8
-  val IssueWidth = 2
+  val IssueWidth = 3
   val CommitWidth = 2
 }
 
