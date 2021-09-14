@@ -83,7 +83,7 @@ class Rename extends Module with ZhoushanConfig {
     }
     out_valid := false.B
   }
-  
+
   io.out.valid := out_valid
   io.out.bits.vec := out_uop
 }
@@ -173,7 +173,7 @@ class PrfStateTable extends Module with PrfStateConstant with ZhoushanConfig {
       table(io.exe(i)) := EXECUTED
     }
   }
-  
+
   for (i <- 0 until CommitWidth) {
     when (io.cm(i) =/= 0.U) {
       table(io.cm(i)) := COMMITTED
