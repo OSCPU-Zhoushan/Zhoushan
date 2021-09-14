@@ -45,9 +45,8 @@ class Rename extends Module with ZhoushanConfig {
 
   val rt = Module(new RenameTable)
   rt.io.en := en
+  rt.io.in := in_uop
   for (i <- 0 until DecodeWidth) {
-    rt.io.rs1_addr(i) := in_uop(i).rs1_addr
-    rt.io.rs2_addr(i) := in_uop(i).rs2_addr
     uop(i).rs1_paddr  := rt.io.rs1_paddr(i)
     uop(i).rs2_paddr  := rt.io.rs2_paddr(i)
     rt.io.rd_addr(i)  := Mux(in_uop(i).valid && in_uop(i).rd_en, in_uop(i).rd_addr, 0.U)
@@ -92,8 +91,7 @@ class RenameTable extends Module with ZhoushanConfig {
   val io = IO(new Bundle {
     val en = Input(Bool())
     // rs1, rs2
-    val rs1_addr = Vec(DecodeWidth, Input(UInt(5.W)))
-    val rs2_addr = Vec(DecodeWidth, Input(UInt(5.W)))
+    val in = Vec(DecodeWidth, Input(new MicroOp))
     val rs1_paddr = Vec(DecodeWidth, Output(UInt(6.W)))
     val rs2_paddr = Vec(DecodeWidth, Output(UInt(6.W)))
     // rd
@@ -110,14 +108,25 @@ class RenameTable extends Module with ZhoushanConfig {
   val arch_table = RegInit(VecInit(Seq.tabulate(32)(i => i.U(6.W))))
 
   for (i <- 0 until DecodeWidth) {
-    io.rs1_paddr(i) := spec_table(io.rs1_addr(i))
-    io.rs2_paddr(i) := spec_table(io.rs2_addr(i))
+    io.rs1_paddr(i) := spec_table(io.in(i).rs1_addr)
+    io.rs2_paddr(i) := spec_table(io.in(i).rs2_addr)
     io.rd_ppaddr(i) := spec_table(io.rd_addr(i))
   }
+
+  // in-group RAW dependency check
+  // todo: currently only support 2-way rename
+  when ((io.in(1).rs1_addr === io.rd_addr(0)) && (io.rd_addr(0) =/= 0.U)) {
+    io.rs1_paddr(1) := io.rd_paddr(0)
+  }
+  when ((io.in(1).rs2_addr === io.rd_addr(0)) && (io.rd_addr(0) =/= 0.U)) {
+    io.rs2_paddr(1) := io.rd_paddr(0)
+  }
+  
 
   when (io.cm_recover) {
     spec_table := arch_table
   } .otherwise {
+    // be careful with WAW dependency here
     for (i <- 0 until DecodeWidth) {
       when (io.rd_addr(i) =/= 0.U && io.en) {
         spec_table(io.rd_addr(i)) := io.rd_paddr(i)
