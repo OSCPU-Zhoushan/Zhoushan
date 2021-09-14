@@ -102,9 +102,10 @@ class MicroOp extends Bundle {
   val real_bpc  = UInt(32.W)
 
   // register renaming related
-  val rs1_paddr = UInt(6.W)
-  val rs2_paddr = UInt(6.W)
-  val rd_paddr  = UInt(6.W)
+  val rs1_paddr = UInt(6.W)   // rs1 prf addr
+  val rs2_paddr = UInt(6.W)   // rs2 prf addr
+  val rd_paddr  = UInt(6.W)   // rd prf addr
+  val rd_ppaddr = UInt(6.W)   // rd prev prf addr
 
   // re-order buffer related
   val rob_addr  = UInt(4.W)

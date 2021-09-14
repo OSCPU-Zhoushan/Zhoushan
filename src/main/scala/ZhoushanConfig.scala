@@ -7,6 +7,7 @@ trait ZhoushanConfig {
   val RobSize = 16
   val IssueQueueSize = 8
   val IssueWidth = 2
+  val CommitWidth = 2
 }
 
 object ZhoushanConfig extends ZhoushanConfig { }
