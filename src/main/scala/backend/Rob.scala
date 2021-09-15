@@ -148,6 +148,26 @@ class Rob extends Module with ZhoushanConfig {
       io.jmp_packet.mis     := Mux(uop_cm.real_br, 
                                    (uop_cm.pred_br && (uop_cm.real_bpc =/= uop_cm.pred_bpc)) || !uop_cm.pred_br,
                                    uop_cm.pred_br)
+      io.jmp_packet.intr    := false.B  // todo
+
+      // ref: riscv-spec-20191213 page 21-22
+      val rd_link = (uop_cm.rd_addr === 1.U || uop_cm.rd_addr === 5.U)
+      val rs1_link = (uop_cm.rs1_addr === 1.U || uop_cm.rs1_addr === 5.U)
+      val ras_type = WireInit(RAS_X)
+      when (uop_cm.jmp_code === JMP_JAL) {
+        when (rd_link) {
+          ras_type := RAS_PUSH
+        }
+      }
+      when (uop_cm.jmp_code === JMP_JALR) {
+        ras_type := MuxLookup(Cat(rd_link.asUInt(), rs1_link.asUInt()), RAS_X, Array(
+          "b00".U -> RAS_X,
+          "b01".U -> RAS_POP,
+          "b10".U -> RAS_PUSH,
+          "b11".U -> Mux(uop_cm.rd_addr === uop_cm.rs1_addr, RAS_PUSH, RAS_POP_THEN_PUSH)
+        ))
+      }
+      io.jmp_packet.ras_type := ras_type
     }
   }
 

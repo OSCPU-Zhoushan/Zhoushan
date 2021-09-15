@@ -86,7 +86,11 @@ class IssueQueue extends Module with ZhoushanConfig {
     val rs1_avail = io.avail_list(io.out(i).rs1_paddr)
     val rs2_avail = io.avail_list(io.out(i).rs2_paddr)
     val fu_ready = Mux(io.out(i).fu_code === FU_MEM, io.lsu_ready, true.B)
-    issue_valid(i) := rs1_avail && rs2_avail && fu_ready
+    if (i == 0) {
+      issue_valid(i) := rs1_avail && rs2_avail && fu_ready
+    } else {
+      issue_valid(i) := issue_valid(i - 1) && rs1_avail && rs2_avail && fu_ready
+    }
   }
 
   val valid_vec = Mux(count >= deq_width.U, ((1 << deq_width) - 1).U, UIntToOH(count)(deq_width - 1, 0) - 1.U)
