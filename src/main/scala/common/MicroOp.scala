@@ -98,8 +98,6 @@ class MicroOp extends Bundle {
   // branch prediction related
   val pred_br   = Bool()
   val pred_bpc  = UInt(32.W)
-  val real_br   = Bool()
-  val real_bpc  = UInt(32.W)
 
   // register renaming related
   val rs1_paddr = UInt(6.W)   // rs1 prf addr

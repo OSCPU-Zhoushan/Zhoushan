@@ -13,7 +13,6 @@ class Lsu extends Module {
     val out = Output(UInt(64.W))
     val busy = Output(Bool())
     val dmem = new CacheBusIO
-    val intr = Input(Bool())
   })
 
   val uop = io.uop
@@ -73,7 +72,7 @@ class Lsu extends Module {
   req.bits.wen := is_store
   req.bits.user := 0.U
   req.valid := uop_real.valid && (state === s_idle) &&
-               (is_load || is_store) && !io.intr && (uop.valid || !completed)
+               (is_load || is_store) && (uop.valid || !completed)
 
   resp.ready := (state === s_wait_r) || (state === s_wait_w)
 
@@ -81,12 +80,10 @@ class Lsu extends Module {
 
   switch (state) {
     is (s_idle) {
-      when (!io.intr) {
-        when (is_load && req.fire()) {
-          state := s_wait_r
-        } .elsewhen (is_store && req.fire()) {
-          state := s_wait_w
-        }
+      when (is_load && req.fire()) {
+        state := s_wait_r
+      } .elsewhen (is_store && req.fire()) {
+        state := s_wait_w
       }
     }
     is (s_wait_r) {
