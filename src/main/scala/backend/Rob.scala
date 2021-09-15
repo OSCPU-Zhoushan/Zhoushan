@@ -79,10 +79,11 @@ class Rob extends Module with ZhoushanConfig {
       jcp(enq_addr).valid := false.B
       enq_out := io.in.bits.vec(i)      // pass input to output
       enq_out.rob_addr := enq_addr
-      io.out.bits.vec(i) := enq_out
     } .otherwise {
-      io.out.bits.vec(i) := 0.U.asTypeOf(new MicroOp)
+      enq_out := 0.U.asTypeOf(new MicroOp)
     }
+
+    io.out.bits.vec(i) := enq_out
   }
 
   val next_enq_vec = VecInit(enq_vec.map(_ + num_enq))
