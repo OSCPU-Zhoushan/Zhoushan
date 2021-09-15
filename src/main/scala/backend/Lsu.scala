@@ -107,8 +107,6 @@ class Lsu extends Module {
     }
   }
 
-  BoringUtils.addSource(RegNext(RegNext(addr)), "lsu_addr")
-
   val ld_out = Wire(UInt(64.W))
   val ldu_out = Wire(UInt(64.W))
   val load_out = Wire(UInt(64.W))

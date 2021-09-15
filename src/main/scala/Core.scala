@@ -33,28 +33,51 @@ class Core extends Module with ZhoushanConfig {
   decode.io.in <> ibuf.io.out
   decode.io.flush := flush
 
-  /* ----- Stage 4 - Instruction Issue (IS) ------ */
+  /* ----- Stage 4 - Register Renaming (RR) ------ */
+
+  val rename = Module(new Rename)
+  rename.io.in <> decode.io.out
+  rename.io.flush := flush
+
+  /* ----- Stage 5 - Dispatch (DP) --------------- */
+
+  val rob = Module(new Rob)
+  rob.io.in <> rename.io.out
+  rob.io.flush := flush
+
+  rename.io.cm_recover := rob.io.jmp_packet.mis
+  rename.io.cm := rob.io.cm
+
+  fetch.io.jmp_packet := rob.io.jmp_packet
+  flush := rob.io.jmp_packet.mis
+
+  /* ----- Stage 6 - Issue (IS) ------------------ */
 
   val iq = Module(new IssueQueue)
   iq.io.in <> decode.io.out
   iq.io.flush := flush
+  iq.io.avail_list := rename.io.avail_list
 
-  /* ----- Stage 5 - Register File (RF) ---------- */
+  /* ----- Stage 7 - Register File (RF) ---------- */
 
-  val rf = Module(new RegFile)
-  rf.io.in <> iq.io.out
-  rf.io.flush := flush
+  val prf = Module(new RegFile)
+  prf.io.in := iq.io.out
+  prf.io.flush := flush
 
-  /* ----- Stage 6 - Execution (EX) -------------- */
+  /* ----- Stage 8 - Execution (EX) -------------- */
 
   val execution = Module(new Execution)
   execution.io.in <> rf.io.out
+  execution.io.flush := flush
+  execution.io.rs1_data := prf.io.rs1_data
+  execution.io.rs2_data := prf.io.rs2_data
 
-  val ex_rs1_data = WireInit(VecInit(Seq.fill(IssueWidth)(0.U(64.W))))
-  val ex_rs2_data = WireInit(VecInit(Seq.fill(IssueWidth)(0.U(64.W))))
+  rename.io.exe := execution.io.out
 
-  execution.io.rs1_data := ex_rs1_data
-  execution.io.rs2_data := ex_rs2_data
+  rob.io.exe := execution.io.out
+  rob.io.exe_jcp := execution.io.out_jcp
+
+  iq.io.lsu_ready := execution.io.lsu_ready
 
   val crossbar1to2 = Module(new CacheBusCrossbar1to2)
   crossbar1to2.io.in <> execution.io.dmem
@@ -66,72 +89,50 @@ class Core extends Module with ZhoushanConfig {
   val clint = Module(new Clint)
   clint.io.in <> crossbar1to2.io.out(1)
 
-  /* ----- Stage 7 - Commit (CM) ----------------- */
+  /* ----- Stage 9 - Commit (CM) ----------------- */
 
-  rf.io.rd_en := execution.io.rd_en
-  rf.io.rd_addr := execution.io.rd_addr
-  rf.io.rd_data := execution.io.rd_data
+  prf.io.rd_en := execution.io.rd_en
+  prf.io.rd_paddr := execution.io.rd_paddr
+  prf.io.rd_data := execution.iio.rd_data
 
-  /* ----- Forwarding Unit ----------------------- */
-
-  val intr = execution.io.intr
-  val uop_commit = Wire(Vec(IssueWidth, new MicroOp))
-  for (i <- 0 until IssueWidth) {
-    uop_commit(i) := execution.io.out.vec(i)
-  }
-  val ex_rs1_from_cm = WireInit(VecInit(Seq.fill(IssueWidth)(VecInit(Seq.fill(IssueWidth)(false.B)))))
-  val ex_rs2_from_cm = WireInit(VecInit(Seq.fill(IssueWidth)(VecInit(Seq.fill(IssueWidth)(false.B)))))
-  for (i <- 0 until IssueWidth) {
-    ex_rs1_data(i) := rf.io.rs1_data(i)
-    ex_rs2_data(i) := rf.io.rs2_data(i)
-    for (j <- 0 until IssueWidth) {
-      ex_rs1_from_cm(i)(j) := uop_commit(j).valid && uop_commit(j).rd_en &&
-                              (uop_commit(j).rd_addr =/= 0.U) &&
-                              (uop_commit(j).rd_addr === execution.io.in.bits.vec(i).rs1_addr)
-      ex_rs2_from_cm(i)(j) := uop_commit(j).valid && uop_commit(j).rd_en &&
-                              (uop_commit(j).rd_addr =/= 0.U) &&
-                              (uop_commit(j).rd_addr === execution.io.in.bits.vec(i).rs2_addr)
-      when (ex_rs1_from_cm(i)(j)) {
-        ex_rs1_data(i) := RegNext(execution.io.rd_data(j))
-      }
-      when (ex_rs2_from_cm(i)(j)) {
-        ex_rs2_data(i) := RegNext(execution.io.rd_data(j))
-      }
-    }
-  }
-
-  /* ----- Pipeline Control Signals -------------- */
-
-  fetch.io.jmp_packet <> execution.io.jmp_packet
-  flush := execution.io.jmp_packet.mis
+  val cm = rob.io.cm
 
   /* ----- Difftest ------------------------------ */
-
-  val lsu_addr = WireInit(UInt(64.W), 0.U)
-  BoringUtils.addSink(lsu_addr, "lsu_addr")
 
   val ClintAddrBase = Settings.ClintAddrBase.U
   val ClintAddrSize = Settings.ClintAddrSize.U
 
+  val rf_a0 = WireInit(0.U(64.W))
+  BoringUtils.addSink(rf_a0, "rf_a0")
+
   if (Settings.Difftest) {
-    for (i <- 0 until IssueWidth) {
-      val skip = (uop_commit(i).inst === Instructions.PUTCH) ||
-                 (uop_commit(i).fu_code === Constant.FU_CSR && uop_commit(i).inst(31, 20) === Csrs.mcycle) ||
-                 (uop_commit(i).fu_code === Constant.FU_MEM && lsu_addr >= ClintAddrBase && lsu_addr < ClintAddrBase + ClintAddrSize)
+    for (i <- 0 until CommitWidth) {
+      val skip = (cm(i).inst === Instructions.PUTCH) ||
+                 (cm(i).fu_code === Constant.FU_CSR && cm(i).inst(31, 20) === Csrs.mcycle)
 
       val dt_ic = Module(new DifftestInstrCommit)
       dt_ic.io.clock    := clock
       dt_ic.io.coreid   := 0.U
       dt_ic.io.index    := i.U
-      dt_ic.io.valid    := uop_commit(i).valid
-      dt_ic.io.pc       := uop_commit(i).pc
-      dt_ic.io.instr    := uop_commit(i).inst
+      dt_ic.io.valid    := cm(i).valid
+      dt_ic.io.pc       := cm(i).pc
+      dt_ic.io.instr    := cm(i).inst
       dt_ic.io.skip     := skip
       dt_ic.io.isRVC    := false.B
       dt_ic.io.scFailed := false.B
-      dt_ic.io.wen      := uop_commit(i).rd_en
+      dt_ic.io.wen      := cm(i).rd_en
       dt_ic.io.wdata    := RegNext(execution.io.rd_data(i))
-      dt_ic.io.wdest    := uop_commit(i).rd_addr
+      dt_ic.io.wdest    := cm(i).rd_addr
+
+      when (execution.io.out.vec(0).inst === Instructions.PUTCH) {
+        printf("%c", rf_a0(7, 0))
+      }
+
+      if (Settings.DebugMsgUopCommit) {
+        when (cm(i).valid) {
+          printf("%d: [UOP %d] pc=%x inst=%x\n", DebugTimer(), i.U, cm(i).pc, cm(i).inst)
+        }
+      }
     }
   }
 
@@ -139,36 +140,59 @@ class Core extends Module with ZhoushanConfig {
   val instr_cnt = RegInit(0.U(64.W))
 
   cycle_cnt := cycle_cnt + 1.U
-  instr_cnt := instr_cnt + PopCount(uop_commit.map(_.valid))
-
-
-  val rf_a0 = WireInit(0.U(64.W))
-  BoringUtils.addSink(rf_a0, "rf_a0")
-  
-  if (Settings.Difftest) {
-    if (Settings.DebugMsgUopCommit) {
-      for (i <- 0 until IssueWidth) {
-        when (uop_commit(i).valid) {
-          printf("%d: [UOP %d] pc=%x inst=%x\n", DebugTimer(), i.U, uop_commit(i).pc, uop_commit(i).inst)
-        }
-      }
-    }
-    when (execution.io.out.vec(0).inst === Instructions.PUTCH) {
-      printf("%c", rf_a0(7, 0))
-    }
-  }
+  instr_cnt := instr_cnt + PopCount(cm.map(_.valid))
 
   if (Settings.Difftest) {
+    val trap = Cat(cm.map(_.inst === "h0000006b".U).reverse)
+    val trap_idx = OHToUInt(trap)
+
     val dt_te = Module(new DifftestTrapEvent)
     dt_te.io.clock    := clock
     dt_te.io.coreid   := 0.U
-    dt_te.io.valid    := (uop_commit(0).inst === "h0000006b".U)
+    dt_te.io.valid    := trap.orR
     dt_te.io.code     := rf_a0(2, 0)
-    dt_te.io.pc       := uop_commit(0).pc
+    dt_te.io.pc       := 0.U
+    for (i <- 0 until CommitWidth) {
+      when (trap_idx === i.U) {
+        dt_te.io.pc   := cm(i).pc
+      }
+    }
     dt_te.io.cycleCnt := cycle_cnt
     dt_te.io.instrCnt := instr_cnt
   }
 
-  BoringUtils.addSource(cycle_cnt, "csr_mcycle")
-  BoringUtils.addSource(instr_cnt, "csr_minstret")
+  // BoringUtils.addSource(cycle_cnt, "csr_mcycle")
+  // BoringUtils.addSource(instr_cnt, "csr_minstret")
+
+  // todo: add CSR in the future
+  if (Settings.Difftest) {
+    val dt_ae = Module(new DifftestArchEvent)
+    dt_ae.io.clock        := clock
+    dt_ae.io.coreid       := 0.U
+    dt_ae.io.intrNO       := 0.U
+    dt_ae.io.cause        := 0.U
+    dt_ae.io.exceptionPC  := 0.U
+
+    val dt_cs = Module(new DifftestCSRState)
+    dt_cs.io.clock          := clock
+    dt_cs.io.coreid         := 0.U
+    dt_cs.io.priviledgeMode := 3.U  // Machine mode
+    dt_cs.io.mstatus        := 0.U
+    dt_cs.io.sstatus        := 0.U
+    dt_cs.io.mepc           := 0.U
+    dt_cs.io.sepc           := 0.U
+    dt_cs.io.mtval          := 0.U
+    dt_cs.io.stval          := 0.U
+    dt_cs.io.mtvec          := 0.U
+    dt_cs.io.stvec          := 0.U
+    dt_cs.io.mcause         := 0.U
+    dt_cs.io.scause         := 0.U
+    dt_cs.io.satp           := 0.U
+    dt_cs.io.mip            := 0.U
+    dt_cs.io.mie            := 0.U
+    dt_cs.io.mscratch       := 0.U
+    dt_cs.io.sscratch       := 0.U
+    dt_cs.io.mideleg        := 0.U
+    dt_cs.io.medeleg        := 0.U
+  }
 }

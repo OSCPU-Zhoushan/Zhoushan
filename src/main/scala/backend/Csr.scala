@@ -77,9 +77,9 @@ class Csr extends Module {
   val mip       = new CsrMip
 
   val mcycle    = WireInit(UInt(64.W), 0.U)
-  BoringUtils.addSink(mcycle, "csr_mcycle")
+  // BoringUtils.addSink(mcycle, "csr_mcycle")
   val minstret  = WireInit(UInt(64.W), 0.U)
-  BoringUtils.addSink(minstret, "csr_minstret")
+  // BoringUtils.addSink(minstret, "csr_minstret")
 
   // ECALL
   when (csr_code === CSR_ECALL) {

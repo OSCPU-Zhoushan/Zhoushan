@@ -3,7 +3,6 @@ package zhoushan
 import chisel3._
 import chisel3.util._
 import chisel3.util.experimental._
-import difftest._
 
 class Prf extends Module with ZhoushanConfig {
   val io = IO(new Bundle {
@@ -59,5 +58,7 @@ class Prf extends Module with ZhoushanConfig {
   io.out := out_uop
   io.rs1_data := out_rs1_data
   io.rs2_data := out_rs2_data
+
+  BoringUtils.addSource(prf, "prf")
 
 }

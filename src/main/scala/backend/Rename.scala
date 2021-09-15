@@ -2,6 +2,8 @@ package zhoushan
 
 import chisel3._
 import chisel3.util._
+import chisel3.util.experimental._
+import difftest._
 
 trait PrfStateConstant {
   val FREE      = 0.asUInt(2.W)
@@ -136,6 +138,19 @@ class RenameTable extends Module with ZhoushanConfig {
       when (io.cm_rd_addr(i) =/= 0.U) {
         arch_table(io.cm_rd_addr(i)) := io.cm_rd_paddr(i)
       }
+    }
+  }
+
+
+  val prf = Wire(Vec(64, UInt(64.W)))
+  BoringUtils.addSink(prf, "prf")
+
+  if (Settings.Difftest) {
+    val dt_ar = Module(new DifftestArchIntRegState)
+    dt_ar.io.clock  := clock
+    dt_ar.io.coreid := 0.U
+    for (i <- 0 until 32) {
+      dt_ar.io.gpr(i) := prf(arch_table(i))
     }
   }
 
