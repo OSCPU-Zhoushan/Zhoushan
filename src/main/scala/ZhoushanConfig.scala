@@ -5,7 +5,8 @@ trait ZhoushanConfig {
   val InstBufferSize = 8
   val DecodeWidth = 2
   val RobSize = 16
-  val IssueQueueSize = 8
+  val IntIssueQueueSize = 8
+  val MemIssueQueueSize = 8
   val IssueWidth = 3
   val CommitWidth = 2
 }
