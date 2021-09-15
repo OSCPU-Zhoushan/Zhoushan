@@ -16,10 +16,11 @@ class Rename extends Module with ZhoushanConfig {
     val out = Decoupled(new MicroOpVec(DecodeWidth))
     val avail_list = Output(UInt(64.W))
     val flush = Input(Bool())
+    // from ex stage
+    val exe = Vec(IssueWidth, Input(new MicroOp))
     // from commit stage
     val cm_recover = Input(Bool())
-    val cm = Flipped(new MicroOpVec(CommitWidth))
-    val exe = Flipped(new MicroOpVec(IssueWidth))
+    val cm = Vec(CommitWidth, Input(new MicroOp))
   })
 
   val en = io.out.ready && io.in.valid
@@ -34,11 +35,11 @@ class Rename extends Module with ZhoushanConfig {
     pst.io.rd_req(i) := in_uop(i).valid && in_uop(i).rd_en
   }
   for (i <- 0 until IssueWidth) {
-    pst.io.exe(i) := Mux(io.exe.vec(i).valid && io.exe.vec(i).rd_en, io.exe.vec(i).rd_paddr, 0.U)
+    pst.io.exe(i) := Mux(io.exe(i).valid && io.exe(i).rd_en, io.exe(i).rd_paddr, 0.U)
   }
   for (i <- 0 until CommitWidth) {
-    pst.io.cm(i) := Mux(io.cm.vec(i).valid && io.cm.vec(i).rd_en, io.cm.vec(i).rd_paddr, 0.U)
-    pst.io.free(i) := Mux(io.cm.vec(i).valid && io.cm.vec(i).rd_en, io.cm.vec(i).rd_ppaddr, 0.U)
+    pst.io.cm(i) := Mux(io.cm(i).valid && io.cm(i).rd_en, io.cm(i).rd_paddr, 0.U)
+    pst.io.free(i) := Mux(io.cm(i).valid && io.cm(i).rd_en, io.cm(i).rd_ppaddr, 0.U)
   }
   pst.io.cm_recover := io.cm_recover
   io.avail_list := pst.io.avail_list
@@ -55,8 +56,8 @@ class Rename extends Module with ZhoushanConfig {
   }
   rt.io.cm_recover  := io.cm_recover
   for (i <- 0 until CommitWidth) {
-    rt.io.cm_rd_addr(i)  := Mux(io.cm.vec(i).valid && io.cm.vec(i).rd_en, io.cm.vec(i).rd_addr, 0.U)
-    rt.io.cm_rd_paddr(i) := io.cm.vec(i).rd_paddr
+    rt.io.cm_rd_addr(i)  := Mux(io.cm(i).valid && io.cm(i).rd_en, io.cm(i).rd_addr, 0.U)
+    rt.io.cm_rd_paddr(i) := io.cm(i).rd_paddr
   }
 
   io.in.ready := pst.io.allocatable

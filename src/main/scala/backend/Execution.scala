@@ -7,11 +7,11 @@ import zhoushan.Constant._
 class Execution extends Module with ZhoushanConfig {
   val io = IO(new Bundle {
     // input
-    val in_uop = Vec(IssueWidth, Input(new MicroOp))
+    val in = Vec(IssueWidth, Input(new MicroOp))
     val rs1_data = Vec(IssueWidth, Input(UInt(64.W)))
     val rs2_data = Vec(IssueWidth, Input(UInt(64.W)))
     // output
-    val out_uop = Vec(IssueWidth, Output(new MicroOp))
+    val out = Vec(IssueWidth, Output(new MicroOp))
     val out_jcp = Vec(IssueWidth - 1, Output(new JmpCommitPacket))
     val rd_en = Vec(IssueWidth, Output(Bool()))
     val rd_paddr = Vec(IssueWidth, Output(UInt(6.W)))
@@ -24,7 +24,7 @@ class Execution extends Module with ZhoushanConfig {
     val dmem = new CacheBusIO
   })
 
-  val uop = io.in_uop
+  val uop = io.in
 
   val in1_0 = Wire(Vec(IssueWidth, UInt(64.W)))
   val in2_0 = Wire(Vec(IssueWidth, UInt(64.W)))
@@ -107,7 +107,7 @@ class Execution extends Module with ZhoushanConfig {
     out_rd_data (2) := pipe2.io.out
   }
 
-  io.out_uop  := out_uop
+  io.out      := out_uop
   io.out_jcp  := out_jcp
   io.rd_en    := out_rd_en
   io.rd_paddr := out_rd_paddr
