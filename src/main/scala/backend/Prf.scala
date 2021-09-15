@@ -3,6 +3,7 @@ package zhoushan
 import chisel3._
 import chisel3.util._
 import chisel3.util.experimental._
+import difftest._
 
 class Prf extends Module with ZhoushanConfig {
   val io = IO(new Bundle {
@@ -59,6 +60,19 @@ class Prf extends Module with ZhoushanConfig {
   io.rs1_data := out_rs1_data
   io.rs2_data := out_rs2_data
 
-  BoringUtils.addSource(prf, "prf")
+  val arch_rename_table = Wire(Vec(32, UInt(6.W)))
+  BoringUtils.addSink(arch_rename_table, "arch_rename_table")
+
+  if (Settings.Difftest) {
+    val dt_ar = Module(new DifftestArchIntRegState)
+    dt_ar.io.clock  := clock
+    dt_ar.io.coreid := 0.U
+    for (i <- 0 until 32) {
+      dt_ar.io.gpr(i) := prf(arch_rename_table(i))
+    }
+  }
+  
+  val rf_a0 = prf(arch_rename_table(10))
+  BoringUtils.addSource(rf_a0, "rf_a0")
 
 }
