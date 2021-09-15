@@ -60,7 +60,7 @@ class Prf extends Module with ZhoushanConfig {
   io.rs1_data := out_rs1_data
   io.rs2_data := out_rs2_data
 
-  val arch_rename_table = Wire(Vec(32, UInt(6.W)))
+  val arch_rename_table = WireInit(VecInit(Seq.fill(32)(0.U(6.W))))
   BoringUtils.addSink(arch_rename_table, "arch_rename_table")
 
   if (Settings.Difftest) {
@@ -72,7 +72,7 @@ class Prf extends Module with ZhoushanConfig {
     }
   }
   
-  val rf_a0 = prf(arch_rename_table(10))
+  val rf_a0 = prf(10)
   BoringUtils.addSource(rf_a0, "rf_a0")
 
 }
