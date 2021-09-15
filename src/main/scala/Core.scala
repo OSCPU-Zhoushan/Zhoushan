@@ -54,7 +54,7 @@ class Core extends Module with ZhoushanConfig {
   /* ----- Stage 6 - Issue (IS) ------------------ */
 
   val iq = Module(new IssueQueue)
-  iq.io.in <> decode.io.out
+  iq.io.in <> rob.io.out
   iq.io.flush := flush
   iq.io.avail_list := rename.io.avail_list
 
