@@ -50,16 +50,16 @@ class IssueQueue extends Module with ZhoushanConfig {
   mem_iq.io.in.valid := io.in.valid && Cat(uop_mem.map(_.valid)).orR
 
   for (i <- 0 until IssueWidth - 1) {
-    io.out(i) := int_iq.out(i)
+    io.out(i) := int_iq.io.out(i)
   }
-  io.out(IssueWidth - 1) := mem_iq.out(0)
+  io.out(IssueWidth - 1) := mem_iq.io.out(0)
 
   io.in.ready := int_iq.io.in.ready && mem_iq.io.in.ready
 
 }
 
 class IntIssueQueue extends Module with ZhoushanConfig {
-  val entries = IssueQueueSize
+  val entries = IntIssueQueueSize
   val enq_width = DecodeWidth
   val deq_width = IssueWidth - 1
 
@@ -163,7 +163,7 @@ class IntIssueQueue extends Module with ZhoushanConfig {
 }
 
 class MemIssueQueue extends Module with ZhoushanConfig {
-  val entries = IssueQueueSize
+  val entries = MemIssueQueueSize
   val enq_width = DecodeWidth
   val deq_width = 1
 

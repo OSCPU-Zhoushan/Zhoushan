@@ -153,6 +153,9 @@ class RenameTable extends Module with ZhoushanConfig {
       dt_ar.io.gpr(i) := prf(arch_table(i))
     }
   }
+  
+  val rf_a0 = prf(arch_table(10))
+  BoringUtils.addSource(rf_a0, "rf_a0")
 
 }
 

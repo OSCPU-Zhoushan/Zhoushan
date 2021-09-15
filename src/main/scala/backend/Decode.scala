@@ -24,30 +24,30 @@ class Decode extends Module with ZhoushanConfig {
 
   // pipeline registers
 
-  val reg_uop = RegInit(VecInit(Seq.fill(IssueWidth)(0.U.asTypeOf(new MicroOp))))
+  val reg_uop = RegInit(VecInit(Seq.fill(DecodeWidth)(0.U.asTypeOf(new MicroOp))))
   val reg_valid = RegInit(false.B)
 
   when (io.in.valid && !io.flush) {
-    for (i <- 0 until IssueWidth) {
+    for (i <- 0 until DecodeWidth) {
       reg_uop(i) := decoder(i).io.uop
     }
     reg_valid := !io.out.ready
   } .elsewhen (io.flush) {
-    for (i <- 0 until IssueWidth) {
+    for (i <- 0 until DecodeWidth) {
       reg_uop(i) := 0.U.asTypeOf(new MicroOp)
     }
     reg_valid := false.B
   }
 
-  val out_uop = RegInit(VecInit(Seq.fill(IssueWidth)(0.U.asTypeOf(new MicroOp))))
+  val out_uop = RegInit(VecInit(Seq.fill(DecodeWidth)(0.U.asTypeOf(new MicroOp))))
 
   io.in.ready := io.out.ready
   when (io.flush) {
-    for (i <- 0 until IssueWidth) {
+    for (i <- 0 until DecodeWidth) {
       out_uop(i) := 0.U.asTypeOf(new MicroOp)
     }
   } .elsewhen (io.out.ready) {
-    for (i <- 0 until IssueWidth) {
+    for (i <- 0 until DecodeWidth) {
       out_uop(i) := Mux(reg_valid && !io.in.valid, reg_uop(i), decoder(i).io.uop)
     }
   }

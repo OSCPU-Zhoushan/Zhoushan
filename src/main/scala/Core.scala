@@ -60,14 +60,14 @@ class Core extends Module with ZhoushanConfig {
 
   /* ----- Stage 7 - Register File (RF) ---------- */
 
-  val prf = Module(new RegFile)
+  val prf = Module(new Prf)
   prf.io.in := iq.io.out
   prf.io.flush := flush
 
   /* ----- Stage 8 - Execution (EX) -------------- */
 
   val execution = Module(new Execution)
-  execution.io.in <> rf.io.out
+  execution.io.in <> prf.io.out
   execution.io.flush := flush
   execution.io.rs1_data := prf.io.rs1_data
   execution.io.rs2_data := prf.io.rs2_data
@@ -93,7 +93,7 @@ class Core extends Module with ZhoushanConfig {
 
   prf.io.rd_en := execution.io.rd_en
   prf.io.rd_paddr := execution.io.rd_paddr
-  prf.io.rd_data := execution.iio.rd_data
+  prf.io.rd_data := execution.io.rd_data
 
   val cm = rob.io.cm
 
@@ -124,7 +124,7 @@ class Core extends Module with ZhoushanConfig {
       dt_ic.io.wdata    := RegNext(execution.io.rd_data(i))
       dt_ic.io.wdest    := cm(i).rd_addr
 
-      when (execution.io.out.vec(0).inst === Instructions.PUTCH) {
+      when (cm(i).inst === Instructions.PUTCH) {
         printf("%c", rf_a0(7, 0))
       }
 

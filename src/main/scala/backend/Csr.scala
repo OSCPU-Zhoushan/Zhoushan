@@ -32,7 +32,7 @@ class CsrMip extends Bundle {
   val addr = Csrs.mip
   val romask = "h080".U(64.W)
   val mtip = WireInit(UInt(1.W), 0.U)
-  BoringUtils.addSink(mtip, "csr_mip_mtip")
+  // BoringUtils.addSink(mtip, "csr_mip_mtip")
   def apply(): UInt = Cat(Fill(56, 0.U), mtip, Fill(7, 0.U))(63, 0)
   def apply(x: Int): UInt = if (x == 7) mtip else 0.U
   def access(a: UInt, rdata: UInt, ren: Bool, wdata: UInt,
