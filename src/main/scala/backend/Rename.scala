@@ -24,7 +24,7 @@ class Rename extends Module with ZhoushanConfig {
     val cm = Vec(CommitWidth, Input(new MicroOp))
   })
 
-  val en = io.out.ready && io.in.valid
+  val en = io.out.ready && io.in.fire()
 
   val in_uop = io.in.bits.vec
   val uop = WireInit(VecInit(Seq.fill(DecodeWidth)(0.U.asTypeOf(new MicroOp))))
@@ -74,7 +74,7 @@ class Rename extends Module with ZhoushanConfig {
       out_uop(i) := 0.U.asTypeOf(new MicroOp)
     }
     out_valid := false.B
-  } .elsewhen (io.out.ready && io.in.valid) {
+  } .elsewhen (en) {
     for (i <- 0 until DecodeWidth) {
       out_uop(i) := Mux(uop(i).valid, uop(i), 0.U.asTypeOf(new MicroOp))
     }
@@ -84,6 +84,16 @@ class Rename extends Module with ZhoushanConfig {
       out_uop(i) := 0.U.asTypeOf(new MicroOp)
     }
     out_valid := false.B
+  }
+
+  if (Settings.DebugMsgUopCommit) {
+    for (i <- 0 until DecodeWidth) {
+      val u = io.out.bits.vec(i)
+      when (u.valid) {
+        printf("%d: [RR %d ] pc=%x inst=%x rs1=%d->%d rs2=%d->%d rd(en=%x)=%d->%d\n", DebugTimer(), i.U, 
+                u.pc, u.inst, u.rs1_addr, u.rs1_paddr, u.rs2_addr, u.rs2_paddr, u.rd_en, u.rd_addr, u.rd_paddr)
+      }
+    }
   }
 
   io.out.valid := out_valid
