@@ -100,9 +100,6 @@ class Core extends Module with ZhoushanConfig {
 
   /* ----- Difftest ------------------------------ */
 
-  val ClintAddrBase = Settings.ClintAddrBase.U
-  val ClintAddrSize = Settings.ClintAddrSize.U
-
   val rf_a0 = WireInit(0.U(64.W))
   BoringUtils.addSink(rf_a0, "rf_a0")
 

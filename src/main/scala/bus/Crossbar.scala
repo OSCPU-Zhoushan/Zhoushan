@@ -51,8 +51,8 @@ class CacheBusCrossbar1to2 extends Module {
   // 0 -> dmem
   // 1 -> CLINT
 
-  val ClintAddrBase = Settings.ClintAddrBase.U
-  val ClintAddrSize = Settings.ClintAddrSize.U
+  val ClintAddrBase = ZhoushanConfig.ClintAddrBase.U
+  val ClintAddrSize = ZhoushanConfig.ClintAddrSize.U
 
   val addr = io.in.req.bits.addr
   val to_clint = (addr >= ClintAddrBase && addr < ClintAddrBase + ClintAddrSize)
