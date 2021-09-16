@@ -10,7 +10,7 @@ class Lsu extends Module {
     val uop = Input(new MicroOp)
     val in1 = Input(UInt(64.W))
     val in2 = Input(UInt(64.W))
-    val out = Output(UInt(64.W))
+    val ecp = Output(new ExCommitPacket)
     val busy = Output(Bool())
     val dmem = new CacheBusIO
   })
@@ -130,7 +130,8 @@ class Lsu extends Module {
     MEM_LDU -> ldu_out
   ))
 
-  io.out := load_out
+  io.ecp := 0.U.asTypeOf(new ExCommitPacket)
+  io.ecp.rd_data := load_out
   io.busy := req.valid || (state === s_wait_r && !resp.fire()) || (state === s_wait_w && !resp.fire())
 
   // raise an addr_unaligned exception

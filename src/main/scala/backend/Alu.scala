@@ -4,19 +4,12 @@ import chisel3._
 import chisel3.util._
 import zhoushan.Constant._
 
-class JmpCommitPacket extends Bundle {
-  val valid = Bool()
-  val jmp = Bool()
-  val jmp_pc = UInt(32.W)
-}
-
 class Alu extends Module {
   val io = IO(new Bundle {
     val uop = Input(new MicroOp)
     val in1 = Input(UInt(64.W))
     val in2 = Input(UInt(64.W))
-    val out = Output(UInt(64.W))
-    val jcp = Output(new JmpCommitPacket)
+    val ecp = Output(new ExCommitPacket)
   })
 
   val uop = io.uop
@@ -64,8 +57,8 @@ class Alu extends Module {
     JMP_JALR -> ZeroExt32_64(uop.npc)
   ))
 
-  io.out := alu_out | npc_to_rd
-  io.jcp.valid := (uop.fu_code === FU_JMP)
-  io.jcp.jmp := jmp
-  io.jcp.jmp_pc := jmp_pc
+  io.ecp.jmp_valid := (uop.fu_code === FU_JMP)
+  io.ecp.jmp := jmp
+  io.ecp.jmp_pc := jmp_pc
+  io.ecp.rd_data := alu_out | npc_to_rd
 }

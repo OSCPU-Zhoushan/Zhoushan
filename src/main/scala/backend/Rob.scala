@@ -16,9 +16,10 @@ class Rob extends Module with ZhoushanConfig {
     val out = Decoupled(new MicroOpVec(enq_width))
     // from execution --> commit stage
     val exe = Vec(IssueWidth, Input(new MicroOp))
-    val exe_jcp = Vec(IssueWidth - 1, Input(new JmpCommitPacket))
+    val exe_ecp = Vec(IssueWidth, Input(new ExCommitPacket))
     // commit stage
     val cm = Vec(CommitWidth, Output(new MicroOp))
+    val cm_rd_data = Vec(CommitWidth, Output(UInt(64.W)))
     val jmp_packet = Output(new JmpPacket)
     val flush = Input(Bool())
   })
@@ -41,7 +42,7 @@ class Rob extends Module with ZhoushanConfig {
   val enq_ready = RegInit(true.B)
 
   val num_enq = Mux(io.in.fire(), PopCount(io.in.bits.vec.map(_.valid)), 0.U)
-  val num_deq = Mux(io.out.fire(), PopCount(io.out.bits.vec.map(_.valid)), 0.U)
+  val num_deq = PopCount(io.cm.map(_.valid))
 
   // even though deq_width = 2, we may deq only 1 instruction each time
   val num_try_deq = Mux(count >= 1.U, 1.U, count)
@@ -50,9 +51,10 @@ class Rob extends Module with ZhoushanConfig {
 
   enq_ready := (entries - enq_width).U >= next_valid_entry && io.out.ready
 
-  // when instructions are executed, update complete & jcp
+  // when instructions are executed, update complete & ecp
+  // be careful that complete & ecp are regs, remember to sync with SyncReadMem rob
   val complete = RegInit(VecInit(Seq.fill(RobSize)(false.B)))
-  val jcp = RegInit(VecInit(Seq.fill(RobSize)(0.U.asTypeOf(new JmpCommitPacket))))
+  val ecp = RegInit(VecInit(Seq.fill(RobSize)(0.U.asTypeOf(new ExCommitPacket))))
 
   /* --------------- enq ----------------- */
 
@@ -76,7 +78,7 @@ class Rob extends Module with ZhoushanConfig {
     when (io.in.bits.vec(i).valid && io.in.fire() && !io.flush) {
       rob.write(enq_addr, enq)          // write to rob
       complete(enq_addr) := false.B     // mark as not completed
-      jcp(enq_addr).valid := false.B
+      ecp(enq_addr) := 0.U.asTypeOf(new ExCommitPacket)
       enq_out := io.in.bits.vec(i)      // pass input to output
       enq_out.rob_addr := enq_addr
     } .otherwise {
@@ -93,16 +95,16 @@ class Rob extends Module with ZhoushanConfig {
   }
 
   io.in.ready := enq_ready
-  io.out.valid := io.in.valid
+  io.out.valid := Cat(io.out.bits.vec.map(_.valid).reverse).orR
 
   /* --------------- complete ------------ */
 
   for (i <- 0 until IssueWidth) {
     val rob_addr = io.exe(i).rob_addr
-    complete(rob_addr) := io.exe(i).valid
-    if (i < IssueWidth - 1) {
-      jcp(rob_addr) := io.exe_jcp(i)
+    when (io.exe(i).valid) {
+      complete(rob_addr) := true.B
     }
+    ecp(rob_addr) := io.exe_ecp(i)
   }
 
   /* --------------- deq ----------------- */
@@ -112,13 +114,14 @@ class Rob extends Module with ZhoushanConfig {
   deq_vec := next_deq_vec
 
   // set the complete mask
+  // be careful of async read complete
   val complete_mask = WireInit(VecInit(Seq.fill(deq_width)(false.B)))
   for (i <- 0 until deq_width) {
-    val addr = getIdx(next_deq_vec(i))
+    val deq_addr_async = getIdx(deq_vec(i))
     if (i == 0) {
-      complete_mask(i) := complete(addr)
+      complete_mask(i) := complete(deq_addr_async)
     } else {
-      complete_mask(i) := complete_mask(i - 1) && complete(addr)
+      complete_mask(i) := complete_mask(i - 1) && complete(deq_addr_async)
     }
   }
 
@@ -130,10 +133,13 @@ class Rob extends Module with ZhoushanConfig {
   io.jmp_packet := 0.U.asTypeOf(new JmpPacket)
 
   for (i <- 0 until deq_width) {
-    val deq_addr = getIdx(next_deq_vec(i))
-    val deq = rob.read(deq_addr)
-    io.cm(i) := deq
-    jmp_valid(i) := jcp(deq_addr).valid
+    val deq_addr_sync = getIdx(next_deq_vec(i))
+    val deq_uop = rob.read(deq_addr_sync)
+    val deq_addr_async = getIdx(deq_vec(i))
+    val deq_ecp = ecp(deq_addr_async)
+    io.cm(i) := deq_uop
+    io.cm_rd_data(i) := deq_ecp.rd_data
+    jmp_valid(i) := deq_ecp.jmp_valid
     if (i == 0) {
       jmp_mask(i) := true.B
     } else {
@@ -143,32 +149,32 @@ class Rob extends Module with ZhoushanConfig {
     io.cm(i).valid := valid_vec(i) && complete_mask(i) && jmp_mask(i)
 
     // update jmp_packet
-    jmp_1h(i) := jmp_valid(i) && deq.valid
+    jmp_1h(i) := jmp_valid(i) && deq_uop.valid
     when (jmp_1h(i)) {
       io.jmp_packet.valid   := true.B
-      io.jmp_packet.inst_pc := deq.pc
-      io.jmp_packet.jmp     := jcp(deq_addr).jmp
-      io.jmp_packet.jmp_pc  := jcp(deq_addr).jmp_pc
+      io.jmp_packet.inst_pc := deq_uop.pc
+      io.jmp_packet.jmp     := deq_ecp.jmp
+      io.jmp_packet.jmp_pc  := deq_ecp.jmp_pc
       io.jmp_packet.mis     := Mux(io.jmp_packet.jmp, 
-                                   (deq.pred_br && (io.jmp_packet.jmp_pc =/= deq.pred_bpc)) || !deq.pred_br,
-                                   deq.pred_br)
+                                   (deq_uop.pred_br && (io.jmp_packet.jmp_pc =/= deq_uop.pred_bpc)) || !deq_uop.pred_br,
+                                   deq_uop.pred_br)
       io.jmp_packet.intr    := false.B  // todo
 
       // ref: riscv-spec-20191213 page 21-22
-      val rd_link = (deq.rd_addr === 1.U || deq.rd_addr === 5.U)
-      val rs1_link = (deq.rs1_addr === 1.U || deq.rs1_addr === 5.U)
+      val rd_link = (deq_uop.rd_addr === 1.U || deq_uop.rd_addr === 5.U)
+      val rs1_link = (deq_uop.rs1_addr === 1.U || deq_uop.rs1_addr === 5.U)
       val ras_type = WireInit(RAS_X)
-      when (deq.jmp_code === JMP_JAL) {
+      when (deq_uop.jmp_code === JMP_JAL) {
         when (rd_link) {
           ras_type := RAS_PUSH
         }
       }
-      when (deq.jmp_code === JMP_JALR) {
+      when (deq_uop.jmp_code === JMP_JALR) {
         ras_type := MuxLookup(Cat(rd_link.asUInt(), rs1_link.asUInt()), RAS_X, Array(
           "b00".U -> RAS_X,
           "b01".U -> RAS_POP,
           "b10".U -> RAS_PUSH,
-          "b11".U -> Mux(deq.rd_addr === deq.rs1_addr, RAS_PUSH, RAS_POP_THEN_PUSH)
+          "b11".U -> Mux(deq_uop.rd_addr === deq_uop.rs1_addr, RAS_PUSH, RAS_POP_THEN_PUSH)
         ))
       }
       io.jmp_packet.ras_type := ras_type
@@ -180,6 +186,7 @@ class Rob extends Module with ZhoushanConfig {
   when (io.flush) {
     enq_ready := true.B
     complete := VecInit(Seq.fill(RobSize)(false.B))
+    ecp := VecInit(Seq.fill(RobSize)(0.U.asTypeOf(new ExCommitPacket)))
     enq_vec := VecInit((0 until enq_width).map(_.U(addr_width.W)))
     deq_vec := VecInit((0 until deq_width).map(_.U(addr_width.W)))
   }

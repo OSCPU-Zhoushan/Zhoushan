@@ -4,6 +4,13 @@ import chisel3._
 import chisel3.util._
 import zhoushan.Constant._
 
+class ExCommitPacket extends Bundle {
+  val jmp_valid = Bool()
+  val jmp = Bool()
+  val jmp_pc = UInt(32.W)
+  val rd_data = UInt(64.W)
+}
+
 class Execution extends Module with ZhoushanConfig {
   val io = IO(new Bundle {
     // input
@@ -12,7 +19,7 @@ class Execution extends Module with ZhoushanConfig {
     val rs2_data = Vec(IssueWidth, Input(UInt(64.W)))
     // output
     val out = Vec(IssueWidth, Output(new MicroOp))
-    val out_jcp = Vec(IssueWidth - 1, Output(new JmpCommitPacket))
+    val out_ecp = Vec(IssueWidth, Output(new ExCommitPacket))
     val rd_en = Vec(IssueWidth, Output(Bool()))
     val rd_paddr = Vec(IssueWidth, Output(UInt(6.W)))
     val rd_data = Vec(IssueWidth, Output(UInt(64.W)))
@@ -70,7 +77,7 @@ class Execution extends Module with ZhoushanConfig {
   // pipeline registers
 
   val out_uop = RegInit(VecInit(Seq.fill(IssueWidth)(0.U.asTypeOf(new MicroOp))))
-  val out_jcp = RegInit(VecInit(Seq.fill(IssueWidth - 1)(0.U.asTypeOf(new JmpCommitPacket)))) 
+  val out_ecp = RegInit(VecInit(Seq.fill(IssueWidth)(0.U.asTypeOf(new ExCommitPacket))))
   val out_rd_en = WireInit(VecInit(Seq.fill(IssueWidth)(false.B)))
   val out_rd_paddr = WireInit(VecInit(Seq.fill(IssueWidth)(0.U(6.W))))
   val out_rd_data = WireInit(VecInit(Seq.fill(IssueWidth)(0.U(64.W))))
@@ -78,9 +85,7 @@ class Execution extends Module with ZhoushanConfig {
   when (io.flush) {
     for (i <- 0 until IssueWidth) {
       out_uop(i) := 0.U.asTypeOf(new MicroOp)
-      if (i < IssueWidth - 1) {
-        out_jcp(i) := 0.U.asTypeOf(new JmpCommitPacket)
-      }
+      out_ecp(i) := 0.U.asTypeOf(new ExCommitPacket)
       out_rd_en(i) := false.B
       out_rd_paddr(i) := 0.U
       out_rd_data(i) := 0.U
@@ -88,27 +93,28 @@ class Execution extends Module with ZhoushanConfig {
   } .otherwise {
     // pipe 0
     out_uop     (0) := uop(0)
-    out_jcp     (0) := pipe0.io.jcp
+    out_ecp     (0) := pipe0.io.ecp
     out_rd_en   (0) := uop(0).rd_en
     out_rd_paddr(0) := uop(0).rd_paddr
-    out_rd_data (0) := pipe0.io.out
+    out_rd_data (0) := pipe0.io.ecp.rd_data
 
     // pipe 1
     out_uop     (1) := uop(1)
-    out_jcp     (1) := pipe1.io.jcp
+    out_ecp     (1) := pipe1.io.ecp
     out_rd_en   (1) := uop(1).rd_en
     out_rd_paddr(1) := uop(1).rd_paddr
-    out_rd_data (1) := pipe1.io.out
+    out_rd_data (1) := pipe1.io.ecp.rd_data
 
     // pipe 2
     out_uop     (2) := Mux(pipe2.io.ready, uop(2), 0.U.asTypeOf(new MicroOp))
+    out_ecp     (2) := pipe2.io.ecp
     out_rd_en   (2) := Mux(pipe2.io.ready, uop(2).rd_en, false.B)
     out_rd_paddr(2) := uop(2).rd_paddr
-    out_rd_data (2) := pipe2.io.out
+    out_rd_data (2) := pipe2.io.ecp.rd_data
   }
 
   io.out      := out_uop
-  io.out_jcp  := out_jcp
+  io.out_ecp  := out_ecp
   io.rd_en    := out_rd_en
   io.rd_paddr := out_rd_paddr
   io.rd_data  := out_rd_data
@@ -125,8 +131,7 @@ class ExPipe0 extends Module {
     val in1 = Input(UInt(64.W))
     val in2 = Input(UInt(64.W))
     // output
-    val out = Output(UInt(64.W))
-    val jcp = Output(new JmpCommitPacket)
+    val ecp = Output(new ExCommitPacket)
   })
 
   val uop = io.uop
@@ -138,8 +143,7 @@ class ExPipe0 extends Module {
   alu.io.in1 := in1
   alu.io.in2 := in2
 
-  io.out := alu.io.out
-  io.jcp := alu.io.jcp
+  io.ecp := alu.io.ecp
 }
 
 // Execution Pipe 1
@@ -151,8 +155,7 @@ class ExPipe1 extends Module {
     val in1 = Input(UInt(64.W))
     val in2 = Input(UInt(64.W))
     // output
-    val out = Output(UInt(64.W))
-    val jcp = Output(new JmpCommitPacket)
+    val ecp = Output(new ExCommitPacket)
   })
 
   val uop = io.uop
@@ -164,8 +167,7 @@ class ExPipe1 extends Module {
   alu.io.in1 := in1
   alu.io.in2 := in2
 
-  io.out := alu.io.out
-  io.jcp := alu.io.jcp
+  io.ecp := alu.io.ecp
 }
 
 // Execution Pipe 2
@@ -177,7 +179,7 @@ class ExPipe2 extends Module {
     val in1 = Input(UInt(64.W))
     val in2 = Input(UInt(64.W))
     // output
-    val out = Output(UInt(64.W))
+    val ecp = Output(new ExCommitPacket)
     val ready = Output(Bool())
     // dmem
     val dmem = new CacheBusIO
@@ -193,6 +195,6 @@ class ExPipe2 extends Module {
   lsu.io.in2 := in2
   lsu.io.dmem <> io.dmem
 
-  io.out := lsu.io.out
+  io.ecp := lsu.io.ecp
   io.ready := !lsu.io.busy
 }

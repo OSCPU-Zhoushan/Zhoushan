@@ -75,7 +75,7 @@ class Core extends Module with ZhoushanConfig {
   rename.io.exe := execution.io.out
 
   rob.io.exe := execution.io.out
-  rob.io.exe_jcp := execution.io.out_jcp
+  rob.io.exe_ecp := execution.io.out_ecp
 
   iq.io.lsu_ready := execution.io.lsu_ready
 
@@ -96,6 +96,7 @@ class Core extends Module with ZhoushanConfig {
   prf.io.rd_data := execution.io.rd_data
 
   val cm = rob.io.cm
+  val cm_rd_data = rob.io.cm_rd_data
 
   /* ----- Difftest ------------------------------ */
 
@@ -121,7 +122,7 @@ class Core extends Module with ZhoushanConfig {
       dt_ic.io.isRVC    := false.B
       dt_ic.io.scFailed := false.B
       dt_ic.io.wen      := cm(i).rd_en
-      dt_ic.io.wdata    := RegNext(execution.io.rd_data(i))
+      dt_ic.io.wdata    := cm_rd_data(i)
       dt_ic.io.wdest    := cm(i).rd_addr
 
       when (cm(i).inst === Instructions.PUTCH) {
@@ -129,8 +130,10 @@ class Core extends Module with ZhoushanConfig {
       }
 
       if (Settings.DebugMsgUopCommit) {
-        when (cm(i).valid) {
-          printf("%d: [UOP %d] pc=%x inst=%x\n", DebugTimer(), i.U, cm(i).pc, cm(i).inst)
+        val u = cm(i)
+        when (u.valid) {
+          printf("%d: [UOP %d] pc=%x inst=%x rs1=%d->%d rs2=%d->%d rd(en=%x)=%d->%d\n", DebugTimer(), i.U, 
+                 u.pc, u.inst, u.rs1_addr, u.rs1_paddr, u.rs2_addr, u.rs2_paddr, u.rd_en, u.rd_addr, u.rd_paddr)
         }
       }
     }
