@@ -79,7 +79,8 @@ class Execution extends Module with ZhoushanConfig {
   pipe2.io.in1 := in1(2)
   pipe2.io.in2 := in2(2)
   io.lsu_ready := pipe2.io.ready
-  io.dmem <> pipe2.io.dmem
+  pipe2.io.dmem <> io.dmem
+  pipe2.io.flush := io.flush
 
   // pipeline registers
 
@@ -97,6 +98,7 @@ class Execution extends Module with ZhoushanConfig {
       out_rd_paddr(i) := 0.U
       out_rd_data(i) := 0.U
     }
+    reg_uop_lsu := 0.U.asTypeOf(new MicroOp)
   } .otherwise {
     // pipe 0
     out_uop     (0) := uop(0)
@@ -190,6 +192,8 @@ class ExPipe2 extends Module {
     val ready = Output(Bool())
     // dmem
     val dmem = new CacheBusIO
+    // flush signal
+    val flush = Input(Bool())
   })
 
   val uop = io.uop
@@ -201,6 +205,7 @@ class ExPipe2 extends Module {
   lsu.io.in1 := in1
   lsu.io.in2 := in2
   lsu.io.dmem <> io.dmem
+  lsu.io.flush := io.flush
 
   io.ecp := lsu.io.ecp
   io.ready := !lsu.io.busy

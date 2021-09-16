@@ -13,6 +13,7 @@ class Lsu extends Module {
     val ecp = Output(new ExCommitPacket)
     val busy = Output(Bool())
     val dmem = new CacheBusIO
+    val flush = Input(Bool())
   })
 
   val uop = io.uop
@@ -74,7 +75,7 @@ class Lsu extends Module {
   req.valid := uop_real.valid && (state === s_idle) &&
                (is_load || is_store) && (uop.valid || !completed)
 
-  resp.ready := (state === s_wait_r) || (state === s_wait_w)
+  resp.ready := true.B
 
   val load_data = WireInit(UInt(64.W), 0.U)
 
@@ -105,6 +106,15 @@ class Lsu extends Module {
         state := s_idle
       }
     }
+  }
+
+  // when flush, invalidate the current load/store request
+  when (io.flush) {
+    reg_uop := 0.U.asTypeOf(new MicroOp)
+    reg_in1 := 0.U
+    reg_in2 := 0.U
+    completed := true.B
+    state := s_idle
   }
 
   val ld_out = Wire(UInt(64.W))
