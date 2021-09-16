@@ -49,6 +49,7 @@ class Rob extends Module with ZhoushanConfig {
   val num_after_enq = count +& num_enq
   val next_valid_entry = num_after_enq - num_try_deq
 
+  // be careful that enq_ready is register, not wire
   enq_ready := (entries - enq_width).U >= next_valid_entry && io.out.ready
 
   // when instructions are executed, update complete & ecp

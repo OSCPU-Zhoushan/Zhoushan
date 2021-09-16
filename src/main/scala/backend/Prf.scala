@@ -63,6 +63,9 @@ class Prf extends Module with ZhoushanConfig {
   val arch_rename_table = WireInit(VecInit(Seq.fill(32)(0.U(PrfAddrSize.W))))
   BoringUtils.addSink(arch_rename_table, "arch_rename_table")
 
+  val rf_a0 = WireInit(0.U(64.W))
+  BoringUtils.addSource(rf_a0, "rf_a0")
+
   if (Settings.Difftest) {
     val dt_ar = Module(new DifftestArchIntRegState)
     dt_ar.io.clock  := clock
@@ -70,9 +73,7 @@ class Prf extends Module with ZhoushanConfig {
     for (i <- 0 until 32) {
       dt_ar.io.gpr(i) := prf(arch_rename_table(i))
     }
+    rf_a0 := dt_ar.io.gpr(10)
   }
-  
-  val rf_a0 = prf(10)
-  BoringUtils.addSource(rf_a0, "rf_a0")
 
 }
