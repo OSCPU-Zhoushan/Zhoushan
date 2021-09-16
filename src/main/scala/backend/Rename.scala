@@ -54,6 +54,7 @@ class Rename extends Module with ZhoushanConfig {
     rt.io.rd_addr(i)  := Mux(in_uop(i).valid && in_uop(i).rd_en, in_uop(i).rd_addr, 0.U)
     uop(i).rd_ppaddr  := rt.io.rd_ppaddr(i)
     rt.io.rd_paddr(i) := pst.io.rd_paddr(i)
+    uop(i).rd_paddr   := pst.io.rd_paddr(i)
   }
   rt.io.cm_recover  := io.cm_recover
   for (i <- 0 until CommitWidth) {
