@@ -15,7 +15,7 @@ class Rename extends Module with ZhoushanConfig {
   val io = IO(new Bundle {
     val in = Flipped(Decoupled(new MicroOpVec(DecodeWidth)))
     val out = Decoupled(new MicroOpVec(DecodeWidth))
-    val avail_list = Output(UInt(64.W))
+    val avail_list = Output(UInt(PrfSize.W))
     val flush = Input(Bool())
     // from ex stage
     val exe = Vec(IssueWidth, Input(new MicroOp))
@@ -105,20 +105,20 @@ class RenameTable extends Module with ZhoushanConfig {
     val en = Input(Bool())
     // rs1, rs2
     val in = Vec(DecodeWidth, Input(new MicroOp))
-    val rs1_paddr = Vec(DecodeWidth, Output(UInt(6.W)))
-    val rs2_paddr = Vec(DecodeWidth, Output(UInt(6.W)))
+    val rs1_paddr = Vec(DecodeWidth, Output(UInt(PrfAddrSize.W)))
+    val rs2_paddr = Vec(DecodeWidth, Output(UInt(PrfAddrSize.W)))
     // rd
     val rd_addr = Vec(DecodeWidth, Input(UInt(5.W)))
-    val rd_ppaddr = Vec(DecodeWidth, Output(UInt(6.W)))
-    val rd_paddr = Vec(DecodeWidth, Input(UInt(6.W)))
+    val rd_ppaddr = Vec(DecodeWidth, Output(UInt(PrfAddrSize.W)))
+    val rd_paddr = Vec(DecodeWidth, Input(UInt(PrfAddrSize.W)))
     // from commit stage
     val cm_recover = Input(Bool())
     val cm_rd_addr = Vec(CommitWidth, Input(UInt(5.W)))
-    val cm_rd_paddr = Vec(CommitWidth, Input(UInt(6.W)))
+    val cm_rd_paddr = Vec(CommitWidth, Input(UInt(PrfAddrSize.W)))
   })
 
-  val spec_table = RegInit(VecInit(Seq.tabulate(32)(i => i.U(6.W))))
-  val arch_table = RegInit(VecInit(Seq.tabulate(32)(i => i.U(6.W))))
+  val spec_table = RegInit(VecInit(Seq.tabulate(32)(i => i.U(PrfAddrSize.W))))
+  val arch_table = RegInit(VecInit(Seq.tabulate(32)(i => i.U(PrfAddrSize.W))))
 
   for (i <- 0 until DecodeWidth) {
     io.rs1_paddr(i) := spec_table(io.in(i).rs1_addr)
@@ -161,17 +161,17 @@ class PrfStateTable extends Module with PrfStateConstant with ZhoushanConfig {
     val allocatable = Output(Bool())
     // allocate free physical registers
     val rd_req = Vec(DecodeWidth, Input(Bool()))
-    val rd_paddr = Vec(DecodeWidth, Output(UInt(6.W)))
+    val rd_paddr = Vec(DecodeWidth, Output(UInt(PrfAddrSize.W)))
     // update prf state
-    val exe = Vec(IssueWidth, Input(UInt(6.W)))
-    val cm = Vec(CommitWidth, Input(UInt(6.W)))
-    val free = Vec(CommitWidth, Input(UInt(6.W)))
+    val exe = Vec(IssueWidth, Input(UInt(PrfAddrSize.W)))
+    val cm = Vec(CommitWidth, Input(UInt(PrfAddrSize.W)))
+    val free = Vec(CommitWidth, Input(UInt(PrfAddrSize.W)))
     val cm_recover = Input(Bool())
     // pass avail list to issue unit
-    val avail_list = Output(UInt(64.W))
+    val avail_list = Output(UInt(PrfSize.W))
   })
 
-  val table = RegInit(VecInit(Seq.fill(32)(COMMITTED) ++ Seq.fill(32)(FREE)))
+  val table = RegInit(VecInit(Seq.fill(32)(COMMITTED) ++ Seq.fill(PrfSize - 32)(FREE)))
 
   val free_list = Cat(table.map(_ === FREE).reverse)
   val free_count = PopCount(free_list)
@@ -183,7 +183,7 @@ class PrfStateTable extends Module with PrfStateConstant with ZhoushanConfig {
   val fl0 = free_list
   io.rd_paddr(0) := Mux(io.en && io.rd_req(0), PriorityEncoder(fl0), 0.U)
 
-  val fl1 = fl0 & ~UIntToOH(io.rd_paddr(0), 64)
+  val fl1 = fl0 & ~UIntToOH(io.rd_paddr(0), PrfSize)
   io.rd_paddr(1) := Mux(io.en && io.rd_req(1), PriorityEncoder(fl1), 0.U)
 
   for (i <- 0 until DecodeWidth) {
@@ -211,7 +211,7 @@ class PrfStateTable extends Module with PrfStateConstant with ZhoushanConfig {
   }
 
   when (io.cm_recover) {
-    for (i <- 0 until 64) {
+    for (i <- 0 until PrfSize) {
       when (table(i) =/= COMMITTED) {
         table(i) := FREE
       }

@@ -14,7 +14,7 @@ class IssueQueue extends Module with ZhoushanConfig {
     val in = Flipped(Decoupled(new MicroOpVec(DecodeWidth)))
     val out = Vec(IssueWidth, Output(new MicroOp))
     // from rename stage
-    val avail_list = Input(UInt(64.W))
+    val avail_list = Input(UInt(PrfSize.W))
     // from ex stage
     val lsu_ready = Input(Bool())
   })
@@ -68,7 +68,7 @@ class IntIssueQueue extends Module with ZhoushanConfig {
     val in = Flipped(Decoupled(new MicroOpVec(enq_width)))
     val out = Vec(deq_width, Output(new MicroOp))
     // from rename stage
-    val avail_list = Input(UInt(64.W))
+    val avail_list = Input(UInt(PrfSize.W))
   })
 
   val idx_width = log2Ceil(entries)
@@ -172,7 +172,7 @@ class MemIssueQueue extends Module with ZhoushanConfig {
     val in = Flipped(Decoupled(new MicroOpVec(enq_width)))
     val out = Vec(deq_width, Output(new MicroOp))
     // from rename stage
-    val avail_list = Input(UInt(64.W))
+    val avail_list = Input(UInt(PrfSize.W))
     // from ex stage
     val lsu_ready = Input(Bool())
   })

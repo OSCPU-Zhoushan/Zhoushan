@@ -1,6 +1,7 @@
 package zhoushan
 
 import chisel3._
+import chisel3.util._
 
 trait Constant {
   val Y = true.B
@@ -100,13 +101,13 @@ class MicroOp extends Bundle {
   val pred_bpc  = UInt(32.W)
 
   // register renaming related
-  val rs1_paddr = UInt(6.W)   // rs1 prf addr
-  val rs2_paddr = UInt(6.W)   // rs2 prf addr
-  val rd_paddr  = UInt(6.W)   // rd prf addr
-  val rd_ppaddr = UInt(6.W)   // rd prev prf addr
+  val rs1_paddr = UInt(ZhoushanConfig.PrfAddrSize.W)   // rs1 prf addr
+  val rs2_paddr = UInt(ZhoushanConfig.PrfAddrSize.W)   // rs2 prf addr
+  val rd_paddr  = UInt(ZhoushanConfig.PrfAddrSize.W)   // rd prf addr
+  val rd_ppaddr = UInt(ZhoushanConfig.PrfAddrSize.W)   // rd prev prf addr
 
   // re-order buffer related
-  val rob_addr  = UInt(4.W)
+  val rob_addr  = UInt(log2Up(ZhoushanConfig.RobSize).W)
 }
 
 object RasConstant {

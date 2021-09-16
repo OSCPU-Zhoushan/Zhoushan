@@ -1,5 +1,7 @@
 package zhoushan
 
+import chisel3.util._
+
 trait ZhoushanConfig {
   // MMIO
   val ClintAddrBase = 0x02000000
@@ -14,6 +16,8 @@ trait ZhoushanConfig {
   val RobSize = 16
   val IntIssueQueueSize = 8
   val MemIssueQueueSize = 8
+  val PrfSize = 128
+  val PrfAddrSize = log2Up(PrfSize)
 }
 
 object ZhoushanConfig extends ZhoushanConfig { }
