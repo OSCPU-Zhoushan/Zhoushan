@@ -149,7 +149,7 @@ class Rob extends Module with ZhoushanConfig {
     io.cm(i).valid := valid_vec(i) && complete_mask(i) && jmp_mask(i)
 
     // update jmp_packet
-    jmp_1h(i) := jmp_valid(i) && deq_uop.valid
+    jmp_1h(i) := jmp_valid(i) && io.cm(i).valid
     when (jmp_1h(i)) {
       io.jmp_packet.valid   := true.B
       io.jmp_packet.inst_pc := deq_uop.pc

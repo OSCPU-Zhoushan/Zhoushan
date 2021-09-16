@@ -45,7 +45,7 @@ class Core extends Module with ZhoushanConfig {
   rob.io.in <> rename.io.out
   rob.io.flush := flush
 
-  rename.io.cm_recover := rob.io.jmp_packet.mis
+  rename.io.cm_recover := RegNext(rob.io.jmp_packet.mis)
   rename.io.cm := rob.io.cm
 
   fetch.io.jmp_packet := rob.io.jmp_packet
@@ -146,7 +146,7 @@ class Core extends Module with ZhoushanConfig {
   instr_cnt := instr_cnt + PopCount(cm.map(_.valid))
 
   if (Settings.Difftest) {
-    val trap = Cat(cm.map(_.inst === "h0000006b".U).reverse)
+    val trap = Cat(cm.map(_.inst === "h0000006b".U).reverse) & Cat(cm.map(_.valid).reverse)
     val trap_idx = OHToUInt(trap)
 
     val dt_te = Module(new DifftestTrapEvent)
