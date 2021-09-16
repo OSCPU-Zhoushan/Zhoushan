@@ -33,7 +33,7 @@ class Rename extends Module with ZhoushanConfig {
   val pst = Module(new PrfStateTable)
   pst.io.en := en
   for (i <- 0 until DecodeWidth) {
-    pst.io.rd_req(i) := in_uop(i).valid && in_uop(i).rd_en
+    pst.io.rd_req(i) := in_uop(i).valid && in_uop(i).rd_en && in_uop(i).rd_addr =/= 0.U
   }
   for (i <- 0 until IssueWidth) {
     pst.io.exe(i) := Mux(io.exe(i).valid && io.exe(i).rd_en, io.exe(i).rd_paddr, 0.U)
