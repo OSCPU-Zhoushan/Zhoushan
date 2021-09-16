@@ -94,7 +94,7 @@ class IntIssueQueue extends Module with ZhoushanConfig {
   // even though deq_width = IssueWidth, we may deq only 1 instruction each time
   val num_try_deq = Mux(count >= 1.U, 1.U, count)
   val num_after_enq = count +& num_enq
-  val next_valid_entry = num_after_enq - num_try_deq
+  val next_valid_entry = num_after_enq
 
   enq_ready := (entries - enq_width).U >= next_valid_entry
 
@@ -199,7 +199,7 @@ class MemIssueQueue extends Module with ZhoushanConfig {
 
   val num_try_deq = Mux(count >= 1.U, 1.U, count)
   val num_after_enq = count +& num_enq
-  val next_valid_entry = num_after_enq - num_try_deq
+  val next_valid_entry = num_after_enq
 
   enq_ready := (entries - enq_width).U >= next_valid_entry
 
