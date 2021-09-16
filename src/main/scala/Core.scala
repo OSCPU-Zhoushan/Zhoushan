@@ -115,15 +115,15 @@ class Core extends Module with ZhoushanConfig {
       dt_ic.io.clock    := clock
       dt_ic.io.coreid   := 0.U
       dt_ic.io.index    := i.U
-      dt_ic.io.valid    := cm(i).valid
-      dt_ic.io.pc       := cm(i).pc
-      dt_ic.io.instr    := cm(i).inst
-      dt_ic.io.skip     := skip
+      dt_ic.io.valid    := RegNext(cm(i).valid)
+      dt_ic.io.pc       := RegNext(cm(i).pc)
+      dt_ic.io.instr    := RegNext(cm(i).inst)
+      dt_ic.io.skip     := RegNext(skip)
       dt_ic.io.isRVC    := false.B
       dt_ic.io.scFailed := false.B
-      dt_ic.io.wen      := cm(i).rd_en
-      dt_ic.io.wdata    := cm_rd_data(i)
-      dt_ic.io.wdest    := cm(i).rd_addr
+      dt_ic.io.wen      := RegNext(cm(i).rd_en)
+      dt_ic.io.wdata    := RegNext(cm_rd_data(i))
+      dt_ic.io.wdest    := RegNext(cm(i).rd_addr)
 
       when (cm(i).inst === Instructions.PUTCH) {
         printf("%c", rf_a0(7, 0))
@@ -152,12 +152,12 @@ class Core extends Module with ZhoushanConfig {
     val dt_te = Module(new DifftestTrapEvent)
     dt_te.io.clock    := clock
     dt_te.io.coreid   := 0.U
-    dt_te.io.valid    := trap.orR
-    dt_te.io.code     := rf_a0(2, 0)
+    dt_te.io.valid    := RegNext(trap.orR)
+    dt_te.io.code     := RegNext(rf_a0(2, 0))
     dt_te.io.pc       := 0.U
     for (i <- 0 until CommitWidth) {
       when (trap_idx === i.U) {
-        dt_te.io.pc   := cm(i).pc
+        dt_te.io.pc   := RegNext(cm(i).pc)
       }
     }
     dt_te.io.cycleCnt := cycle_cnt
