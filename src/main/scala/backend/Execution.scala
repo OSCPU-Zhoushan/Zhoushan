@@ -34,6 +34,8 @@ class Execution extends Module with ZhoushanConfig {
   val uop = io.in
 
   val reg_uop_lsu = RegInit(0.U.asTypeOf(new MicroOp))
+  val reg_valid = RegNext(!io.lsu_ready) && io.lsu_ready
+
   when (uop(IssueWidth - 1).valid) {
     reg_uop_lsu := uop(IssueWidth - 1)
   }
@@ -111,9 +113,9 @@ class Execution extends Module with ZhoushanConfig {
     out_rd_data (1) := pipe1.io.ecp.rd_data
 
     // pipe 2
-    out_uop     (2) := Mux(pipe2.io.ready, reg_uop_lsu, 0.U.asTypeOf(new MicroOp))
+    out_uop     (2) := Mux(reg_valid, reg_uop_lsu, 0.U.asTypeOf(new MicroOp))
     out_ecp     (2) := pipe2.io.ecp
-    out_rd_en   (2) := Mux(pipe2.io.ready, reg_uop_lsu.rd_en, false.B)
+    out_rd_en   (2) := Mux(reg_valid, reg_uop_lsu.rd_en, false.B)
     out_rd_paddr(2) := reg_uop_lsu.rd_paddr
     out_rd_data (2) := pipe2.io.ecp.rd_data
   }
