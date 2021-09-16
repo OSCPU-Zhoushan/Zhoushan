@@ -86,7 +86,7 @@ class Rename extends Module with ZhoushanConfig {
     out_valid := false.B
   }
 
-  if (Settings.DebugMsgUopCommit) {
+  if (Settings.DebugMsgRename) {
     for (i <- 0 until DecodeWidth) {
       val u = io.out.bits.vec(i)
       when (u.valid) {

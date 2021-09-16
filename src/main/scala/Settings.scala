@@ -2,7 +2,8 @@ package zhoushan
 
 object Settings {
   val Difftest = true
-  val DebugMsgUopCommit = false
+  val DebugMsgRename = false
+  val DebugMsgCommit = false
   val DebugMsgSram = false
   val DebugMsgLsu = false
   val DebugMsgICache = false
