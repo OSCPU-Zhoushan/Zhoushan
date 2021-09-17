@@ -131,9 +131,11 @@ class RenameTable extends Module with ZhoushanConfig {
   // todo: currently only support 2-way rename
   when ((io.in(1).rs1_addr === io.rd_addr(0)) && (io.rd_addr(0) =/= 0.U)) {
     io.rs1_paddr(1) := io.rd_paddr(0)
+    io.rd_ppaddr(1) := io.rd_paddr(0)
   }
   when ((io.in(1).rs2_addr === io.rd_addr(0)) && (io.rd_addr(0) =/= 0.U)) {
     io.rs2_paddr(1) := io.rd_paddr(0)
+    io.rd_ppaddr(1) := io.rd_paddr(0)
   }
 
   when (io.cm_recover) {
@@ -153,6 +155,17 @@ class RenameTable extends Module with ZhoushanConfig {
   }
 
   BoringUtils.addSource(arch_table, "arch_rename_table")
+
+  if (Settings.DebugMsgRename) {
+    for (i <- 0 until 32 / 8) {
+      printf("%d: [RR RT] ", DebugTimer());
+      for (j <- 0 until 8) {
+        val idx = i * 8 + j
+        printf("%d-%d(%d)\t", idx.U, spec_table(idx), arch_table(idx))
+      }
+      printf("\n")
+    }
+  }
 
 }
 
@@ -221,5 +234,16 @@ class PrfStateTable extends Module with PrfStateConstant with ZhoushanConfig {
 
   // default 
   table(0) := COMMITTED
+
+  if (Settings.DebugMsgRename) {
+    for (i <- 0 until PrfSize / 16) {
+      printf("%d: [RRPST] ", DebugTimer());
+      for (j <- 0 until 16) {
+        val idx = i * 16 + j
+        printf("%d-%d\t", idx.U, table(idx))
+      }
+      printf("\n")
+    }
+  }
 
 }
