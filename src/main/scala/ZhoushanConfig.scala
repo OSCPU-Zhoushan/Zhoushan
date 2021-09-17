@@ -16,7 +16,7 @@ trait ZhoushanConfig {
   val RobSize = 16
   val IntIssueQueueSize = 8
   val MemIssueQueueSize = 8
-  val PrfSize = 128
+  val PrfSize = 64
   val PrfAddrSize = log2Up(PrfSize)
 }
 
