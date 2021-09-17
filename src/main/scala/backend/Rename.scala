@@ -4,6 +4,7 @@ import chisel3._
 import chisel3.util._
 import chisel3.util.experimental._
 
+// ref: Weiwu Hu. Computer Architecture (2nd ed). THU Press. (page 136)
 trait PrfStateConstant {
   val FREE      = 0.asUInt(2.W)
   val MAPPED    = 1.asUInt(2.W)
