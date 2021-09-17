@@ -54,7 +54,7 @@ make emu
 
 ### Naming Convention
 
-Filename & class/object name & constant: CamelCase (even though it contains abbreviation, e.g., we write `FpgaTop` rather than `FPGATop`). Example:
+Filename & class/object/trait name & constant: CamelCase (even though it contains abbreviation, e.g., we write `FpgaTop` rather than `FPGATop`). Example:
 
 ```scala
 // SimTop.scala
@@ -63,11 +63,12 @@ class SimTop extends Module {
   ...
 }
 
-// Settings.scala
+// ZhoushanConfig.scala
 
-object Settings {
+trait ZhoushanConfig {
+  // MMIO
+  val ClintAddrBase = 0x02000000
   ...
-  val ClintAddrSize = 0x10000
 }
 ```
 

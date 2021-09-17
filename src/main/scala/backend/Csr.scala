@@ -171,7 +171,7 @@ class Csr extends Module {
 
   // difftest for arch event & CSR state
 
-  if (Settings.Difftest) {
+  if (ZhoushanConfig.EnableDifftest) {
     val dt_ae = Module(new DifftestArchEvent)
     dt_ae.io.clock        := clock
     dt_ae.io.coreid       := 0.U

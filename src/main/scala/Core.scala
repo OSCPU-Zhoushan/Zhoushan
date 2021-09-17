@@ -103,7 +103,7 @@ class Core extends Module with ZhoushanConfig {
   val rf_a0 = WireInit(0.U(64.W))
   BoringUtils.addSink(rf_a0, "rf_a0")
 
-  if (Settings.Difftest) {
+  if (EnableDifftest) {
     for (i <- 0 until CommitWidth) {
       val skip = (cm(i).inst === Instructions.PUTCH) ||
                  (cm(i).fu_code === Constant.FU_CSR && cm(i).inst(31, 20) === Csrs.mcycle)
@@ -126,7 +126,7 @@ class Core extends Module with ZhoushanConfig {
         printf("%c", rf_a0(7, 0))
       }
 
-      if (Settings.DebugMsgCommit) {
+      if (DebugMsgCommit) {
         val u = cm(i)
         when (u.valid) {
           printf("%d: [CM %d ] pc=%x inst=%x rs1=%d->%d rs2=%d->%d rd(en=%x)=%d->%d\n", DebugTimer(), i.U, 
@@ -142,7 +142,7 @@ class Core extends Module with ZhoushanConfig {
   cycle_cnt := cycle_cnt + 1.U
   instr_cnt := instr_cnt + PopCount(cm.map(_.valid))
 
-  if (Settings.Difftest) {
+  if (EnableDifftest) {
     val trap = Cat(cm.map(_.inst === "h0000006b".U).reverse) & Cat(cm.map(_.valid).reverse)
     val trap_idx = OHToUInt(trap)
 
@@ -165,7 +165,7 @@ class Core extends Module with ZhoushanConfig {
   // BoringUtils.addSource(instr_cnt, "csr_minstret")
 
   // todo: add CSR in the future
-  if (Settings.Difftest) {
+  if (EnableDifftest) {
     val dt_ae = Module(new DifftestArchEvent)
     dt_ae.io.clock        := clock
     dt_ae.io.coreid       := 0.U

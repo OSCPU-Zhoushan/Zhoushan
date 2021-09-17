@@ -66,7 +66,7 @@ class Prf extends Module with ZhoushanConfig {
   val rf_a0 = WireInit(0.U(64.W))
   BoringUtils.addSource(rf_a0, "rf_a0")
 
-  if (Settings.Difftest) {
+  if (EnableDifftest) {
     val dt_ar = Module(new DifftestArchIntRegState)
     dt_ar.io.clock  := clock
     dt_ar.io.coreid := 0.U

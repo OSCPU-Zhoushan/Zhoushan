@@ -149,7 +149,7 @@ class BranchTargetBuffer extends Module with BpParameters with ZhoushanConfig {
         io.rras_type(i) := rdata(j).ras_type
         when (io.ren(i)) {
           updatePlruTree(io.raddr(i), j.U)
-          if (Settings.DebugBranchPredictorBtb) {
+          if (DebugBranchPredictorBtb) {
             printf("%d: [BTB] addr=%d way=%x\n", DebugTimer(), io.raddr(i), j.U)
           }
         }
@@ -169,12 +169,12 @@ class BranchTargetBuffer extends Module with BpParameters with ZhoushanConfig {
         btb(j).write(io.waddr, wentry)
         valid(j)(io.waddr) := true.B
         updatePlruTree(io.waddr, j.U)
-        if (Settings.DebugBranchPredictorBtb) {
+        if (DebugBranchPredictorBtb) {
           printf("%d: [BTB] addr=%d way=%x\n", DebugTimer(), io.waddr, j.U)
         }
       }
     }
-    if (Settings.DebugBranchPredictorRas) {
+    if (DebugBranchPredictorRas) {
       when (wentry.ras_type =/= RAS_X) {
         printf("%d: [BTB] pc=%x ras_type=%x\n", DebugTimer(), io.wpc, io.wras_type)
       }
@@ -225,7 +225,7 @@ class ReturnAddressStack extends Module with BpParameters with ZhoushanConfig {
     }
   }
 
-  if (Settings.DebugBranchPredictorRas) {
+  if (DebugBranchPredictorRas) {
     when (io.push_en) {
       printf("%d: [RAS] fp=%x sp=%x push=%x push_pc=%x src_pc=%x mis_inst_pc=%x\n", DebugTimer(), fp, sp, io.push_en, io.push_pc, io.push_src_pc, io.mis_inst_pc)
     }

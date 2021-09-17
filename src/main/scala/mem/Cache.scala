@@ -57,7 +57,7 @@ class Meta extends Module {
 }
 
 // 2-stage pipeline 4KB cache
-class Cache(id: Int) extends Module with SramParameters {
+class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
   val io = IO(new Bundle {
     val in = Flipped(new CacheBusIO)
     val out = new CoreBusIO
@@ -272,7 +272,7 @@ class Cache(id: Int) extends Module with SramParameters {
   out.req.bits.len := 1.U
   out.resp.ready := (state === s_miss_wait_r) || (state === s_miss_wait_w)
 
-  if ((Settings.DebugMsgICache && id == 1) || (Settings.DebugMsgDCache && id == 2)) {
+  if ((DebugMsgICache && id == 1) || (DebugMsgDCache && id == 2)) {
     when (in.req.fire()) {
       printf("%d: [$ %d] [IN -REQ ] addr=%x wen=%x wdata=%x\n", DebugTimer(), id.U, in.req.bits.addr, in.req.bits.wen, in.req.bits.wdata)
     }

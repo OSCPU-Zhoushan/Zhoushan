@@ -18,6 +18,17 @@ trait ZhoushanConfig {
   val MemIssueQueueSize = 8
   val PrfSize = 64
   val PrfAddrSize = log2Up(PrfSize)
+  // Settings
+  val EnableDifftest = true
+  val DebugMsgRename = false
+  val DebugMsgRenameVerbose = false
+  val DebugMsgCommit = false
+  val DebugMsgSram = false
+  val DebugMsgLsu = false
+  val DebugMsgICache = false
+  val DebugMsgDCache = false
+  val DebugBranchPredictorRas = false
+  val DebugBranchPredictorBtb = false
 }
 
 object ZhoushanConfig extends ZhoushanConfig { }

@@ -40,7 +40,7 @@ class Sram(id: Int) extends Module with SramParameters {
   sram.io.D := io.wdata
   io.rdata := sram.io.Q
 
-  if (Settings.DebugMsgSram) {
+  if (ZhoushanConfig.DebugMsgSram) {
     when (io.en) {
       when (io.wen) {
         printf("%d: [SRAM %d] addr=%x wdata=%x\n", DebugTimer(), id.U, io.addr, io.wdata)

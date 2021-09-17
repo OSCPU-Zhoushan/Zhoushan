@@ -90,7 +90,7 @@ class Lsu extends Module {
     is (s_wait_r) {
       when (resp.fire()) {
         load_data := resp.bits.rdata >> (addr_offset << 3)
-        if (Settings.DebugMsgLsu) {
+        if (ZhoushanConfig.DebugMsgLsu) {
           printf("%d: [LOAD ] pc=%x addr=%x rdata=%x -> %x\n", DebugTimer(), uop_real.pc, addr, resp.bits.rdata, resp.bits.rdata >> (addr_offset << 3))
         }
         completed := true.B
@@ -99,7 +99,7 @@ class Lsu extends Module {
     }
     is (s_wait_w) {
       when (resp.fire()) {
-        if (Settings.DebugMsgLsu) {
+        if (ZhoushanConfig.DebugMsgLsu) {
           printf("%d: [STORE] pc=%x addr=%x wdata=%x -> %x wmask=%x\n", DebugTimer(), uop_real.pc, addr, in2_real, req.bits.wdata, req.bits.wmask)
         }
         completed := true.B
