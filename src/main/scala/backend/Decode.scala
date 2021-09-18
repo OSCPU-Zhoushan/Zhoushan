@@ -150,7 +150,7 @@ class Decoder extends Module {
   uop.w_type := w_type
   uop.rs1_src := rs1_src
   uop.rs2_src := rs2_src
-  uop.rd_en := rd_en
+  uop.rd_en := rd_en && (uop.rd_addr =/= 0.U)
 
   val imm_i = Cat(Fill(21, inst(31)), inst(30, 20))
   val imm_s = Cat(Fill(21, inst(31)), inst(30, 25), inst(11, 7))

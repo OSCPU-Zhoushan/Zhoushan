@@ -142,7 +142,13 @@ class Rob extends Module with ZhoushanConfig {
       // todo: currently only support 2-way commit
       jmp_mask(i) := !jmp_valid(0)
     }
-    io.cm(i).valid := valid_vec(i) && complete_mask(i) && jmp_mask(i)
+    if (i == 0) {
+      io.cm(i).valid := valid_vec(i) && complete_mask(i) && jmp_mask(i)
+    } else {
+      // todo: currently only support 2-way commit
+      io.cm(i).valid := valid_vec(i) && complete_mask(i) && jmp_mask(i) && 
+                        Mux(io.cm(0).valid && io.cm(0).rd_en && io.cm(1).rd_en, io.cm(0).rd_addr =/= io.cm(1).rd_addr, true.B)
+    }
 
     // update jmp_packet
     jmp_1h(i) := jmp_valid(i) && io.cm(i).valid
