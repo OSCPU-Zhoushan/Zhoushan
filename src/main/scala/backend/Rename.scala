@@ -102,20 +102,20 @@ class RenameTable extends Module with ZhoushanConfig {
     val en = Input(Bool())
     // rs1, rs2
     val in = Vec(DecodeWidth, Input(new MicroOp))
-    val rs1_paddr = Vec(DecodeWidth, Output(UInt(PrfAddrSize.W)))
-    val rs2_paddr = Vec(DecodeWidth, Output(UInt(PrfAddrSize.W)))
+    val rs1_paddr = Vec(DecodeWidth, Output(UInt(log2Up(PrfSize).W)))
+    val rs2_paddr = Vec(DecodeWidth, Output(UInt(log2Up(PrfSize).W)))
     // rd
     val rd_addr = Vec(DecodeWidth, Input(UInt(5.W)))
-    val rd_ppaddr = Vec(DecodeWidth, Output(UInt(PrfAddrSize.W)))
-    val rd_paddr = Vec(DecodeWidth, Input(UInt(PrfAddrSize.W)))
+    val rd_ppaddr = Vec(DecodeWidth, Output(UInt(log2Up(PrfSize).W)))
+    val rd_paddr = Vec(DecodeWidth, Input(UInt(log2Up(PrfSize).W)))
     // from commit stage
     val cm_recover = Input(Bool())
     val cm_rd_addr = Vec(CommitWidth, Input(UInt(5.W)))
-    val cm_rd_paddr = Vec(CommitWidth, Input(UInt(PrfAddrSize.W)))
+    val cm_rd_paddr = Vec(CommitWidth, Input(UInt(log2Up(PrfSize).W)))
   })
 
-  val spec_table = RegInit(VecInit(Seq.tabulate(32)(i => i.U(PrfAddrSize.W))))
-  val arch_table = RegInit(VecInit(Seq.tabulate(32)(i => i.U(PrfAddrSize.W))))
+  val spec_table = RegInit(VecInit(Seq.tabulate(32)(i => i.U(log2Up(PrfSize).W))))
+  val arch_table = RegInit(VecInit(Seq.tabulate(32)(i => i.U(log2Up(PrfSize).W))))
 
   for (i <- 0 until DecodeWidth) {
     io.rs1_paddr(i) := spec_table(io.in(i).rs1_addr)
@@ -171,11 +171,11 @@ class PrfStateTable extends Module with PrfStateConstant with ZhoushanConfig {
     val allocatable = Output(Bool())
     // allocate free physical registers
     val rd_req = Vec(DecodeWidth, Input(Bool()))
-    val rd_paddr = Vec(DecodeWidth, Output(UInt(PrfAddrSize.W)))
+    val rd_paddr = Vec(DecodeWidth, Output(UInt(log2Up(PrfSize).W)))
     // update prf state
-    val exe = Vec(IssueWidth, Input(UInt(PrfAddrSize.W)))
-    val cm = Vec(CommitWidth, Input(UInt(PrfAddrSize.W)))
-    val free = Vec(CommitWidth, Input(UInt(PrfAddrSize.W)))
+    val exe = Vec(IssueWidth, Input(UInt(log2Up(PrfSize).W)))
+    val cm = Vec(CommitWidth, Input(UInt(log2Up(PrfSize).W)))
+    val free = Vec(CommitWidth, Input(UInt(log2Up(PrfSize).W)))
     val cm_recover = Input(Bool())
     // pass avail list to issue unit
     val avail_list = Output(UInt(PrfSize.W))

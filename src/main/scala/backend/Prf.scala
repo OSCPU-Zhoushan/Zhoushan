@@ -12,7 +12,7 @@ class Prf extends Module with ZhoushanConfig {
     val rs1_data = Vec(IssueWidth, Output(UInt(64.W)))
     val rs2_data = Vec(IssueWidth, Output(UInt(64.W)))
     val rd_en = Vec(IssueWidth, Input(Bool()))
-    val rd_paddr = Vec(IssueWidth, Input(UInt(PrfAddrSize.W)))
+    val rd_paddr = Vec(IssueWidth, Input(UInt(log2Up(PrfSize).W)))
     val rd_data = Vec(IssueWidth, Input(UInt(64.W)))
     val flush = Input(Bool())
   })
@@ -60,7 +60,7 @@ class Prf extends Module with ZhoushanConfig {
   io.rs1_data := out_rs1_data
   io.rs2_data := out_rs2_data
 
-  val arch_rename_table = WireInit(VecInit(Seq.fill(32)(0.U(PrfAddrSize.W))))
+  val arch_rename_table = WireInit(VecInit(Seq.fill(32)(0.U(log2Up(PrfSize).W))))
   BoringUtils.addSink(arch_rename_table, "arch_rename_table")
 
   val rf_a0 = WireInit(0.U(64.W))

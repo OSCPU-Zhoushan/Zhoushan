@@ -21,7 +21,7 @@ class Execution extends Module with ZhoushanConfig {
     val out = Vec(IssueWidth, Output(new MicroOp))
     val out_ecp = Vec(IssueWidth, Output(new ExCommitPacket))
     val rd_en = Vec(IssueWidth, Output(Bool()))
-    val rd_paddr = Vec(IssueWidth, Output(UInt(PrfAddrSize.W)))
+    val rd_paddr = Vec(IssueWidth, Output(UInt(log2Up(PrfSize).W)))
     val rd_data = Vec(IssueWidth, Output(UInt(64.W)))
     // from subsequent stage
     val flush = Input(Bool())
@@ -87,7 +87,7 @@ class Execution extends Module with ZhoushanConfig {
   val out_uop = RegInit(VecInit(Seq.fill(IssueWidth)(0.U.asTypeOf(new MicroOp))))
   val out_ecp = RegInit(VecInit(Seq.fill(IssueWidth)(0.U.asTypeOf(new ExCommitPacket))))
   val out_rd_en = WireInit(VecInit(Seq.fill(IssueWidth)(false.B)))
-  val out_rd_paddr = WireInit(VecInit(Seq.fill(IssueWidth)(0.U(PrfAddrSize.W))))
+  val out_rd_paddr = WireInit(VecInit(Seq.fill(IssueWidth)(0.U(log2Up(PrfSize).W))))
   val out_rd_data = WireInit(VecInit(Seq.fill(IssueWidth)(0.U(64.W))))
 
   when (io.flush) {

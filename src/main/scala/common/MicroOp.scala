@@ -101,10 +101,10 @@ class MicroOp extends Bundle {
   val pred_bpc  = UInt(32.W)
 
   // register renaming related
-  val rs1_paddr = UInt(ZhoushanConfig.PrfAddrSize.W)   // rs1 prf addr
-  val rs2_paddr = UInt(ZhoushanConfig.PrfAddrSize.W)   // rs2 prf addr
-  val rd_paddr  = UInt(ZhoushanConfig.PrfAddrSize.W)   // rd prf addr
-  val rd_ppaddr = UInt(ZhoushanConfig.PrfAddrSize.W)   // rd prev prf addr
+  val rs1_paddr = UInt(log2Up(ZhoushanConfig.PrfSize).W)   // rs1 prf addr
+  val rs2_paddr = UInt(log2Up(ZhoushanConfig.PrfSize).W)   // rs2 prf addr
+  val rd_paddr  = UInt(log2Up(ZhoushanConfig.PrfSize).W)   // rd prf addr
+  val rd_ppaddr = UInt(log2Up(ZhoushanConfig.PrfSize).W)   // rd prev prf addr
 
   // re-order buffer related
   val rob_addr  = UInt(log2Up(ZhoushanConfig.RobSize).W)
