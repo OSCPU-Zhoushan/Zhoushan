@@ -16,6 +16,13 @@ class Decode extends Module with ZhoushanConfig {
   val reg_in = RegInit(VecInit(Seq.fill(DecodeWidth)(0.U.asTypeOf(new InstPacket))))
   val reg_in_valid = RegInit(false.B)
 
+  when (io.flush) {
+    reg_in_valid := false.B
+  } .elsewhen (io.in.valid && !io.flush && !io.out.fire()) {
+    reg_in := io.in.bits.vec
+    reg_in_valid := true.B
+  }
+
   val decoder = for (i <- 0 until DecodeWidth) yield {
     val decoder = Module(new Decoder)
     decoder
@@ -24,15 +31,6 @@ class Decode extends Module with ZhoushanConfig {
   for (i <- 0 until DecodeWidth) {
     decoder(i).io.in := Mux(io.in.valid, io.in.bits.vec(i), reg_in(i))
     decoder(i).io.in_valid := io.in.valid || reg_in_valid
-  }
-
-  when (io.flush) {
-    reg_in_valid := false.B
-  } .elsewhen (io.in.valid && !io.flush && !io.out.fire()) {
-    for (i <- 0 until DecodeWidth) {
-      reg_in(i) := io.in.bits.vec(i)
-    }
-    reg_in_valid := true.B
   }
 
   // handshake signals

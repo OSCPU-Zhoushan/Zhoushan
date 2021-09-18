@@ -39,9 +39,13 @@ class Core extends Module with ZhoushanConfig {
 
   /* ----- Stage 4 - Issue (IS) ------------------ */
 
+  val stall_reg = Module(new StallRegister)
+  stall_reg.io.in <> rename.io.out
+  stall_reg.io.flush := flush
+
   val rob = Module(new Rob)
-  rob.io.in.bits := rename.io.out.bits
-  rob.io.in.valid := rename.io.out.valid
+  rob.io.in.bits := stall_reg.io.out.bits
+  rob.io.in.valid := stall_reg.io.out.valid
   rob.io.flush := flush
 
   rename.io.cm_recover := RegNext(rob.io.jmp_packet.mis)
@@ -51,13 +55,13 @@ class Core extends Module with ZhoushanConfig {
   flush := rob.io.jmp_packet.mis
 
   val iq = Module(new IssueQueue)
-  iq.io.in.bits := rename.io.out.bits
-  iq.io.in.valid := rename.io.out.valid
+  iq.io.in.bits := stall_reg.io.out.bits
+  iq.io.in.valid := stall_reg.io.out.valid
   iq.io.rob_addr := rob.io.rob_addr
   iq.io.flush := flush
   iq.io.avail_list := rename.io.avail_list
 
-  rename.io.out.ready := rob.io.in.ready && iq.io.in.ready
+  stall_reg.io.out.ready := rob.io.in.ready && iq.io.in.ready
 
   /* ----- Stage 5 - Register File (RF) ---------- */
 
