@@ -18,7 +18,7 @@ class Decode extends Module with ZhoushanConfig {
 
   when (io.flush || io.out.fire()) {
     reg_in_valid := false.B
-  } .elsewhen (io.in.valid && !io.flush && !io.out.ready && RegNext(io.out.ready)) {
+  } .elsewhen (io.in.valid && !io.flush && !io.out.ready) {
     reg_in := io.in.bits.vec
     reg_in_valid := true.B
   }
