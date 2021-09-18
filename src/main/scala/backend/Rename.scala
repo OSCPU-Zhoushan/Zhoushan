@@ -127,10 +127,12 @@ class RenameTable extends Module with ZhoushanConfig {
   // todo: currently only support 2-way rename
   when ((io.in(1).rs1_addr === io.rd_addr(0)) && (io.rd_addr(0) =/= 0.U)) {
     io.rs1_paddr(1) := io.rd_paddr(0)
-    io.rd_ppaddr(1) := io.rd_paddr(0)
   }
   when ((io.in(1).rs2_addr === io.rd_addr(0)) && (io.rd_addr(0) =/= 0.U)) {
     io.rs2_paddr(1) := io.rd_paddr(0)
+  }
+  // in-group WAW dependency check
+  when ((io.in(1).rd_addr === io.rd_addr(0)) && (io.rd_addr(0) =/= 0.U)) {
     io.rd_ppaddr(1) := io.rd_paddr(0)
   }
 
