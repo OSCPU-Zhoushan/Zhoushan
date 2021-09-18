@@ -371,10 +371,12 @@ class BrPredictor extends Module with BpParameters with ZhoushanConfig {
       pred_br(i) := false.B
       pred_bpc(i) := Mux(jmp_packet.jmp, jmp_packet.jmp_pc, jmp_packet.inst_pc + 4.U)
     } .otherwise {
-      when (ras_ret_en(i)) {
+      // temporarily skip RAS
+      /* when (ras_ret_en(i)) {
         pred_br(i) := true.B
         pred_bpc(i) := ras_ret_pc(i)
-      } .elsewhen (pht_rdirect(i)) {
+      } .else */
+      when (pht_rdirect(i)) {
         pred_br(i) := btb_rhit(i)   // equivalent to Mux(btb_rhit, pht_rdirect, false.B)
         pred_bpc(i) := Mux(btb_rhit(i), btb_rtarget(i), RegNext(npc))
       } .otherwise {
