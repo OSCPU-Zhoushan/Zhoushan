@@ -33,16 +33,15 @@ class Core extends Module with ZhoushanConfig {
   decode.io.in <> ibuf.io.out
   decode.io.flush := flush
 
-  /* ----- Stage 4 - Register Renaming (RR) ------ */
-
   val rename = Module(new Rename)
   rename.io.in <> decode.io.out
   rename.io.flush := flush
 
-  /* ----- Stage 5 - Dispatch (DP) --------------- */
+  /* ----- Stage 4 - Issue (IS) ------------------ */
 
   val rob = Module(new Rob)
-  rob.io.in <> rename.io.out
+  rob.io.in.bits := rename.io.out.bits
+  rob.io.in.valid := rename.io.out.valid
   rob.io.flush := flush
 
   rename.io.cm_recover := RegNext(rob.io.jmp_packet.mis)
@@ -51,20 +50,22 @@ class Core extends Module with ZhoushanConfig {
   fetch.io.jmp_packet := rob.io.jmp_packet
   flush := rob.io.jmp_packet.mis
 
-  /* ----- Stage 6 - Issue (IS) ------------------ */
-
   val iq = Module(new IssueQueue)
-  iq.io.in <> rob.io.out
+  iq.io.in.bits := rename.io.out.bits
+  iq.io.in.valid := rename.io.out.valid
+  iq.io.rob_addr := rob.io.rob_addr
   iq.io.flush := flush
   iq.io.avail_list := rename.io.avail_list
 
-  /* ----- Stage 7 - Register File (RF) ---------- */
+  rename.io.out.ready := rob.io.in.ready && iq.io.in.ready
+
+  /* ----- Stage 5 - Register File (RF) ---------- */
 
   val prf = Module(new Prf)
   prf.io.in := iq.io.out
   prf.io.flush := flush
 
-  /* ----- Stage 8 - Execution (EX) -------------- */
+  /* ----- Stage 6 - Execution (EX) -------------- */
 
   val execution = Module(new Execution)
   execution.io.in <> prf.io.out
@@ -89,7 +90,7 @@ class Core extends Module with ZhoushanConfig {
   val clint = Module(new Clint)
   clint.io.in <> crossbar1to2.io.out(1)
 
-  /* ----- Stage 9 - Commit (CM) ----------------- */
+  /* ----- Stage 7 - Commit (CM) ----------------- */
 
   prf.io.rd_en := execution.io.rd_en
   prf.io.rd_paddr := execution.io.rd_paddr

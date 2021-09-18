@@ -10,24 +10,24 @@ class Rob extends Module with ZhoushanConfig {
   val enq_width = DecodeWidth
   val deq_width = CommitWidth
 
+  val idx_width = log2Up(entries)
+  val addr_width = idx_width + 1  // MSB is flag bit
+  def getIdx(x: UInt): UInt = x(idx_width - 1, 0)
+  def getFlag(x: UInt): Bool = x(addr_width - 1).asBool()
+
   val io = IO(new Bundle {
     // from dispatch stage
     val in = Flipped(Decoupled(new MicroOpVec(enq_width)))
-    val out = Decoupled(new MicroOpVec(enq_width))
+    val rob_addr = Vec(enq_width, Output(UInt(idx_width.W)))
     // from execution --> commit stage
     val exe = Vec(IssueWidth, Input(new MicroOp))
     val exe_ecp = Vec(IssueWidth, Input(new ExCommitPacket))
     // commit stage
-    val cm = Vec(CommitWidth, Output(new MicroOp))
-    val cm_rd_data = Vec(CommitWidth, Output(UInt(64.W)))
+    val cm = Vec(deq_width, Output(new MicroOp))
+    val cm_rd_data = Vec(deq_width, Output(UInt(64.W)))
     val jmp_packet = Output(new JmpPacket)
     val flush = Input(Bool())
   })
-
-  val idx_width = log2Ceil(entries)
-  val addr_width = idx_width + 1  // MSB is flag bit
-  def getIdx(x: UInt): UInt = x(idx_width - 1, 0)
-  def getFlag(x: UInt): Bool = x(addr_width - 1).asBool()
 
   val rob = SyncReadMem(entries, new MicroOp, SyncReadMem.WriteFirst)
 
@@ -50,7 +50,7 @@ class Rob extends Module with ZhoushanConfig {
   val next_valid_entry = num_after_enq - num_try_deq
 
   // be careful that enq_ready is register, not wire
-  enq_ready := (entries - enq_width).U >= next_valid_entry && io.out.ready
+  enq_ready := (entries - enq_width).U >= next_valid_entry
 
   // when instructions are executed, update complete & ecp
   // be careful that complete & ecp are regs, remember to sync with SyncReadMem rob
@@ -74,19 +74,15 @@ class Rob extends Module with ZhoushanConfig {
     enq := io.in.bits.vec(i)
 
     val enq_addr = getIdx(enq_vec(offset(i)))
-    val enq_out = RegInit(0.U.asTypeOf(new MicroOp))
 
     when (io.in.bits.vec(i).valid && io.in.fire() && !io.flush) {
       rob.write(enq_addr, enq)          // write to rob
       complete(enq_addr) := false.B     // mark as not completed
       ecp(enq_addr) := 0.U.asTypeOf(new ExCommitPacket)
-      enq_out := io.in.bits.vec(i)      // pass input to output
-      enq_out.rob_addr := enq_addr
+      io.rob_addr(i) := enq_addr
     } .otherwise {
-      enq_out := 0.U.asTypeOf(new MicroOp)
+      io.rob_addr(i) := 0.U
     }
-
-    io.out.bits.vec(i) := enq_out
   }
 
   val next_enq_vec = VecInit(enq_vec.map(_ + num_enq))
@@ -96,7 +92,6 @@ class Rob extends Module with ZhoushanConfig {
   }
 
   io.in.ready := enq_ready
-  io.out.valid := Cat(io.out.bits.vec.map(_.valid).reverse).orR
 
   /* --------------- complete ------------ */
 

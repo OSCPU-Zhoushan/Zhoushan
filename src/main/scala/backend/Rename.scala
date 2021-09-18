@@ -25,7 +25,7 @@ class Rename extends Module with ZhoushanConfig {
     val cm = Vec(CommitWidth, Input(new MicroOp))
   })
 
-  val en = io.out.ready && io.in.fire()
+  val en = io.out.fire() && io.in.valid
 
   val in_uop = io.in.bits.vec
   val uop = WireInit(VecInit(Seq.fill(DecodeWidth)(0.U.asTypeOf(new MicroOp))))
@@ -63,7 +63,7 @@ class Rename extends Module with ZhoushanConfig {
     rt.io.cm_rd_paddr(i) := io.cm(i).rd_paddr
   }
 
-  io.in.ready := pst.io.allocatable
+  io.in.ready := pst.io.allocatable && io.out.ready
 
   // pipeline registers
 
@@ -75,17 +75,15 @@ class Rename extends Module with ZhoushanConfig {
       out_uop(i) := 0.U.asTypeOf(new MicroOp)
     }
     out_valid := false.B
-  } .elsewhen (en) {
+  } .otherwise {
     for (i <- 0 until DecodeWidth) {
       out_uop(i) := Mux(uop(i).valid, uop(i), 0.U.asTypeOf(new MicroOp))
     }
-    out_valid := true.B
-  } .otherwise {
-    for (i <- 0 until DecodeWidth) {
-      out_uop(i) := 0.U.asTypeOf(new MicroOp)
-    }
-    out_valid := false.B
+    out_valid := io.in.valid
   }
+
+  io.out.bits.vec := out_uop
+  io.out.valid := out_valid
 
   if (DebugMsgRename) {
     for (i <- 0 until DecodeWidth) {
@@ -97,8 +95,6 @@ class Rename extends Module with ZhoushanConfig {
     }
   }
 
-  io.out.valid := out_valid
-  io.out.bits.vec := out_uop
 }
 
 class RenameTable extends Module with ZhoushanConfig {

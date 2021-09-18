@@ -4,14 +4,15 @@ import chisel3._
 import chisel3.util._
 
 class InstPacket extends Bundle {
-  val pc = Output(UInt(32.W))
-  val inst = Output(UInt(32.W))
-  val pred_br = Output(Bool())
-  val pred_bpc = Output(UInt(32.W))
+  val pc = UInt(32.W)
+  val inst = UInt(32.W)
+  val pred_br = Bool()
+  val pred_bpc = UInt(32.W)
+  val valid = Bool()
 }
 
 class InstPacketVec(vec_width: Int) extends Bundle with ZhoushanConfig {
-  val vec = Vec(vec_width, Valid(new InstPacket))
+  val vec = Vec(vec_width, Output(new InstPacket))
 }
 
 class InstBuffer extends Module with ZhoushanConfig {
@@ -90,7 +91,7 @@ class InstBuffer extends Module with ZhoushanConfig {
 
   for (i <- 0 until enq_width) {
     val enq = Wire(new InstPacket)
-    enq := io.in.bits.vec(i).bits
+    enq := io.in.bits.vec(i)
 
     when (io.in.bits.vec(i).valid && io.in.fire() && !io.flush) {
       buf.write(getIdx(enq_vec(offset(i))), enq)
@@ -113,7 +114,7 @@ class InstBuffer extends Module with ZhoushanConfig {
 
   for (i <- 0 until deq_width) {
     val deq = buf.read(getIdx(next_deq_vec(i)))
-    io.out.bits.vec(i).bits := deq
+    io.out.bits.vec(i) := deq
     io.out.bits.vec(i).valid := valid_vec(i)
   }
 

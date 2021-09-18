@@ -11,7 +11,10 @@ class MicroOpVec(vec_width: Int) extends Bundle {
 class IssueQueue extends Module with ZhoushanConfig {
   val io = IO(new Bundle {
     val flush = Input(Bool())
+    // input
     val in = Flipped(Decoupled(new MicroOpVec(DecodeWidth)))
+    val rob_addr = Vec(DecodeWidth, Input(UInt(log2Up(RobSize).W)))
+    // output
     val out = Vec(IssueWidth, Output(new MicroOp))
     // from rename stage
     val avail_list = Input(UInt(PrfSize.W))
@@ -21,10 +24,12 @@ class IssueQueue extends Module with ZhoushanConfig {
 
   val int_iq = Module(new IntIssueQueue)
   int_iq.io.flush := io.flush
+  int_iq.io.rob_addr := io.rob_addr
   int_iq.io.avail_list := io.avail_list
 
   val mem_iq = Module(new MemIssueQueue)
   mem_iq.io.flush := io.flush
+  mem_iq.io.rob_addr := io.rob_addr
   mem_iq.io.avail_list := io.avail_list
   mem_iq.io.lsu_ready := io.lsu_ready
 
@@ -66,6 +71,7 @@ class IntIssueQueue extends Module with ZhoushanConfig {
   val io = IO(new Bundle {
     val flush = Input(Bool())
     val in = Flipped(Decoupled(new MicroOpVec(enq_width)))
+    val rob_addr = Vec(enq_width, Input(UInt(log2Up(RobSize).W)))
     val out = Vec(deq_width, Output(new MicroOp))
     // from rename stage
     val avail_list = Input(UInt(PrfSize.W))
@@ -113,6 +119,7 @@ class IntIssueQueue extends Module with ZhoushanConfig {
   for (i <- 0 until enq_width) {
     val enq = Wire(new MicroOp)
     enq := io.in.bits.vec(i)
+    enq.rob_addr := io.rob_addr(i)
 
     when (enq.valid && io.in.fire() && !io.flush) {
       buf.write(getIdx(enq_vec(offset(i))), enq)
@@ -170,6 +177,7 @@ class MemIssueQueue extends Module with ZhoushanConfig {
   val io = IO(new Bundle {
     val flush = Input(Bool())
     val in = Flipped(Decoupled(new MicroOpVec(enq_width)))
+    val rob_addr = Vec(enq_width, Input(UInt(log2Up(RobSize).W)))
     val out = Vec(deq_width, Output(new MicroOp))
     // from rename stage
     val avail_list = Input(UInt(PrfSize.W))
@@ -218,6 +226,7 @@ class MemIssueQueue extends Module with ZhoushanConfig {
   for (i <- 0 until enq_width) {
     val enq = Wire(new MicroOp)
     enq := io.in.bits.vec(i)
+    enq.rob_addr := io.rob_addr(i)
 
     when (enq.valid && io.in.fire() && !io.flush) {
       buf.write(getIdx(enq_vec(offset(i))), enq)
