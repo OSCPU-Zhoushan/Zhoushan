@@ -47,7 +47,7 @@ class Rob extends Module with ZhoushanConfig {
   // even though deq_width = 2, we may deq only 1 instruction each time
   val num_try_deq = Mux(count >= 1.U, 1.U, count)
   val num_after_enq = count +& num_enq
-  val next_valid_entry = num_after_enq - num_try_deq
+  val next_valid_entry = num_after_enq
 
   // be careful that enq_ready is register, not wire
   enq_ready := (entries - enq_width).U >= next_valid_entry
@@ -140,7 +140,7 @@ class Rob extends Module with ZhoushanConfig {
       jmp_mask(i) := true.B
     } else {
       // todo: currently only support 2-way commit
-      jmp_mask(i) := Mux(jmp_valid(1), !jmp_valid(0), true.B)
+      jmp_mask(i) := !jmp_valid(0)
     }
     // resolve WAW dependency
     // don't commit two instructions with same rd_addr at the same time
