@@ -16,7 +16,7 @@ class Rob extends Module with ZhoushanConfig {
   def getFlag(x: UInt): Bool = x(addr_width - 1).asBool()
 
   val io = IO(new Bundle {
-    // from dispatch stage
+    // input
     val in = Flipped(Decoupled(new MicroOpVec(enq_width)))
     val rob_addr = Vec(enq_width, Output(UInt(idx_width.W)))
     // from execution --> commit stage

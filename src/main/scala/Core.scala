@@ -44,8 +44,10 @@ class Core extends Module with ZhoushanConfig {
   stall_reg.io.flush := flush
 
   val rob = Module(new Rob)
+  val iq = Module(new IssueQueue)
+
   rob.io.in.bits := stall_reg.io.out.bits
-  rob.io.in.valid := stall_reg.io.out.valid
+  rob.io.in.valid := stall_reg.io.out.valid && iq.io.in.ready
   rob.io.flush := flush
 
   rename.io.cm_recover := RegNext(rob.io.jmp_packet.mis)
@@ -54,9 +56,8 @@ class Core extends Module with ZhoushanConfig {
   fetch.io.jmp_packet := rob.io.jmp_packet
   flush := rob.io.jmp_packet.mis
 
-  val iq = Module(new IssueQueue)
   iq.io.in.bits := stall_reg.io.out.bits
-  iq.io.in.valid := stall_reg.io.out.valid
+  iq.io.in.valid := stall_reg.io.out.valid && rob.io.in.ready
   iq.io.rob_addr := rob.io.rob_addr
   iq.io.flush := flush
   iq.io.avail_list := rename.io.avail_list
