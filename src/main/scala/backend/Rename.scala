@@ -25,7 +25,7 @@ class Rename extends Module with ZhoushanConfig {
     val cm = Vec(CommitWidth, Input(new MicroOp))
   })
 
-  val en = io.out.fire() && io.in.valid
+  val en = io.out.ready && io.in.valid
 
   val in_uop = io.in.bits.vec
   val uop = WireInit(VecInit(Seq.fill(DecodeWidth)(0.U.asTypeOf(new MicroOp))))

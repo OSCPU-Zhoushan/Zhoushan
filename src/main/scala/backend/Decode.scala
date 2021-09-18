@@ -27,11 +27,8 @@ class Decode extends Module with ZhoushanConfig {
   }
 
   when (io.flush) {
-    for (i <- 0 until DecodeWidth) {
-      reg_in(i) := 0.U.asTypeOf(new InstPacket)
-    }
     reg_in_valid := false.B
-  } .elsewhen (io.in.valid && !io.flush) {
+  } .elsewhen (io.in.valid && !io.flush && !io.out.fire()) {
     for (i <- 0 until DecodeWidth) {
       reg_in(i) := io.in.bits.vec(i)
     }
