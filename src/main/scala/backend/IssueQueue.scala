@@ -50,9 +50,9 @@ class IssueQueue extends Module with ZhoushanConfig {
   }
 
   int_iq.io.in.bits.vec := uop_int
-  int_iq.io.in.valid := io.in.valid && Cat(uop_int.map(_.valid)).orR
+  int_iq.io.in.valid := io.in.valid && Cat(uop_int.map(_.valid)).orR && mem_iq.io.in.ready
   mem_iq.io.in.bits.vec := uop_mem
-  mem_iq.io.in.valid := io.in.valid && Cat(uop_mem.map(_.valid)).orR
+  mem_iq.io.in.valid := io.in.valid && Cat(uop_mem.map(_.valid)).orR && int_iq.io.in.ready
 
   for (i <- 0 until IssueWidth - 1) {
     io.out(i) := int_iq.io.out(i)

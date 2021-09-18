@@ -99,8 +99,8 @@ class Rob extends Module with ZhoushanConfig {
     val rob_addr = io.exe(i).rob_addr
     when (io.exe(i).valid) {
       complete(rob_addr) := true.B
+      ecp(rob_addr) := io.exe_ecp(i)
     }
-    ecp(rob_addr) := io.exe_ecp(i)
   }
 
   /* --------------- deq ----------------- */
@@ -140,8 +140,10 @@ class Rob extends Module with ZhoushanConfig {
       jmp_mask(i) := true.B
     } else {
       // todo: currently only support 2-way commit
-      jmp_mask(i) := !jmp_valid(0)
+      jmp_mask(i) := Mux(jmp_valid(1), !jmp_valid(0), true.B)
     }
+    // resolve WAW dependency
+    // don't commit two instructions with same rd_addr at the same time
     if (i == 0) {
       io.cm(i).valid := valid_vec(i) && complete_mask(i) && jmp_mask(i)
     } else {

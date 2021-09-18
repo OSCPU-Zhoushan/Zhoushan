@@ -26,6 +26,7 @@ class StallRegister extends Module with ZhoushanConfig {
   when (io.out.ready && RegNext(!io.out.ready)) {
     io.out.bits.vec := reg_in
     io.out.valid := reg_in_valid
+    reg_in_valid := false.B
   } .otherwise {
     io.out.bits.vec := in
     io.out.valid := io.in.valid
