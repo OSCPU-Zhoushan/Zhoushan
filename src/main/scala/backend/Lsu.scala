@@ -78,13 +78,16 @@ class Lsu extends Module {
   resp.ready := true.B
 
   val load_data = WireInit(UInt(64.W), 0.U)
+  val store_valid = RegInit(false.B)
 
   switch (state) {
     is (s_idle) {
       when (is_load && req.fire()) {
         state := s_wait_r
+        store_valid := false.B
       } .elsewhen (is_store && req.fire()) {
         state := s_wait_w
+        store_valid := true.B
       }
     }
     is (s_wait_r) {
@@ -141,6 +144,7 @@ class Lsu extends Module {
   ))
 
   io.ecp := 0.U.asTypeOf(new ExCommitPacket)
+  io.ecp.store_valid := store_valid
   io.ecp.rd_data := load_out
   io.busy := req.valid || (state === s_wait_r && !resp.fire()) || (state === s_wait_w && !resp.fire())
 

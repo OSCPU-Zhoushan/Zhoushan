@@ -57,6 +57,7 @@ class Alu extends Module {
     JMP_JALR -> ZeroExt32_64(uop.npc)
   ))
 
+  io.ecp.store_valid := false.B
   io.ecp.jmp_valid := (uop.fu_code === FU_JMP)
   io.ecp.jmp := jmp
   io.ecp.jmp_pc := jmp_pc

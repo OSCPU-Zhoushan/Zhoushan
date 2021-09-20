@@ -26,6 +26,7 @@ class Rob extends Module with ZhoushanConfig {
     val cm = Vec(deq_width, Output(new MicroOp))
     val cm_rd_data = Vec(deq_width, Output(UInt(64.W)))
     val jmp_packet = Output(new JmpPacket)
+    val sq_deq_req = Output(Bool())
     val flush = Input(Bool())
   })
 
@@ -121,12 +122,17 @@ class Rob extends Module with ZhoushanConfig {
     }
   }
 
-  // set the jmp mask & deq, generate jmp_packet
+  // set the jmp mask, store mask & deq, generate jmp_packet for IF & deq_req for SQ
   val jmp_valid = WireInit(VecInit(Seq.fill(deq_width)(false.B)))
   val jmp_mask = WireInit(VecInit(Seq.fill(deq_width)(false.B)))
   val jmp_1h = WireInit(VecInit(Seq.fill(deq_width)(false.B)))
 
   io.jmp_packet := 0.U.asTypeOf(new JmpPacket)
+
+  val store_valid = WireInit(VecInit(Seq.fill(deq_width)(false.B)))
+  val store_mask = WireInit(VecInit(Seq.fill(deq_width)(false.B)))
+
+  io.sq_deq_req := Cat(store_valid.reverse).orR
 
   for (i <- 0 until deq_width) {
     val deq_addr_sync = getIdx(next_deq_vec(i))
@@ -136,19 +142,22 @@ class Rob extends Module with ZhoushanConfig {
     io.cm(i) := deq_uop
     io.cm_rd_data(i) := deq_ecp.rd_data
     jmp_valid(i) := deq_ecp.jmp_valid
+    store_valid(i) := deq_ecp.store_valid
     if (i == 0) {
       jmp_mask(i) := true.B
+      store_mask(i) := true.B
     } else {
       // todo: currently only support 2-way commit
       jmp_mask(i) := !jmp_valid(0)
+      store_mask(i) := !store_mask(0)
     }
     // resolve WAW dependency
     // don't commit two instructions with same rd_addr at the same time
     if (i == 0) {
-      io.cm(i).valid := valid_vec(i) && complete_mask(i) && jmp_mask(i)
+      io.cm(i).valid := valid_vec(i) && complete_mask(i) && jmp_mask(i) && store_mask(i)
     } else {
       // todo: currently only support 2-way commit
-      io.cm(i).valid := valid_vec(i) && complete_mask(i) && jmp_mask(i) && 
+      io.cm(i).valid := valid_vec(i) && complete_mask(i) && jmp_mask(i) && store_mask(i) &&
                         Mux(io.cm(0).valid && io.cm(0).rd_en && io.cm(1).rd_en, io.cm(0).rd_addr =/= io.cm(1).rd_addr, true.B)
     }
 

@@ -17,6 +17,7 @@ trait ZhoushanConfig {
   val IntIssueQueueSize = 8
   val MemIssueQueueSize = 8
   val PrfSize = 64
+  val StoreQueueSize = 4
   // Settings
   val EnableDifftest = true
   val DebugMsgRename = false
