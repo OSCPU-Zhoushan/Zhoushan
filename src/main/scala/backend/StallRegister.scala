@@ -3,6 +3,7 @@ package zhoushan
 import chisel3._
 import chisel3.util._
 
+// located at IS stage, before IQ & ROB
 class StallRegister extends Module with ZhoushanConfig {
   val io = IO(new Bundle {
     val flush = Input(Bool())
