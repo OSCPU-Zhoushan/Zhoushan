@@ -29,3 +29,17 @@ object ZeroExt32_64 {
   def apply(x: UInt): UInt = Cat(Fill(32, 0.U), x)
 }
 
+object BoolStopWatch {
+  def apply(start: Bool, stop: Bool, start_high_priority: Boolean = false) = {
+    val r = RegInit(false.B)
+    if (start_high_priority) {
+      when (stop) { r := false.B }
+      when (start) { r := true.B }
+    }
+    else {
+      when (start) { r := true.B }
+      when (stop) { r := false.B }
+    }
+    r
+  }
+}
