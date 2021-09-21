@@ -18,7 +18,7 @@ class StoreQueue extends Module with ZhoushanConfig {
     val deq_req = Input(Bool()) // dequeue request from rob
   })
 
-  val deq_req_counter = UInt((log2Up(StoreQueueSize) + 1).W)
+  val deq_req_counter = RegInit(UInt((log2Up(StoreQueueSize) + 1).W), 0.U)
   when (io.deq_req) {
     deq_req_counter := deq_req_counter + 1.U
   }
