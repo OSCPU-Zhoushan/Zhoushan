@@ -42,6 +42,45 @@ class CoreBusCrossbar2to1 extends Module {
 
 }
 
+class CacheBusCrossbar2to1 extends Module {
+  val io = IO(new Bundle {
+    val in = Flipped(Vec(2, new CacheBusIO))
+    val out = new CacheBusIO
+  })
+
+  val arbiter = Module(new RRArbiter(new CacheBusReq, 2))
+  val chosen = RegInit(UInt(1.W), 0.U)
+  arbiter.io.in(0) <> io.in(0).req
+  arbiter.io.in(1) <> io.in(1).req
+
+  // req logic
+  io.in(0).req.ready := (arbiter.io.chosen === 0.U)
+  io.in(1).req.ready := (arbiter.io.chosen === 1.U)
+  (io.out.req, arbiter.io.out) match { case (l, r) => {
+    l.bits := r.bits
+    l.valid := r.valid
+    r.ready := l.ready
+  }}
+
+  // resp logic - send to corresponding master device
+  io.in(0).resp.bits := io.out.resp.bits
+  io.in(1).resp.bits := io.out.resp.bits
+  when (io.out.resp.bits.id === 1.U) {          // to store queue - store
+    io.out.resp.ready := io.in(0).resp.ready
+    io.in(0).resp.valid := io.out.resp.valid
+    io.in(1).resp.valid := false.B
+  } .elsewhen (io.out.resp.bits.id === 2.U) {   // to store queue - load
+    io.out.resp.ready := io.in(1).resp.ready
+    io.in(0).resp.valid := false.B
+    io.in(1).resp.valid := io.out.resp.valid
+  } .otherwise {
+    io.out.resp.ready := false.B
+    io.in(0).resp.valid := false.B
+    io.in(1).resp.valid := false.B
+  }
+
+}
+
 class CacheBusCrossbar1to2 extends Module {
   val io = IO(new Bundle {
     val in = Flipped(new CacheBusIO)

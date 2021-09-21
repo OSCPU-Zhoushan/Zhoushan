@@ -3,7 +3,7 @@ package zhoushan
 import chisel3._
 import chisel3.util._
 
-// Simple Axi is an simplified bus implementation modified from AXI4
+// CoreBus is an simplified bus implementation modified from AXI4
 // AXI4    - Duplex
 // CoreBus - Simplex, enough for IF (read only) and MEM stage
 

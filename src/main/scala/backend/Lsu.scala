@@ -72,6 +72,7 @@ class Lsu extends Module {
   req.bits.wmask := mask & ((wmask << addr_offset)(7, 0))
   req.bits.wen := is_store
   req.bits.user := 0.U
+  req.bits.id := 0.U
   req.valid := uop_real.valid && (state === s_idle) &&
                (is_load || is_store) && (uop.valid || !completed)
 

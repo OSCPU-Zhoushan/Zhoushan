@@ -92,6 +92,7 @@ class InstFetch extends Module with ZhoushanConfig {
   req.bits.wmask := 0.U
   req.bits.wen   := false.B
   req.bits.user  := Cat(pred_br_real, pc_valid, npc, pc_base)
+  req.bits.id    := 0.U
   req.valid      := io.out.ready
 
   resp.ready := io.out.ready || mis
