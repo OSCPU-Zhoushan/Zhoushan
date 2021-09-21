@@ -12,16 +12,15 @@ class StoreQueueEntry extends Bundle with AxiParameters {
 
 class StoreQueue extends Module with ZhoushanConfig {
   val io = IO(new Bundle {
+    // flush request from ROB
     val flush = Input(Bool())
+    // from EX stage - LSU
     val in = Flipped(new CacheBusIO)
+    // to data cache
     val out = new CacheBusIO
-    val deq_req = Input(Bool()) // dequeue request from rob
+    // deq request from ROB
+    val deq_req = Input(Bool())
   })
-
-  val deq_req_counter = RegInit(UInt((log2Up(StoreQueueSize) + 1).W), 0.U)
-  when (io.deq_req) {
-    deq_req_counter := deq_req_counter + 1.U
-  }
 
   val sq = Mem(StoreQueueSize, new StoreQueueEntry)
   val enq_ptr = Counter(StoreQueueSize)
@@ -36,15 +35,23 @@ class StoreQueue extends Module with ZhoushanConfig {
   val deq_idle :: deq_wait :: Nil = Enum(2)
   val deq_state = RegInit(deq_idle)
 
+  val deq_req_counter = RegInit(UInt((log2Up(StoreQueueSize) + 1).W), 0.U)
+  val deq_req_empty = (deq_req_counter === 0.U)
+
   val deq_fire = WireInit(false.B)
-  val deq_valid = !empty && (deq_req_counter =/= 0.U)
+  val deq_valid = !empty && !deq_req_empty
   val deq_ready = io.out.req.ready && (deq_state === deq_idle)
   deq_fire := deq_valid && deq_ready
+
+  when (io.deq_req && !deq_fire) {
+    deq_req_counter := deq_req_counter + 1.U
+  } .elsewhen (!io.deq_req && deq_fire) {
+    deq_req_counter := deq_req_counter - 1.U
+  }
 
   when (deq_fire) {
     sq(deq_ptr.value).valid := false.B
     deq_ptr.inc()
-    deq_req_counter := deq_req_counter - 1.U
 
     if (DebugMsgStoreQueue) {
       printf("%d: [SQ - D] idx=%d v=%x addr=%x wdata=%x wmask=%x\n", DebugTimer(), deq_ptr.value,
@@ -65,12 +72,12 @@ class StoreQueue extends Module with ZhoushanConfig {
     }
   }
 
-  // enqueue
+  // enqueue (be careful that enqueue is done after dequeue)
   val enq_idle :: enq_wait :: Nil = Enum(2)
   val enq_state = RegInit(enq_idle)
 
   val enq_valid = io.in.req.valid && io.in.req.bits.wen
-  val enq_ready = (!full || io.out.req.ready) && (enq_state === enq_idle)
+  val enq_ready = (!full || deq_fire) && (enq_state === enq_idle)
   val enq_fire = enq_valid && enq_ready
 
   when (enq_fire) {
@@ -116,6 +123,49 @@ class StoreQueue extends Module with ZhoushanConfig {
   val load_hit = Cat(load_addr_match.reverse).orR
   // todo: optimize the load logic
 
+  /* ---------- Flush ---------------- */
+
+  val flush_idle :: flush_wait :: Nil = Enum(2)
+  val flush_state = RegInit(flush_idle)
+
+  def flush_all() = {
+    enq_ptr.reset()
+    deq_ptr.reset()
+    maybe_full := false.B
+    for (i <- 0 until StoreQueueSize) {
+      sq(i).valid := false.B
+    }
+  }
+
+  switch (flush_state) {
+    is (flush_idle) {
+      // no flush signal
+      when (io.flush) {
+        when (deq_req_empty) {
+          flush_all()
+          if (DebugMsgStoreQueue) {
+            printf("%d: [SQ - F] SQ empty - OK\n", DebugTimer())
+          }
+        } .otherwise {
+          flush_state := flush_wait
+          if (DebugMsgStoreQueue) {
+            printf("%d: [SQ - F] SQ not empty - deq_req_counter=%d\n", DebugTimer(), deq_req_counter)
+          }
+        }
+      }
+    }
+    is (flush_wait) {
+      // flush signal, handle remaining deq request
+      when (deq_req_empty) {
+        flush_all()
+        flush_state := flush_idle
+        if (DebugMsgStoreQueue) {
+          printf("%d: [SQ - F] SQ empty - OK, clear all deq req\n", DebugTimer())
+        }
+      }
+    }
+  }
+
   /* ----- Cachebus Handshake -------- */
 
   val is_store = io.in.req.valid && io.in.req.bits.wen
@@ -125,11 +175,11 @@ class StoreQueue extends Module with ZhoushanConfig {
   io.in.req.ready := false.B
   when (io.in.req.valid) {
     when (io.in.req.bits.wen) {
-      io.in.req.ready := enq_ready
+      io.in.req.ready := enq_ready && (flush_state === flush_idle)
       reg_is_store := true.B
     }
     when (io.in.req.bits.ren) {
-      io.in.req.ready := !load_hit && io.out.req.ready
+      io.in.req.ready := !load_hit && io.out.req.ready && (flush_state === flush_idle)
       reg_is_store := false.B
     }
   }
@@ -137,6 +187,7 @@ class StoreQueue extends Module with ZhoushanConfig {
   io.in.resp.valid      := Mux(is_store_real, (enq_state === enq_wait), io.out.resp.valid)
   io.in.resp.bits.rdata := io.out.resp.bits.rdata
   io.in.resp.bits.user  := 0.U
+  io.in.resp.bits.id    := 0.U
 
   io.out.req.valid      := Mux(is_store_real, deq_valid, io.in.req.valid)
   io.out.req.bits.addr  := Mux(is_store_real, sq(deq_ptr.value).addr, io.in.req.bits.addr)
@@ -145,23 +196,8 @@ class StoreQueue extends Module with ZhoushanConfig {
   io.out.req.bits.ren   := !is_store_real
   io.out.req.bits.wen   := is_store_real
   io.out.req.bits.user  := 0.U
+  io.out.req.bits.id    := 0.U
 
   io.out.resp.ready     := Mux(is_store_real, (deq_state === deq_wait), io.in.resp.ready)
-
-  /* ---------- Flush ---------------- */
-
-  when(io.flush) {
-    enq_ptr.reset()
-    deq_ptr.reset()
-    maybe_full := false.B
-    for (i <- 0 until StoreQueueSize) {
-      sq(i).valid := false.B
-    }
-    // todo: when flush, how to handle remaining deq request?
-
-    if (DebugMsgStoreQueue) {
-      printf("%d: [SQ - F]\n", DebugTimer())
-    }
-  }
 
 }
