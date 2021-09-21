@@ -132,7 +132,7 @@ class Rob extends Module with ZhoushanConfig {
   val store_valid = WireInit(VecInit(Seq.fill(deq_width)(false.B)))
   val store_mask = WireInit(VecInit(Seq.fill(deq_width)(false.B)))
 
-  io.sq_deq_req := Cat(store_valid.reverse).orR
+  io.sq_deq_req := false.B
 
   for (i <- 0 until deq_width) {
     val deq_addr_sync = getIdx(next_deq_vec(i))
@@ -159,6 +159,11 @@ class Rob extends Module with ZhoushanConfig {
       // todo: currently only support 2-way commit
       io.cm(i).valid := valid_vec(i) && complete_mask(i) && jmp_mask(i) && store_mask(i) &&
                         Mux(io.cm(0).valid && io.cm(0).rd_en && io.cm(1).rd_en, io.cm(0).rd_addr =/= io.cm(1).rd_addr, true.B)
+    }
+
+    // update sq_deq_req
+    when (io.cm(i).valid && store_valid(i)) {
+      io.sq_deq_req := true.B
     }
 
     // update jmp_packet

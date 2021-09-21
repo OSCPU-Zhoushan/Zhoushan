@@ -25,6 +25,7 @@ trait ZhoushanConfig {
   val DebugMsgCommit = false
   val DebugMsgSram = false
   val DebugMsgLsu = false
+  val DebugMsgStoreQueue = false
   val DebugMsgICache = false
   val DebugMsgDCache = false
   val DebugBranchPredictorRas = false
