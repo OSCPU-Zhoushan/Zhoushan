@@ -17,7 +17,7 @@ class Core extends Module with ZhoushanConfig {
 
   val fetch = Module(new InstFetch)
 
-  val icache = Module(new Cache(1))
+  val icache = Module(new Cache(id = InstCacheId))
   icache.io.in <> fetch.io.imem
   icache.io.out <> io.imem
 
@@ -44,10 +44,10 @@ class Core extends Module with ZhoushanConfig {
   stall_reg.io.flush := flush
 
   val rob = Module(new Rob)
-  val iq = Module(new IssueQueue)
+  val isu = Module(new IssueUnit)
 
   rob.io.in.bits := stall_reg.io.out.bits
-  rob.io.in.valid := stall_reg.io.out.valid && iq.io.in.ready
+  rob.io.in.valid := stall_reg.io.out.valid && isu.io.in.ready
   rob.io.flush := flush
 
   rename.io.cm_recover := RegNext(rob.io.jmp_packet.mis)
@@ -56,18 +56,18 @@ class Core extends Module with ZhoushanConfig {
   fetch.io.jmp_packet := rob.io.jmp_packet
   flush := rob.io.jmp_packet.mis
 
-  iq.io.in.bits := stall_reg.io.out.bits
-  iq.io.in.valid := stall_reg.io.out.valid && rob.io.in.ready
-  iq.io.rob_addr := rob.io.rob_addr
-  iq.io.flush := flush
-  iq.io.avail_list := rename.io.avail_list
+  isu.io.in.bits := stall_reg.io.out.bits
+  isu.io.in.valid := stall_reg.io.out.valid && rob.io.in.ready
+  isu.io.rob_addr := rob.io.rob_addr
+  isu.io.flush := flush
+  isu.io.avail_list := rename.io.avail_list
 
-  stall_reg.io.out.ready := rob.io.in.ready && iq.io.in.ready
+  stall_reg.io.out.ready := rob.io.in.ready && isu.io.in.ready
 
   /* ----- Stage 5 - Register File (RF) ---------- */
 
   val prf = Module(new Prf)
-  prf.io.in := iq.io.out
+  prf.io.in := isu.io.out
   prf.io.flush := flush
 
   /* ----- Stage 6 - Execution (EX) -------------- */
@@ -83,7 +83,7 @@ class Core extends Module with ZhoushanConfig {
   rob.io.exe := execution.io.out
   rob.io.exe_ecp := execution.io.out_ecp
 
-  iq.io.lsu_ready := execution.io.lsu_ready
+  isu.io.lsu_ready := execution.io.lsu_ready
 
   val sq = Module(new StoreQueue)
   sq.io.flush := flush
@@ -97,7 +97,7 @@ class Core extends Module with ZhoushanConfig {
   val crossbar1to2 = Module(new CacheBusCrossbar1to2)
   crossbar1to2.io.in <> crossbar2to1.io.out
 
-  val dcache = Module(new Cache(2))
+  val dcache = Module(new Cache(DataCacheId))
   dcache.io.in <> crossbar1to2.io.out(0)
   dcache.io.out <> io.dmem
 
@@ -137,7 +137,7 @@ class Core extends Module with ZhoushanConfig {
       dt_ic.io.wdata    := RegNext(cm_rd_data(i))
       dt_ic.io.wdest    := RegNext(cm(i).rd_addr)
 
-      when (cm(i).inst === Instructions.PUTCH) {
+      when (dt_ic.io.valid && dt_ic.io.instr === Instructions.PUTCH) {
         printf("%c", rf_a0(7, 0))
       }
 

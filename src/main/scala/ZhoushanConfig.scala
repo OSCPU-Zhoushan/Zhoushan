@@ -6,6 +6,11 @@ trait ZhoushanConfig {
   // MMIO
   val ClintAddrBase = 0x02000000
   val ClintAddrSize = 0x10000
+  // Bus ID
+  val InstCacheId = 1
+  val DataCacheId = 2
+  val SqStoreId = 1
+  val SqLoadId = 2
   // Constants
   val FetchWidth = 2
   val DecodeWidth = 2

@@ -17,8 +17,8 @@ class StoreQueue extends Module with ZhoushanConfig {
     // from EX stage - LSU
     val in = Flipped(new CacheBusIO)
     // to data cache
-    val out_st = new CacheBusIO   // id = 1
-    val out_ld = new CacheBusIO   // id = 2
+    val out_st = new CacheBusIO   // id = ZhoushanConfig.SqStoreId
+    val out_ld = new CacheBusIO   // id = ZhoushanConfig.SqLoadId
     // deq request from ROB
     val deq_req = Input(Bool())
   })
@@ -197,7 +197,7 @@ class StoreQueue extends Module with ZhoushanConfig {
   io.out_st.req.bits.ren   := false.B
   io.out_st.req.bits.wen   := true.B
   io.out_st.req.bits.user  := 0.U
-  io.out_st.req.bits.id    := 1.U
+  io.out_st.req.bits.id    := SqStoreId.U
 
   io.out_st.resp.ready     := (deq_state === deq_wait)
 
@@ -208,7 +208,7 @@ class StoreQueue extends Module with ZhoushanConfig {
   io.out_ld.req.bits.ren   := true.B
   io.out_ld.req.bits.wen   := false.B
   io.out_ld.req.bits.user  := 0.U
-  io.out_ld.req.bits.id    := 2.U
+  io.out_ld.req.bits.id    := SqLoadId.U
 
   io.out_ld.resp.ready     := io.in.resp.ready
 

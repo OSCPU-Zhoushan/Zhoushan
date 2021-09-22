@@ -26,11 +26,11 @@ class CoreBusCrossbar2to1 extends Module {
   // resp logic - send to corresponding master device
   io.in(0).resp.bits := io.out.resp.bits
   io.in(1).resp.bits := io.out.resp.bits
-  when (io.out.resp.bits.id === 1.U) {          // to instruction cache
+  when (io.out.resp.bits.id === ZhoushanConfig.InstCacheId.U) {
     io.out.resp.ready := io.in(0).resp.ready
     io.in(0).resp.valid := io.out.resp.valid
     io.in(1).resp.valid := false.B
-  } .elsewhen (io.out.resp.bits.id === 2.U) {   // to data cache
+  } .elsewhen (io.out.resp.bits.id === ZhoushanConfig.DataCacheId.U) {
     io.out.resp.ready := io.in(1).resp.ready
     io.in(0).resp.valid := false.B
     io.in(1).resp.valid := io.out.resp.valid
@@ -65,11 +65,11 @@ class CacheBusCrossbar2to1 extends Module {
   // resp logic - send to corresponding master device
   io.in(0).resp.bits := io.out.resp.bits
   io.in(1).resp.bits := io.out.resp.bits
-  when (io.out.resp.bits.id === 1.U) {          // to store queue - store
+  when (io.out.resp.bits.id === ZhoushanConfig.SqStoreId.U) {
     io.out.resp.ready := io.in(0).resp.ready
     io.in(0).resp.valid := io.out.resp.valid
     io.in(1).resp.valid := false.B
-  } .elsewhen (io.out.resp.bits.id === 2.U) {   // to store queue - load
+  } .elsewhen (io.out.resp.bits.id === ZhoushanConfig.SqLoadId.U) {
     io.out.resp.ready := io.in(1).resp.ready
     io.in(0).resp.valid := false.B
     io.in(1).resp.valid := io.out.resp.valid
