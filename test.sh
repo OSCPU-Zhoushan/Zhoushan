@@ -34,7 +34,7 @@ function riscv_tests {
   wait
 }
 
-while getopts 'qcrt:' OPT; do
+while getopts 'qcrt:w:' OPT; do
   case $OPT in
     q)
       quick_tests;;
@@ -43,6 +43,9 @@ while getopts 'qcrt:' OPT; do
     r)
       riscv_tests;;
     t)
+      example="$OPTARG"
+      ./build/emu -i ../am-kernels/tests/cpu-tests/build/${example}-riscv64-mycpu.bin;;
+    w)
       example="$OPTARG"
       ./build/emu -i ../am-kernels/tests/cpu-tests/build/${example}-riscv64-mycpu.bin -b 0 --dump-wave;;
     ?)
