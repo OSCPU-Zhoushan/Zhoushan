@@ -254,7 +254,7 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
 
   // handshake signals with IF unit
   in.req.ready := pipeline_ready
-  in.resp.valid := s2_hit_real || (state === s_miss_ok_r)
+  in.resp.valid := (s2_hit_real && !s2_wen) || (state === s_hit_w) || (state === s_miss_ok_r)
   in.resp.bits.rdata := 0.U
   in.resp.bits.user := s2_user
   in.resp.bits.id := s2_id
