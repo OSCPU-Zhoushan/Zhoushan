@@ -17,7 +17,8 @@ class StoreQueue extends Module with ZhoushanConfig {
     // from EX stage - LSU
     val in = Flipped(new CacheBusIO)
     // to data cache
-    val out = new CacheBusIO
+    val out_st = new CacheBusIO   // id = 1
+    val out_ld = new CacheBusIO   // id = 2
     // deq request from ROB
     val deq_req = Input(Bool())
   })
@@ -40,7 +41,7 @@ class StoreQueue extends Module with ZhoushanConfig {
 
   val deq_fire = WireInit(false.B)
   val deq_valid = !empty && !deq_req_empty
-  val deq_ready = io.out.req.ready && (deq_state === deq_idle)
+  val deq_ready = io.out_st.req.ready && (deq_state === deq_idle)
   deq_fire := deq_valid && deq_ready
 
   when (io.deq_req && !deq_fire) {
@@ -66,7 +67,7 @@ class StoreQueue extends Module with ZhoushanConfig {
       }
     }
     is (deq_wait) {
-      when (io.out.resp.fire()) {
+      when (io.out_st.resp.fire()) {
         deq_state := deq_idle
       }
     }
@@ -179,25 +180,36 @@ class StoreQueue extends Module with ZhoushanConfig {
       reg_is_store := true.B
     }
     when (io.in.req.bits.ren) {
-      io.in.req.ready := !load_hit && io.out.req.ready && (flush_state === flush_idle)
+      io.in.req.ready := io.out_ld.req.ready && !load_hit && (flush_state === flush_idle)
       reg_is_store := false.B
     }
   }
 
-  io.in.resp.valid      := Mux(is_store_real, (enq_state === enq_wait), io.out.resp.valid)
-  io.in.resp.bits.rdata := io.out.resp.bits.rdata
+  io.in.resp.valid      := Mux(is_store_real, (enq_state === enq_wait), io.out_ld.resp.valid)
+  io.in.resp.bits.rdata := io.out_ld.resp.bits.rdata
   io.in.resp.bits.user  := 0.U
   io.in.resp.bits.id    := 0.U
 
-  io.out.req.valid      := Mux(is_store_real, deq_valid, io.in.req.valid)
-  io.out.req.bits.addr  := Mux(is_store_real, sq(deq_ptr.value).addr, io.in.req.bits.addr)
-  io.out.req.bits.wdata := Mux(is_store_real, sq(deq_ptr.value).wdata, 0.U)
-  io.out.req.bits.wmask := Mux(is_store_real, sq(deq_ptr.value).wmask, 0.U)
-  io.out.req.bits.ren   := !is_store_real
-  io.out.req.bits.wen   := is_store_real
-  io.out.req.bits.user  := 0.U
-  io.out.req.bits.id    := 0.U
+  io.out_st.req.valid      := deq_valid
+  io.out_st.req.bits.addr  := sq(deq_ptr.value).addr
+  io.out_st.req.bits.wdata := sq(deq_ptr.value).wdata
+  io.out_st.req.bits.wmask := sq(deq_ptr.value).wmask
+  io.out_st.req.bits.ren   := false.B
+  io.out_st.req.bits.wen   := true.B
+  io.out_st.req.bits.user  := 0.U
+  io.out_st.req.bits.id    := 1.U
 
-  io.out.resp.ready     := Mux(is_store_real, (deq_state === deq_wait), io.in.resp.ready)
+  io.out_st.resp.ready     := (deq_state === deq_wait)
+
+  io.out_ld.req.valid      := io.in.req.valid && io.in.req.bits.ren && !load_hit && (flush_state === flush_idle)
+  io.out_ld.req.bits.addr  := io.in.req.bits.addr
+  io.out_ld.req.bits.wdata := 0.U
+  io.out_ld.req.bits.wmask := 0.U
+  io.out_ld.req.bits.ren   := true.B
+  io.out_ld.req.bits.wen   := false.B
+  io.out_ld.req.bits.user  := 0.U
+  io.out_ld.req.bits.id    := 2.U
+
+  io.out_ld.resp.ready     := io.in.resp.ready
 
 }
