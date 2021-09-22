@@ -79,17 +79,19 @@ abstract class AbstractIssueQueue(entries: Int, enq_width: Int, deq_width: Int) 
 
 class IntIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_width: Int) extends AbstractIssueQueue(entries, enq_width, deq_width) {
   val idx_width = log2Up(entries)
+  val addr_width = idx_width + 1
+  def getIdx(x: UInt): UInt = x(idx_width - 1, 0)
 
   val buf = Mem(entries, new MicroOp)
 
-  val enq_vec = RegInit(VecInit((0 until enq_width).map(_.U(idx_width.W))))
+  val enq_vec = RegInit(VecInit((0 until enq_width).map(_.U(addr_width.W))))
   val enq_ptr = enq_vec(0)
 
   val num_enq = Mux(io.in.fire(), PopCount(io.in.bits.vec.map(_.valid)), 0.U)
   val num_deq = PopCount(io.out.map(_.valid))
 
-  val enq_ready = RegInit(true.B)
-  enq_ready := enq_ptr < (entries - enq_width).U
+  val enq_ready = WireInit(true.B)
+  enq_ready := enq_ptr <= (entries - enq_width).U(addr_width.W)
 
   // deq
 
@@ -108,13 +110,11 @@ class IntIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_width: Int) exte
   // todo: currently only support 2-way
   val rl0 = Cat(ready_list.reverse)
   deq_vec(0) := PriorityEncoder(rl0)
+  deq_vec_valid(0) := ready_list(deq_vec(0))
 
   val rl1 = rl0 & ~UIntToOH(deq_vec(0), entries)
   deq_vec(1) := PriorityEncoder(rl1)
-
-  for (i <- 0 until deq_width) {
-    deq_vec_valid(i) := ready_list(deq_vec(i))
-  }
+  deq_vec_valid(1) := ready_list(deq_vec(1)) && (deq_vec(1) =/= deq_vec(0))
 
   for (i <- 0 until deq_width) {
     val deq = buf(deq_vec(i))
@@ -127,18 +127,26 @@ class IntIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_width: Int) exte
   val up1 = WireInit(VecInit(Seq.fill(entries)(false.B)))
   val up2 = WireInit(VecInit(Seq.fill(entries)(false.B)))
 
-  for (i <- 0 until entries - 1) {
+  for (i <- 0 until entries) {
     up1(i) := (i.U >= deq_vec(0)) && deq_vec_valid(0) && !up2(i)
   }
-  for (i <- 0 until entries - 2) {
+  for (i <- 0 until entries) {
     up2(i) := (i.U >= deq_vec(1) - 1.U) && deq_vec_valid(1)
   }
   for (i <- 0 until entries) {
     when (up1(i)) {
-      buf(i.U) := buf((i + 1).U)
+      if (i < entries - 1) {
+        buf(i.U) := buf((i + 1).U)
+      } else {
+        buf(i.U) := 0.U.asTypeOf(new MicroOp)
+      }
     }
     when (up2(i)) {
-      buf(i.U) := buf((i + 2).U)
+      if (i < entries - 2) {
+        buf(i.U) := buf((i + 2).U)
+      } else {
+        buf(i.U) := 0.U.asTypeOf(new MicroOp)
+      }
     }
   }
 
@@ -160,7 +168,7 @@ class IntIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_width: Int) exte
     enq.rob_addr := io.rob_addr(i)
 
     when (enq.valid && io.in.fire() && !io.flush) {
-      buf(enq_vec(enq_offset(i))) := enq
+      buf(getIdx(enq_vec(enq_offset(i)))) := enq
     }
   }
 
@@ -179,7 +187,7 @@ class IntIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_width: Int) exte
       buf(i) := 0.U.asTypeOf(new MicroOp)
     }
     enq_ready := true.B
-    enq_vec := VecInit((0 until enq_width).map(_.U(idx_width.W)))
+    enq_vec := VecInit((0 until enq_width).map(_.U(addr_width.W)))
   }
 
   if (DebugIntIssueQueue) {
