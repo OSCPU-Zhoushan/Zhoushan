@@ -166,7 +166,7 @@ class IntIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_width: Int) exte
 
   val next_enq_vec = VecInit(enq_vec.map(_ + num_enq - num_deq))
 
-  when (io.in.fire() && !io.flush) {
+  when ((io.in.fire() || Cat(io.out.map(_.valid)).orR) && !io.flush) {
     enq_vec := next_enq_vec
   }
 
