@@ -64,7 +64,7 @@ class IssueUnit extends Module with ZhoushanConfig {
 
 }
 
-class IssueQueue(entries: Int, enq_width: Int, deq_width: Int) extends Module with ZhoushanConfig {
+abstract class AbstractIssueQueue(entries: Int, enq_width: Int, deq_width: Int) extends Module with ZhoushanConfig {
   val io = IO(new Bundle {
     val flush = Input(Bool())
     val in = Flipped(Decoupled(new MicroOpVec(enq_width)))
@@ -75,7 +75,9 @@ class IssueQueue(entries: Int, enq_width: Int, deq_width: Int) extends Module wi
     // from ex stage
     val fu_ready = Input(Bool())
   })
+}
 
+class IssueQueue(entries: Int, enq_width: Int, deq_width: Int) extends AbstractIssueQueue(entries, enq_width, deq_width) {
   val idx_width = log2Ceil(entries)
   val addr_width = idx_width + 1  // MSB is flag bit
   def getIdx(x: UInt): UInt = x(idx_width - 1, 0)
