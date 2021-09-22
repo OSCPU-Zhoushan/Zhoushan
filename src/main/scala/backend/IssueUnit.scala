@@ -28,7 +28,7 @@ class IssueUnit extends Module with ZhoushanConfig {
   int_iq.io.avail_list := io.avail_list
   int_iq.io.fu_ready := true.B
 
-  val mem_iq = Module(new IssueQueueInOrder(entries = MemIssueQueueSize, enq_width = DecodeWidth, deq_width = 1))
+  val mem_iq = Module(new MemIssueQueueOutOfOrder(entries = MemIssueQueueSize, enq_width = DecodeWidth, deq_width = 1))
   mem_iq.io.flush := io.flush
   mem_iq.io.rob_addr := io.rob_addr
   mem_iq.io.avail_list := io.avail_list
@@ -87,7 +87,7 @@ abstract class AbstractIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_wi
   val addr_width = idx_width + 1
   def getIdx(x: UInt): UInt = x(idx_width - 1, 0)
 
-  val buf = Mem(entries, new MicroOp)
+  val buf = RegInit(VecInit(Seq.fill(entries)(0.U.asTypeOf(new MicroOp))))
 
   val enq_vec = RegInit(VecInit((0 until enq_width).map(_.U(addr_width.W))))
   val enq_ptr = enq_vec(0)
@@ -191,7 +191,7 @@ class IntIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_width: Int)
 
   /* ---------- flush ---------- */
 
-  when (reset.asBool() || io.flush) {
+  when (io.flush) {
     for (i <- 0 until entries) {
       buf(i) := 0.U.asTypeOf(new MicroOp)
     }
@@ -199,6 +199,117 @@ class IntIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_width: Int)
   }
 
   if (DebugIntIssueQueue) {
+    for (i <- 0 until entries / 8) {
+      printf("%d: [IQ - I] ", DebugTimer());
+      for (j <- 0 until 8) {
+        val idx = i * 8 + j
+        printf("%d-%x(%x)\t", idx.U, buf(idx).pc, buf(idx).valid)
+      }
+      printf("\n")
+    }
+  }
+}
+
+class MemIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_width: Int)
+    extends AbstractIssueQueueOutOfOrder(entries, enq_width, deq_width) {
+
+  val is_store = Wire(Vec(entries, Bool()))
+  for (i <- 0 until entries) {
+    is_store(i) := (buf(i).mem_code === Constant.MEM_ST)
+  }
+
+  val store_mask = Wire(Vec(entries, Bool()))
+  for (i <- 0 until entries) {
+    store_mask(i) := !(Cat((0 to i).map(is_store(_))).orR)
+  }
+
+  /* ---------- deq ------------ */
+
+  val deq_vec = Wire(Vec(deq_width, UInt(idx_width.W)))
+  val deq_vec_valid = Wire(Vec(deq_width, Bool()))
+
+  // ready to issue check
+  val ready_list = WireInit(VecInit(Seq.fill(entries)(false.B)))
+  for (i <- 0 until entries) {
+    val rs1_avail = io.avail_list(buf(i).rs1_paddr)
+    val rs2_avail = io.avail_list(buf(i).rs2_paddr)
+    val fu_ready = io.fu_ready
+    val store_ready = WireInit(false.B)
+    if (i == 0) {
+      store_ready := true.B
+    } else {
+      store_ready := store_mask(i)
+    }
+    ready_list(i) := rs1_avail && rs2_avail && fu_ready && store_ready
+  }
+
+  // 1-way load/store instruction issue
+  val rl0 = Cat(ready_list.reverse)
+  deq_vec(0) := PriorityEncoder(rl0)
+  deq_vec_valid(0) := ready_list(deq_vec(0))
+
+  for (i <- 0 until deq_width) {
+    val deq = buf(deq_vec(i))
+    io.out(i) := deq
+    io.out(i).valid := deq.valid && deq_vec_valid(i)
+  }
+
+  // collapse logic
+  val up1 = WireInit(VecInit(Seq.fill(entries)(false.B)))
+
+  for (i <- 0 until entries) {
+    up1(i) := (i.U >= deq_vec(0)) && deq_vec_valid(0)
+  }
+  for (i <- 0 until entries) {
+    when (up1(i)) {
+      if (i < entries - 1) {
+        buf(i.U) := buf((i + 1).U)
+      } else {
+        buf(i.U) := 0.U.asTypeOf(new MicroOp)
+      }
+    }
+  }
+
+  /* ---------- enq ------------ */
+
+  val enq_offset = Wire(Vec(enq_width, UInt(log2Ceil(enq_width + 1).W)))
+  for (i <- 0 until enq_width) {
+    if (i == 0) {
+      enq_offset(i) := 0.U
+    } else {
+      // todo: currently only support 2-way
+      enq_offset(i) := PopCount(io.in.bits.vec(0).valid)
+    }
+  }
+
+  for (i <- 0 until enq_width) {
+    val enq = Wire(new MicroOp)
+    enq := io.in.bits.vec(i)
+    enq.rob_addr := io.rob_addr(i)
+
+    when (enq.valid && io.in.fire() && !io.flush) {
+      buf(getIdx(enq_vec(enq_offset(i)))) := enq
+    }
+  }
+
+  val next_enq_vec = VecInit(enq_vec.map(_ + num_enq - num_deq))
+
+  when ((io.in.fire() || Cat(io.out.map(_.valid)).orR) && !io.flush) {
+    enq_vec := next_enq_vec
+  }
+
+  io.in.ready := enq_ready
+
+  /* ---------- flush ---------- */
+
+  when (io.flush) {
+    for (i <- 0 until entries) {
+      buf(i) := 0.U.asTypeOf(new MicroOp)
+    }
+    enq_vec := VecInit((0 until enq_width).map(_.U(addr_width.W)))
+  }
+
+  if (DebugMemIssueQueue) {
     for (i <- 0 until entries / 8) {
       printf("%d: [IQ - I] ", DebugTimer());
       for (j <- 0 until 8) {

@@ -29,6 +29,7 @@ trait ZhoushanConfig {
   val DebugRename = false
   val DebugRenameVerbose = false
   val DebugIntIssueQueue = false
+  val DebugMemIssueQueue = true
   val DebugCommit = false
   val DebugSram = false
   val DebugLsu = false
