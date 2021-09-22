@@ -15,8 +15,8 @@ class CoreBusCrossbar2to1 extends Module {
   arbiter.io.in(1) <> io.in(1).req
 
   // req logic
-  io.in(0).req.ready := (arbiter.io.chosen === 0.U)
-  io.in(1).req.ready := (arbiter.io.chosen === 1.U)
+  io.in(0).req.ready := (arbiter.io.chosen === 0.U) && io.out.req.ready
+  io.in(1).req.ready := (arbiter.io.chosen === 1.U) && io.out.req.ready
   (io.out.req, arbiter.io.out) match { case (l, r) => {
     l.bits := r.bits
     l.valid := r.valid
@@ -26,11 +26,11 @@ class CoreBusCrossbar2to1 extends Module {
   // resp logic - send to corresponding master device
   io.in(0).resp.bits := io.out.resp.bits
   io.in(1).resp.bits := io.out.resp.bits
-  when (io.out.resp.bits.id === 1.U) {          // to InstFetch
+  when (io.out.resp.bits.id === 1.U) {          // to instruction cache
     io.out.resp.ready := io.in(0).resp.ready
     io.in(0).resp.valid := io.out.resp.valid
     io.in(1).resp.valid := false.B
-  } .elsewhen (io.out.resp.bits.id === 2.U) {   // to LSU
+  } .elsewhen (io.out.resp.bits.id === 2.U) {   // to data cache
     io.out.resp.ready := io.in(1).resp.ready
     io.in(0).resp.valid := false.B
     io.in(1).resp.valid := io.out.resp.valid
@@ -54,8 +54,8 @@ class CacheBusCrossbar2to1 extends Module {
   arbiter.io.in(1) <> io.in(1).req
 
   // req logic
-  io.in(0).req.ready := (arbiter.io.chosen === 0.U)
-  io.in(1).req.ready := (arbiter.io.chosen === 1.U)
+  io.in(0).req.ready := (arbiter.io.chosen === 0.U) && io.out.req.ready
+  io.in(1).req.ready := (arbiter.io.chosen === 1.U) && io.out.req.ready
   (io.out.req, arbiter.io.out) match { case (l, r) => {
     l.bits := r.bits
     l.valid := r.valid
@@ -108,8 +108,8 @@ class CacheBusCrossbar1to2 extends Module {
   arbiter.io.in(1) <> io.out(1).resp
 
   // resp logic
-  io.out(0).resp.ready := (arbiter.io.chosen === 0.U)
-  io.out(1).resp.ready := (arbiter.io.chosen === 1.U)
+  io.out(0).resp.ready := (arbiter.io.chosen === 0.U) && io.in.resp.ready
+  io.out(1).resp.ready := (arbiter.io.chosen === 1.U) && io.in.resp.ready
   (io.in.resp, arbiter.io.out) match { case (l, r) => {
     l.bits := r.bits
     l.valid := r.valid
