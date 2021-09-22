@@ -22,13 +22,13 @@ class IssueUnit extends Module with ZhoushanConfig {
     val lsu_ready = Input(Bool())
   })
 
-  val int_iq = Module(new IssueQueue(entries = IntIssueQueueSize, enq_width = DecodeWidth, deq_width = IssueWidth - 1))
+  val int_iq = Module(new IntIssueQueueOutOfOrder(entries = IntIssueQueueSize, enq_width = DecodeWidth, deq_width = IssueWidth - 1))
   int_iq.io.flush := io.flush
   int_iq.io.rob_addr := io.rob_addr
   int_iq.io.avail_list := io.avail_list
   int_iq.io.fu_ready := true.B
 
-  val mem_iq = Module(new IssueQueue(entries = MemIssueQueueSize, enq_width = DecodeWidth, deq_width = 1))
+  val mem_iq = Module(new IssueQueueInOrder(entries = MemIssueQueueSize, enq_width = DecodeWidth, deq_width = 1))
   mem_iq.io.flush := io.flush
   mem_iq.io.rob_addr := io.rob_addr
   mem_iq.io.avail_list := io.avail_list
@@ -77,8 +77,125 @@ abstract class AbstractIssueQueue(entries: Int, enq_width: Int, deq_width: Int) 
   })
 }
 
-class IssueQueue(entries: Int, enq_width: Int, deq_width: Int) extends AbstractIssueQueue(entries, enq_width, deq_width) {
-  val idx_width = log2Ceil(entries)
+class IntIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_width: Int) extends AbstractIssueQueue(entries, enq_width, deq_width) {
+  val idx_width = log2Up(entries)
+
+  val buf = Mem(entries, new MicroOp)
+
+  val enq_vec = RegInit(VecInit((0 until enq_width).map(_.U(idx_width.W))))
+  val enq_ptr = enq_vec(0)
+
+  val num_enq = Mux(io.in.fire(), PopCount(io.in.bits.vec.map(_.valid)), 0.U)
+  val num_deq = PopCount(io.out.map(_.valid))
+
+  val enq_ready = RegInit(true.B)
+  enq_ready := enq_ptr < (entries - enq_width).U
+
+  // deq
+
+  val deq_vec = Wire(Vec(deq_width, UInt(idx_width.W)))
+  val deq_vec_valid = Wire(Vec(deq_width, Bool()))
+
+  // ready to issue check
+  val ready_list = WireInit(VecInit(Seq.fill(entries)(false.B)))
+  for (i <- 0 until entries) {
+    val rs1_avail = io.avail_list(buf(i).rs1_paddr)
+    val rs2_avail = io.avail_list(buf(i).rs2_paddr)
+    val fu_ready = io.fu_ready
+    ready_list(i) := rs1_avail && rs2_avail && fu_ready
+  }
+
+  // todo: currently only support 2-way
+  val rl0 = Cat(ready_list.reverse)
+  deq_vec(0) := PriorityEncoder(rl0)
+
+  val rl1 = rl0 & ~UIntToOH(deq_vec(0), entries)
+  deq_vec(1) := PriorityEncoder(rl1)
+
+  for (i <- 0 until deq_width) {
+    deq_vec_valid(i) := ready_list(deq_vec(i))
+  }
+
+  for (i <- 0 until deq_width) {
+    val deq = buf(deq_vec(i))
+    io.out(i) := deq
+    io.out(i).valid := deq.valid && deq_vec_valid(i)
+  }
+
+  // collapse logic
+  // todo: currently only support 2-way
+  val up1 = WireInit(VecInit(Seq.fill(entries)(false.B)))
+  val up2 = WireInit(VecInit(Seq.fill(entries)(false.B)))
+
+  for (i <- 0 until entries - 1) {
+    up1(i) := (i.U >= deq_vec(0)) && deq_vec_valid(0) && !up2(i)
+  }
+  for (i <- 0 until entries - 2) {
+    up2(i) := (i.U >= deq_vec(1) - 1.U) && deq_vec_valid(1)
+  }
+  for (i <- 0 until entries) {
+    when (up1(i)) {
+      buf(i.U) := buf((i + 1).U)
+    }
+    when (up2(i)) {
+      buf(i.U) := buf((i + 2).U)
+    }
+  }
+
+  // enq
+
+  val enq_offset = Wire(Vec(enq_width, UInt(log2Ceil(enq_width + 1).W)))
+  for (i <- 0 until enq_width) {
+    if (i == 0) {
+      enq_offset(i) := 0.U
+    } else {
+      // todo: currently only support 2-way
+      enq_offset(i) := PopCount(io.in.bits.vec(0).valid)
+    }
+  }
+
+  for (i <- 0 until enq_width) {
+    val enq = Wire(new MicroOp)
+    enq := io.in.bits.vec(i)
+    enq.rob_addr := io.rob_addr(i)
+
+    when (enq.valid && io.in.fire() && !io.flush) {
+      buf(enq_vec(enq_offset(i))) := enq
+    }
+  }
+
+  val next_enq_vec = VecInit(enq_vec.map(_ + num_enq - num_deq))
+
+  when (io.in.fire() && !io.flush) {
+    enq_vec := next_enq_vec
+  }
+
+  io.in.ready := enq_ready
+
+  // flush
+
+  when (reset.asBool() || io.flush) {
+    for (i <- 0 until entries) {
+      buf(i) := 0.U.asTypeOf(new MicroOp)
+    }
+    enq_ready := true.B
+    enq_vec := VecInit((0 until enq_width).map(_.U(idx_width.W)))
+  }
+
+  if (DebugIntIssueQueue) {
+    for (i <- 0 until entries / 8) {
+      printf("%d: [IQ - I] ", DebugTimer());
+      for (j <- 0 until 8) {
+        val idx = i * 8 + j
+        printf("%d-%x(%x)\t", idx.U, buf(idx).pc, buf(idx).valid)
+      }
+      printf("\n")
+    }
+  }
+}
+
+class IssueQueueInOrder(entries: Int, enq_width: Int, deq_width: Int) extends AbstractIssueQueue(entries, enq_width, deq_width) {
+  val idx_width = log2Up(entries)
   val addr_width = idx_width + 1  // MSB is flag bit
   def getIdx(x: UInt): UInt = x(idx_width - 1, 0)
   def getFlag(x: UInt): Bool = x(addr_width - 1).asBool()

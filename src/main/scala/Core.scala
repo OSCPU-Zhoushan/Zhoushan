@@ -141,7 +141,7 @@ class Core extends Module with ZhoushanConfig {
         printf("%c", rf_a0(7, 0))
       }
 
-      if (DebugMsgCommit) {
+      if (DebugCommit) {
         val u = cm(i)
         when (u.valid) {
           printf("%d: [CM %d ] pc=%x inst=%x rs1=%d->%d rs2=%d->%d rd(en=%x)=%d->%d bp(br=%x bpc=%x) rob=%d\n", DebugTimer(), i.U, 

@@ -3,7 +3,7 @@ package zhoushan
 import chisel3.util._
 
 trait ZhoushanConfig {
-  // MMIO
+  // MMIO Address Map
   val ClintAddrBase = 0x02000000
   val ClintAddrSize = 0x10000
   // Bus ID
@@ -25,14 +25,16 @@ trait ZhoushanConfig {
   val StoreQueueSize = 4
   // Settings
   val EnableDifftest = true
-  val DebugMsgRename = false
-  val DebugMsgRenameVerbose = false
-  val DebugMsgCommit = false
-  val DebugMsgSram = false
-  val DebugMsgLsu = false
-  val DebugMsgStoreQueue = false
-  val DebugMsgICache = false
-  val DebugMsgDCache = false
+  // Debug Info
+  val DebugRename = false
+  val DebugRenameVerbose = false
+  val DebugIntIssueQueue = false
+  val DebugCommit = false
+  val DebugSram = false
+  val DebugLsu = false
+  val DebugStoreQueue = false
+  val DebugICache = false
+  val DebugDCache = false
   val DebugBranchPredictorRas = false
   val DebugBranchPredictorBtb = false
 }

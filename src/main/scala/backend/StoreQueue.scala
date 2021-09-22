@@ -54,7 +54,7 @@ class StoreQueue extends Module with ZhoushanConfig {
     sq(deq_ptr.value).valid := false.B
     deq_ptr.inc()
 
-    if (DebugMsgStoreQueue) {
+    if (DebugStoreQueue) {
       printf("%d: [SQ - D] idx=%d v=%x addr=%x wdata=%x wmask=%x\n", DebugTimer(), deq_ptr.value,
              sq(deq_ptr.value).valid, sq(deq_ptr.value).addr, sq(deq_ptr.value).wdata, sq(deq_ptr.value).wmask)
     }
@@ -90,7 +90,7 @@ class StoreQueue extends Module with ZhoushanConfig {
     sq(enq_ptr.value) := enq
     enq_ptr.inc()
 
-    if (DebugMsgStoreQueue) {
+    if (DebugStoreQueue) {
       printf("%d: [SQ - E] idx=%d v=%x addr=%x wdata=%x wmask=%x\n", DebugTimer(), enq_ptr.value,
              enq.valid, enq.addr, enq.wdata, enq.wmask)
     }
@@ -144,12 +144,12 @@ class StoreQueue extends Module with ZhoushanConfig {
       when (io.flush) {
         when (deq_req_empty) {
           flush_all()
-          if (DebugMsgStoreQueue) {
+          if (DebugStoreQueue) {
             printf("%d: [SQ - F] SQ empty - OK\n", DebugTimer())
           }
         } .otherwise {
           flush_state := flush_wait
-          if (DebugMsgStoreQueue) {
+          if (DebugStoreQueue) {
             printf("%d: [SQ - F] SQ not empty - deq_req_counter=%d\n", DebugTimer(), deq_req_counter)
           }
         }
@@ -160,7 +160,7 @@ class StoreQueue extends Module with ZhoushanConfig {
       when (deq_req_empty) {
         flush_all()
         flush_state := flush_idle
-        if (DebugMsgStoreQueue) {
+        if (DebugStoreQueue) {
           printf("%d: [SQ - F] SQ empty - OK, clear all deq req\n", DebugTimer())
         }
       }

@@ -85,7 +85,7 @@ class Rename extends Module with ZhoushanConfig {
   io.out.bits.vec := out_uop
   io.out.valid := out_valid
 
-  if (DebugMsgRename) {
+  if (DebugRename) {
     for (i <- 0 until DecodeWidth) {
       val u = io.out.bits.vec(i)
       when (u.valid) {
@@ -154,7 +154,7 @@ class RenameTable extends Module with ZhoushanConfig {
 
   BoringUtils.addSource(arch_table, "arch_rename_table")
 
-  if (DebugMsgRenameVerbose) {
+  if (DebugRenameVerbose) {
     for (i <- 0 until 32 / 8) {
       printf("%d: [RR RT] ", DebugTimer());
       for (j <- 0 until 8) {
@@ -233,7 +233,7 @@ class PrfStateTable extends Module with PrfStateConstant with ZhoushanConfig {
   // default 
   table(0) := COMMITTED
 
-  if (DebugMsgRenameVerbose) {
+  if (DebugRenameVerbose) {
     for (i <- 0 until PrfSize / 16) {
       printf("%d: [RRPST] ", DebugTimer());
       for (j <- 0 until 16) {

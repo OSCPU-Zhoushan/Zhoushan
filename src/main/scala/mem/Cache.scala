@@ -276,7 +276,7 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
   out.req.bits.len := 1.U
   out.resp.ready := (state === s_miss_wait_r) || (state === s_miss_wait_w)
 
-  if ((DebugMsgICache && id == 1) || (DebugMsgDCache && id == 2)) {
+  if ((DebugICache && id == 1) || (DebugDCache && id == 2)) {
     when (in.req.fire()) {
       printf("%d: [$ %d] [IN -REQ ] addr=%x wen=%x wdata=%x\n", DebugTimer(), id.U, in.req.bits.addr, in.req.bits.wen, in.req.bits.wdata)
     }
