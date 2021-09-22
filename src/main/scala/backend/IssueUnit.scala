@@ -64,7 +64,9 @@ class IssueUnit extends Module with ZhoushanConfig {
 
 }
 
-abstract class AbstractIssueQueue(entries: Int, enq_width: Int, deq_width: Int) extends Module with ZhoushanConfig {
+abstract class AbstractIssueQueue(entries: Int, enq_width: Int, deq_width: Int)
+    extends Module with ZhoushanConfig {
+
   val io = IO(new Bundle {
     val flush = Input(Bool())
     val in = Flipped(Decoupled(new MicroOpVec(enq_width)))
@@ -75,9 +77,12 @@ abstract class AbstractIssueQueue(entries: Int, enq_width: Int, deq_width: Int) 
     // from ex stage
     val fu_ready = Input(Bool())
   })
+
 }
 
-class IntIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_width: Int) extends AbstractIssueQueue(entries, enq_width, deq_width) {
+abstract class AbstractIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_width: Int)
+    extends AbstractIssueQueue(entries, enq_width, deq_width) {
+
   val idx_width = log2Up(entries)
   val addr_width = idx_width + 1
   def getIdx(x: UInt): UInt = x(idx_width - 1, 0)
@@ -90,10 +95,14 @@ class IntIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_width: Int) exte
   val num_enq = Mux(io.in.fire(), PopCount(io.in.bits.vec.map(_.valid)), 0.U)
   val num_deq = PopCount(io.out.map(_.valid))
 
-  val enq_ready = WireInit(true.B)
-  enq_ready := enq_ptr <= (entries - enq_width).U(addr_width.W)
+  val enq_ready = enq_ptr <= (entries - enq_width).U(addr_width.W)
 
-  // deq
+}
+
+class IntIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_width: Int)
+    extends AbstractIssueQueueOutOfOrder(entries, enq_width, deq_width) {
+
+  /* ---------- deq ------------ */
 
   val deq_vec = Wire(Vec(deq_width, UInt(idx_width.W)))
   val deq_vec_valid = Wire(Vec(deq_width, Bool()))
@@ -150,7 +159,7 @@ class IntIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_width: Int) exte
     }
   }
 
-  // enq
+  /* ---------- enq ------------ */
 
   val enq_offset = Wire(Vec(enq_width, UInt(log2Ceil(enq_width + 1).W)))
   for (i <- 0 until enq_width) {
@@ -180,13 +189,12 @@ class IntIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_width: Int) exte
 
   io.in.ready := enq_ready
 
-  // flush
+  /* ---------- flush ---------- */
 
   when (reset.asBool() || io.flush) {
     for (i <- 0 until entries) {
       buf(i) := 0.U.asTypeOf(new MicroOp)
     }
-    enq_ready := true.B
     enq_vec := VecInit((0 until enq_width).map(_.U(addr_width.W)))
   }
 
