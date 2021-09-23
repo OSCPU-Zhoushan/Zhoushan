@@ -203,11 +203,11 @@ class Rob extends Module with ZhoushanConfig {
     }
   }
 
-  if (DebugRobFlushSignal) {
-    when (io.jmp_packet.valid && io.jmp_packet.mis) {
-      printf("%d: [FLUSH] pc=%x pred=%x->%x real=%x->%x\n", DebugTimer(),
+  if (DebugJmpPacket) {
+    when (io.jmp_packet.valid) {
+      printf("%d: [ JMP ] pc=%x pred=%x->%x real=%x->%x mis=%x\n", DebugTimer(),
              io.jmp_packet.inst_pc, io.jmp_packet.pred_br, io.jmp_packet.pred_bpc,
-             io.jmp_packet.jmp, io.jmp_packet.jmp_pc)
+             io.jmp_packet.jmp, io.jmp_packet.jmp_pc, io.jmp_packet.mis)
     }
   }
 
