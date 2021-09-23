@@ -61,7 +61,7 @@ class Core extends Module with ZhoushanConfig {
   isu.io.rob_addr := rob.io.rob_addr
   isu.io.flush := flush
   isu.io.avail_list := rename.io.avail_list
-  isu.io.rob_empty := rob.io.empty
+  isu.io.csr_ready := rob.io.csr_ready
 
   stall_reg.io.out.ready := rob.io.in.ready && isu.io.in.ready
 

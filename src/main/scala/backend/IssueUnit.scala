@@ -21,7 +21,7 @@ class IssueUnit extends Module with ZhoushanConfig {
     // from ex stage
     val lsu_ready = Input(Bool())
     // from rob
-    val rob_empty = Input(Bool())
+    val csr_ready = Input(Bool())
   })
 
   val int_iq = Module(new IntIssueQueueOutOfOrder(entries = IntIssueQueueSize, enq_width = DecodeWidth, deq_width = IssueWidth - 1))
@@ -54,10 +54,10 @@ class IssueUnit extends Module with ZhoushanConfig {
 
   int_iq.io.in.bits.vec := uop_int
   int_iq.io.in.valid := io.in.valid && Cat(uop_int.map(_.valid)).orR && mem_iq.io.in.ready
-  int_iq.io.rob_empty := io.rob_empty
+  int_iq.io.csr_ready := io.csr_ready
   mem_iq.io.in.bits.vec := uop_mem
   mem_iq.io.in.valid := io.in.valid && Cat(uop_mem.map(_.valid)).orR && int_iq.io.in.ready
-  mem_iq.io.rob_empty := io.rob_empty
+  mem_iq.io.csr_ready := false.B
 
   for (i <- 0 until IssueWidth - 1) {
     io.out(i) := int_iq.io.out(i)
@@ -81,7 +81,7 @@ abstract class AbstractIssueQueue(entries: Int, enq_width: Int, deq_width: Int)
     // from ex stage
     val fu_ready = Input(Bool())
     // from rob
-    val rob_empty = Input(Bool())
+    val csr_ready = Input(Bool())
   })
 
 }
@@ -127,7 +127,7 @@ class IntIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_width: Int)
     val rs2_avail = io.avail_list(buf(i).rs2_paddr)
     val fu_ready = io.fu_ready
     if (i == 0) {
-      ready_list(i) := rs1_avail && rs2_avail && fu_ready && (!is_csr(i) || (is_csr(i) && io.rob_empty))
+      ready_list(i) := rs1_avail && rs2_avail && fu_ready && (!is_csr(i) || (is_csr(i) && io.csr_ready))
     } else {
       ready_list(i) := rs1_avail && rs2_avail && fu_ready && !is_csr(i)
     }

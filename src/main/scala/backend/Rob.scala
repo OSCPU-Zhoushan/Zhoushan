@@ -30,8 +30,8 @@ class Rob extends Module with ZhoushanConfig {
     val sq_deq_req = Output(Bool())
     // flush input
     val flush = Input(Bool())
-    // empty output
-    val empty = Output(Bool())
+    // csr instruction ready to issue signal
+    val csr_ready = Output(Bool())
   })
 
   val rob = SyncReadMem(entries, new MicroOp, SyncReadMem.WriteFirst)
@@ -44,8 +44,6 @@ class Rob extends Module with ZhoushanConfig {
   val deq_flag = getFlag(deq_vec(0))
 
   val count = Mux(enq_flag === deq_flag, enq_ptr - deq_ptr, entries.U + enq_ptr - deq_ptr)
-
-  io.empty := (enq_flag === deq_flag) && (enq_ptr === deq_ptr)
 
   val num_enq = Mux(io.in.fire(), PopCount(io.in.bits.vec.map(_.valid)), 0.U)
   val num_deq = PopCount(io.cm.map(_.valid))
@@ -140,11 +138,17 @@ class Rob extends Module with ZhoushanConfig {
 
   io.sq_deq_req := false.B
 
+  // csr instruction ready to issue signal
+  io.csr_ready := false.B
+
   for (i <- 0 until deq_width) {
     val deq_addr_sync = getIdx(next_deq_vec(i))
     val deq_uop = rob.read(deq_addr_sync)
     val deq_addr_async = getIdx(deq_vec(i))
     val deq_ecp = ecp(deq_addr_async)
+    when (deq_uop.fu_code === FU_CSR) {
+      io.csr_ready := true.B
+    }
     io.cm(i) := deq_uop
     io.cm_rd_data(i) := deq_ecp.rd_data
     jmp_valid(i) := deq_ecp.jmp_valid
