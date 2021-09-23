@@ -193,10 +193,10 @@ class BranchTargetBuffer4WayAssociative extends AbstractBranchTargetBuffer {
         io.rhit(i) := true.B
         io.rtarget(i) := rdata(j).target
         io.rras_type(i) := rdata(j).ras_type
-        when (io.ren(i)) {
-          updatePlruTree(io.raddr(i), j.U)
+        when (RegNext(io.ren(i))) {
+          updatePlruTree(RegNext(io.raddr(i)), j.U)
           if (DebugBranchPredictorBtb) {
-            printf("%d: [BTB-R] addr=%d way=%x\n", DebugTimer(), io.raddr(i), j.U)
+            printf("%d: [BTB-R] addr=%d way=%x\n", DebugTimer(), RegNext(io.raddr(i)), j.U)
           }
         }
       }
