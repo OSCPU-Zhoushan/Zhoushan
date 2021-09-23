@@ -128,4 +128,7 @@ class JmpPacket extends Bundle {
   val mis = Bool()
   val intr = Bool()
   val ras_type = UInt(2.W)
+  // debug info
+  val pred_br = Bool()
+  val pred_bpc = UInt(32.W)
 }

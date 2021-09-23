@@ -178,6 +178,10 @@ class Rob extends Module with ZhoushanConfig {
                                    deq_uop.pred_br)
       io.jmp_packet.intr    := false.B  // todo
 
+      // debug info
+      io.jmp_packet.pred_br := deq_uop.pred_br
+      io.jmp_packet.pred_bpc := deq_uop.pred_bpc
+
       // ref: riscv-spec-20191213 page 21-22
       val rd_link = (deq_uop.rd_addr === 1.U || deq_uop.rd_addr === 5.U)
       val rs1_link = (deq_uop.rs1_addr === 1.U || deq_uop.rs1_addr === 5.U)
@@ -196,6 +200,14 @@ class Rob extends Module with ZhoushanConfig {
         ))
       }
       io.jmp_packet.ras_type := ras_type
+    }
+  }
+
+  if (DebugRobFlushSignal) {
+    when (io.jmp_packet.valid && io.jmp_packet.mis) {
+      printf("%d: [FLUSH] pc=%x pred=%x->%x real=%x->%x\n", DebugTimer(),
+             io.jmp_packet.inst_pc, io.jmp_packet.pred_br, io.jmp_packet.pred_bpc,
+             io.jmp_packet.jmp, io.jmp_packet.jmp_pc)
     }
   }
 
