@@ -7,16 +7,20 @@ import zhoushan.RasConstant._
 trait BpParameters {
   val BhtWidth = 6
   val BhtSize = 64
-  val BhtAddrSize = log2Up(BhtSize)     // 6
+  val BhtAddrSize = log2Up(BhtSize)         // 6
   val PhtWidth = 8
-  val PhtIndexSize = log2Up(PhtWidth)   // 3 
-  val PhtSize = 64                      // 2 ^ BhtWidth
-  val PhtAddrSize = log2Up(PhtSize)     // 6 <- BhtWidth
+  val PhtIndexSize = log2Up(PhtWidth)       // 3 
+  val PhtSize = 64                          // 2 ^ BhtWidth
+  val PhtAddrSize = log2Up(PhtSize)         // 6 <- BhtWidth
+  val BtbDirectMapped = true
   val BtbSize = 64
-  val BtbAddrSize = log2Up(BtbSize) - 2 // 4 (-2 due to 4-way associative)
-  val BtbTagSize = 29 - BtbAddrSize     // 31 - BtbAddrSize - 2
+  val BtbAddrSize = log2Up(BtbSize) - 
+                    (if (BtbDirectMapped) 0 // -0 due to direct mapped
+                    else 2)                 // -2 due to 4-way associative
+  val BtbTagSize = 29 - BtbAddrSize         // 31 - BtbAddrSize - 2
+  val RasEnable = false
   val RasSize = 16
-  val RasPtrSize = log2Up(RasSize)      // 4
+  val RasPtrSize = log2Up(RasSize)          // 4
 }
 
 class PatternHistoryTable extends Module with BpParameters with ZhoushanConfig {
@@ -93,7 +97,7 @@ sealed class BtbEntry extends Bundle with BpParameters {
   val ras_type = UInt(2.W)
 }
 
-class BranchTargetBuffer extends Module with BpParameters with ZhoushanConfig {
+abstract class AbstractBranchTargetBuffer extends Module with BpParameters with ZhoushanConfig {
   val io = IO(new Bundle {
     val raddr = Vec(FetchWidth, Input(UInt(BtbAddrSize.W)))
     val ren = Vec(FetchWidth, Input(Bool()))
@@ -109,6 +113,48 @@ class BranchTargetBuffer extends Module with BpParameters with ZhoushanConfig {
     // debug info
     val wpc = Input(UInt(32.W))
   })
+}
+
+class BranchTargetBufferDirectMapped extends AbstractBranchTargetBuffer {
+
+  val btb = SyncReadMem(BtbSize, new BtbEntry, SyncReadMem.WriteFirst)
+
+  val valid = RegInit(VecInit(Seq.fill(BtbSize)(false.B)))
+
+  for (i <- 0 until FetchWidth) {
+    val rdata = WireInit(0.U.asTypeOf(new BtbEntry))
+    val rvalid = RegInit(false.B)
+    io.rhit(i) := false.B
+    io.rtarget(i) := 0.U
+    io.rras_type(i) := RAS_X
+    rdata := btb.read(io.raddr(i))
+    rvalid := valid(io.raddr(i))
+    when (rvalid && (rdata.tag === RegNext(io.rtag(i)))) {
+      io.rhit(i) := true.B
+      io.rtarget(i) := rdata.target
+      io.rras_type(i) := rdata.ras_type
+    }
+  }
+
+  val wentry = Wire(new BtbEntry)
+  wentry.tag := io.wtag
+  wentry.target := io.wtarget
+  wentry.ras_type := io.wras_type
+  when (io.wen) {
+    btb.write(io.waddr, wentry)
+    valid(io.waddr) := true.B
+    if (DebugBranchPredictorRas) {
+      when (wentry.ras_type =/= RAS_X) {
+        printf("%d: [BTB-R] pc=%x ras_type=%x\n", DebugTimer(), io.wpc, io.wras_type)
+      }
+    }
+  }
+
+}
+
+class BranchTargetBuffer4WayAssociative extends AbstractBranchTargetBuffer {
+
+  // todo: we need to check hit status before write, otherwise we have multi way for the same addr
 
   // 4-way associative btb
   val btb = for (i <- 0 until 4) yield {
@@ -304,7 +350,8 @@ class BrPredictor extends Module with BpParameters with ZhoushanConfig {
   pht.io.wjmp := jmp_packet.jmp
 
   // BTB definition (direct-mapped)
-  val btb = Module(new BranchTargetBuffer)
+  val btb = Module(if (BtbDirectMapped) new BranchTargetBufferDirectMapped
+                   else new BranchTargetBuffer4WayAssociative)
   def btbAddr(x: UInt) : UInt = x(1 + BtbAddrSize, 2)
   def btbTag(x: UInt) : UInt = x(1 + BtbAddrSize + BtbTagSize, 2 + BtbAddrSize)
 
@@ -371,17 +418,19 @@ class BrPredictor extends Module with BpParameters with ZhoushanConfig {
       pred_br(i) := false.B
       pred_bpc(i) := Mux(jmp_packet.jmp, jmp_packet.jmp_pc, jmp_packet.inst_pc + 4.U)
     } .otherwise {
-      // temporarily skip RAS
-      /* when (ras_ret_en(i)) {
-        pred_br(i) := true.B
-        pred_bpc(i) := ras_ret_pc(i)
-      } .else */
       when (pht_rdirect(i)) {
         pred_br(i) := btb_rhit(i)   // equivalent to Mux(btb_rhit, pht_rdirect, false.B)
         pred_bpc(i) := Mux(btb_rhit(i), btb_rtarget(i), RegNext(npc))
       } .otherwise {
         pred_br(i) := false.B
         pred_bpc(i) := RegNext(npc)
+      }
+      if (RasEnable) {
+        // RAS has the highest prediction priority
+        when (ras_ret_en(i)) {
+          pred_br(i) := true.B
+          pred_bpc(i) := ras_ret_pc(i)
+        }
       }
     }
   }
