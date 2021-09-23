@@ -43,3 +43,16 @@ object BoolStopWatch {
     r
   }
 }
+
+object Delayer {
+  def apply(x: Data, delay: Int): Data = {
+    assert(delay >= 0, "Delayer: negative delay is invalid\n")
+    val r = RegInit(0.U(x.getWidth.W))
+    if (delay == 0) {
+      x
+    } else {
+      r := apply(x, delay - 1)
+      r
+    }
+  }
+}
