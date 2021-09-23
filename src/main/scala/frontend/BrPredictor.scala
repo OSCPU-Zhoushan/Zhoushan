@@ -7,12 +7,12 @@ import zhoushan.RasConstant._
 trait BpParameters {
   val BhtWidth = 6
   val BhtSize = 64
-  val BhtAddrSize = log2Up(BhtSize)         // 6
+  val BhtAddrSize = log2Up(BhtSize)
   val PhtWidth = 8
-  val PhtIndexSize = log2Up(PhtWidth)       // 3 
-  val PhtSize = 64                          // 2 ^ BhtWidth
-  val PhtAddrSize = log2Up(PhtSize)         // 6 <- BhtWidth
-  val BtbAssociative = false
+  val PhtIndexSize = log2Up(PhtWidth)
+  val PhtSize = 1 << BhtWidth               // 2 ^ BhtWidth
+  val PhtAddrSize = BhtWidth                // BhtWidth
+  val BtbAssociative = true
   val BtbSize = 64
   val BtbAddrSize = log2Up(BtbSize) - 
                     (if (BtbAssociative) 2  // -2 due to 4-way associative
@@ -20,7 +20,7 @@ trait BpParameters {
   val BtbTagSize = 29 - BtbAddrSize         // 31 - BtbAddrSize - 2
   val RasEnable = false
   val RasSize = 16
-  val RasPtrSize = log2Up(RasSize)          // 4
+  val RasPtrSize = log2Up(RasSize)
 }
 
 class PatternHistoryTable extends Module with BpParameters with ZhoushanConfig {
