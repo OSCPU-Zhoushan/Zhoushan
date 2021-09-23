@@ -89,11 +89,12 @@ abstract class AbstractIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_wi
 
   val buf = RegInit(VecInit(Seq.fill(entries)(0.U.asTypeOf(new MicroOp))))
 
-  val enq_vec = RegInit(VecInit((0 until enq_width).map(_.U(addr_width.W))))
-  val enq_ptr = enq_vec(0)
-
   val num_enq = Mux(io.in.fire(), PopCount(io.in.bits.vec.map(_.valid)), 0.U)
   val num_deq = PopCount(io.out.map(_.valid))
+
+  val enq_vec = RegInit(VecInit((0 until enq_width).map(_.U(addr_width.W))))
+  val enq_vec_real = VecInit(enq_vec.map(_ - num_deq))
+  val enq_ptr = enq_vec_real(0)
 
   val enq_ready = enq_ptr <= (entries - enq_width).U(addr_width.W)
 
@@ -177,7 +178,7 @@ class IntIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_width: Int)
     enq.rob_addr := io.rob_addr(i)
 
     when (enq.valid && io.in.fire() && !io.flush) {
-      buf(getIdx(enq_vec(enq_offset(i)))) := enq
+      buf(getIdx(enq_vec_real(enq_offset(i)))) := enq
     }
   }
 
@@ -288,7 +289,7 @@ class MemIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_width: Int)
     enq.rob_addr := io.rob_addr(i)
 
     when (enq.valid && io.in.fire() && !io.flush) {
-      buf(getIdx(enq_vec(enq_offset(i)))) := enq
+      buf(getIdx(enq_vec_real(enq_offset(i)))) := enq
     }
   }
 
