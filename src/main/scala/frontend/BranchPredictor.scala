@@ -5,19 +5,27 @@ import chisel3.util._
 import zhoushan.RasConstant._
 
 trait BpParameters {
+  // Branch History Table
   val BhtWidth = 6
   val BhtSize = 64
   val BhtAddrSize = log2Up(BhtSize)
-  val PhtWidth = 8
+  // Global History Table
+  val GhtWidth = 6
+  // Pattern History Table
+  val PhtLocal = true                         // PhtLocal is false -> GShare
+  val ChtWidth = if (PhtLocal) BhtWidth else GhtWidth
+  val PhtWidth = 8                            // only available for local PHT
   val PhtIndexSize = log2Up(PhtWidth)
-  val PhtSize = 1 << BhtWidth               // 2 ^ BhtWidth
-  val PhtAddrSize = BhtWidth                // BhtWidth
+  val PhtSize = 1 << ChtWidth
+  val PhtAddrSize = ChtWidth
+  // Branch Target Buffer
   val BtbAssociative = true
   val BtbSize = 64
-  val BtbAddrSize = log2Up(BtbSize) - 
-                    (if (BtbAssociative) 2  // -2 due to 4-way associative
-                    else 0)                 // -0 due to direct mapped
-  val BtbTagSize = 29 - BtbAddrSize         // 31 - BtbAddrSize - 2
+  val BtbAddrSize = log2Up(BtbSize) -
+                    (if (BtbAssociative) 2    // -2 due to 4-way associative
+                    else 0)                   // -0 due to direct mapped
+  val BtbTagSize = 29 - BtbAddrSize           // 31 - BtbAddrSize - 2
+  // Return Address Stack
   val RasEnable = false
   val RasSize = 16
   val RasPtrSize = log2Up(RasSize)
@@ -71,26 +79,38 @@ class BranchPredictor extends Module with BpParameters with ZhoushanConfig {
     bht(bht_waddr) := Cat(jmp_packet.jmp.asUInt(), bht_wrdata(BhtWidth - 1, 1))
   }
 
+  // GHT definition
+  val ght = RegInit(0.U(GhtWidth.W))
+
+  // GHT read logic
+  val ght_rdata = ght
+
+  // GHT update logic
+  when (jmp_packet.valid) {
+    ght := Cat(jmp_packet.jmp.asUInt(), ght(GhtWidth - 1, 1))
+  }
+
   // PHT definition
-  val pht = Module(new PatternHistoryTable)
-  def phtAddr(bht_data: UInt, x: UInt) : UInt = bht_data ^ x(1 + BhtWidth, 2)
-  def phtIndex(x: UInt) : UInt = x(7 + PhtIndexSize, 8)
+  val pht = Module(if (PhtLocal) new PatternHistoryTableLocal
+                   else new PatternHistoryTableGlobal)
+  def phtAddr(cht_data: UInt, x: UInt) : UInt = cht_data ^ x(1 + ChtWidth, 2)
+  def phtIndex(x: UInt) : UInt = x(1 + ChtWidth + PhtIndexSize, 2 + ChtWidth)
 
   // PHT read logic
   val pht_rdirect = WireInit(VecInit(Seq.fill(FetchWidth)(false.B)))
   for (i <- 0 until FetchWidth) {
-    pht.io.raddr(i) := phtAddr(bht_rdata(i), pc(i))
+    pht.io.raddr(i) := phtAddr(if (PhtLocal) bht_rdata(i) else ght_rdata, pc(i))
     pht.io.rindex(i) := phtIndex(pc(i))
     pht_rdirect(i) := pht.io.rdirect(i)
   }
 
   // PHT update logic
-  pht.io.waddr := phtAddr(bht_wrdata, jmp_packet.inst_pc)
+  pht.io.waddr := phtAddr(if (PhtLocal) bht_wrdata else ght_rdata, jmp_packet.inst_pc)
   pht.io.windex := phtIndex(jmp_packet.inst_pc)
   pht.io.wen := jmp_packet.valid
   pht.io.wjmp := jmp_packet.jmp
 
-  // BTB definition (direct-mapped)
+  // BTB definition
   val btb = Module(if (BtbAssociative) new BranchTargetBuffer4WayAssociative
                    else new BranchTargetBufferDirectMapped)
   def btbAddr(x: UInt) : UInt = x(1 + BtbAddrSize, 2)
