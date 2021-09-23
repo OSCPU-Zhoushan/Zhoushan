@@ -174,6 +174,16 @@ class Core extends Module with ZhoushanConfig {
     }
     dt_te.io.cycleCnt := cycle_cnt
     dt_te.io.instrCnt := instr_cnt
+
+    if (EnableMisRateCounter) {
+      val profile_jmp_counter = WireInit(UInt(64.W), 0.U)
+      val profile_mis_counter = WireInit(UInt(64.W), 0.U)
+      BoringUtils.addSink(profile_jmp_counter, "profile_jmp_counter")
+      BoringUtils.addSink(profile_mis_counter, "profile_mis_counter")
+      when (dt_te.io.valid) {
+        printf("Jump: %d, Mis: %d\n", profile_jmp_counter, profile_mis_counter)
+      }
+    }
   }
 
   // BoringUtils.addSource(cycle_cnt, "csr_mcycle")

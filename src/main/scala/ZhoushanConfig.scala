@@ -25,13 +25,14 @@ trait ZhoushanConfig {
   val StoreQueueSize = 4
   // Settings
   val EnableDifftest = true
+  val EnableMisRateCounter = true
   // Debug Info
   val DebugRename = false
   val DebugRenameVerbose = false
   val DebugIntIssueQueue = false
   val DebugMemIssueQueue = false
   val DebugCommit = false
-  val DebugJmpPacket = true
+  val DebugJmpPacket = false
   val DebugSram = false
   val DebugLsu = false
   val DebugStoreQueue = false

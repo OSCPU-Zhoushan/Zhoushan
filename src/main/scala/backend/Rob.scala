@@ -2,6 +2,7 @@ package zhoushan
 
 import chisel3._
 import chisel3.util._
+import chisel3.util.experimental._
 import zhoushan.Constant._
 import zhoushan.RasConstant._
 
@@ -209,6 +210,19 @@ class Rob extends Module with ZhoushanConfig {
              io.jmp_packet.inst_pc, io.jmp_packet.pred_br, io.jmp_packet.pred_bpc,
              io.jmp_packet.jmp, io.jmp_packet.jmp_pc, io.jmp_packet.mis)
     }
+  }
+
+  if (EnableDifftest && EnableMisRateCounter) {
+    val jmp_counter = RegInit(UInt(64.W), 0.U)
+    val mis_counter = RegInit(UInt(64.W), 0.U)
+    when (io.jmp_packet.valid) {
+      jmp_counter := jmp_counter + 1.U
+      when (io.jmp_packet.mis) {
+        mis_counter := mis_counter + 1.U
+      }
+    }
+    BoringUtils.addSource(jmp_counter, "profile_jmp_counter")
+    BoringUtils.addSource(mis_counter, "profile_mis_counter")
   }
 
   /* --------------- flush --------------- */
