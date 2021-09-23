@@ -47,7 +47,7 @@ while getopts 'qcrt:w:' OPT; do
       ./build/emu -i ../am-kernels/tests/cpu-tests/build/${example}-riscv64-mycpu.bin;;
     w)
       example="$OPTARG"
-      ./build/emu -i ../am-kernels/tests/cpu-tests/build/${example}-riscv64-mycpu.bin -b 0 --dump-wave;;
+      ./build/emu -i ../am-kernels/tests/cpu-tests/build/${example}-riscv64-mycpu.bin -b 0 --dump-wave --wave-path=./build/wave.vcd;;
     ?)
       echo "Error: missing arguments"
   esac
