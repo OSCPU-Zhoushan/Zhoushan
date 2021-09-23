@@ -12,11 +12,11 @@ trait BpParameters {
   val PhtIndexSize = log2Up(PhtWidth)       // 3 
   val PhtSize = 64                          // 2 ^ BhtWidth
   val PhtAddrSize = log2Up(PhtSize)         // 6 <- BhtWidth
-  val BtbDirectMapped = true
+  val BtbAssociative = false
   val BtbSize = 64
   val BtbAddrSize = log2Up(BtbSize) - 
-                    (if (BtbDirectMapped) 0 // -0 due to direct mapped
-                    else 2)                 // -2 due to 4-way associative
+                    (if (BtbAssociative) 2  // -2 due to 4-way associative
+                    else 0)                 // -0 due to direct mapped
   val BtbTagSize = 29 - BtbAddrSize         // 31 - BtbAddrSize - 2
   val RasEnable = false
   val RasSize = 16
@@ -203,23 +203,55 @@ class BranchTargetBuffer4WayAssociative extends AbstractBranchTargetBuffer {
     }
   }
 
+  // write to btb: 1. check hit or not; 2. write
+
   val wentry = Wire(new BtbEntry)
   wentry.tag := io.wtag
   wentry.target := io.wtarget
   wentry.ras_type := io.wras_type
   val replace_way = Cat(plru0(io.waddr), 
                         Mux(plru0(io.waddr) === 0.U, plru1(io.waddr), plru2(io.waddr)))
-  when (io.wen) {
-    for (j <- 0 until 4) {
-      when (replace_way === j.U) {
-        btb(j).write(io.waddr, wentry)
-        valid(j)(io.waddr) := true.B
-        updatePlruTree(io.waddr, j.U)
-        if (DebugBranchPredictorBtb) {
-          printf("%d: [BTB-W] addr=%d way=%x\n", DebugTimer(), io.waddr, j.U)
+
+  val w_rdata = WireInit(VecInit(Seq.fill(4)(0.U.asTypeOf(new BtbEntry))))
+  val w_rvalid = RegInit(VecInit(Seq.fill(4)(false.B)))
+  val w_hit = WireInit(false.B)
+  val w_way = WireInit(0.U(replace_way.getWidth.W))
+
+  for (j <- 0 until 4) {
+    w_rdata(j) := btb(j).read(io.waddr)
+    w_rvalid(j) := valid(j)(io.waddr)
+    when (w_rvalid(j) && (w_rdata(j).tag === RegNext(io.wtag))) {
+      w_hit := true.B
+      w_way := j.U
+    }
+  }
+
+  when (RegNext(io.wen)) {
+    when (w_hit) {
+      for (j <- 0 until 4) {
+        when (w_way === j.U) {
+          btb(j).write(RegNext(io.waddr), RegNext(wentry))
+          updatePlruTree(RegNext(io.waddr), j.U)
+          if (DebugBranchPredictorBtb) {
+            printf("%d: [BTB-W] addr=%d way=%x w_hit=1\n", DebugTimer(), RegNext(io.waddr), j.U)
+          }
+        }
+      }
+    } .otherwise {
+      for (j <- 0 until 4) {
+        when (replace_way === j.U) {
+          btb(j).write(RegNext(io.waddr), RegNext(wentry))
+          valid(j)(RegNext(io.waddr)) := true.B
+          updatePlruTree(RegNext(io.waddr), j.U)
+          if (DebugBranchPredictorBtb) {
+            printf("%d: [BTB-W] addr=%d way=%x w_hit=0\n", DebugTimer(), RegNext(io.waddr), j.U)
+          }
         }
       }
     }
+  }
+
+  when (io.wen) {
     if (DebugBranchPredictorRas) {
       when (wentry.ras_type =/= RAS_X) {
         printf("%d: [BTB-R] pc=%x ras_type=%x\n", DebugTimer(), io.wpc, io.wras_type)
@@ -350,8 +382,8 @@ class BrPredictor extends Module with BpParameters with ZhoushanConfig {
   pht.io.wjmp := jmp_packet.jmp
 
   // BTB definition (direct-mapped)
-  val btb = Module(if (BtbDirectMapped) new BranchTargetBufferDirectMapped
-                   else new BranchTargetBuffer4WayAssociative)
+  val btb = Module(if (BtbAssociative) new BranchTargetBuffer4WayAssociative
+                   else new BranchTargetBufferDirectMapped)
   def btbAddr(x: UInt) : UInt = x(1 + BtbAddrSize, 2)
   def btbTag(x: UInt) : UInt = x(1 + BtbAddrSize + BtbTagSize, 2 + BtbAddrSize)
 
