@@ -34,7 +34,7 @@ class InstFetch extends Module with ZhoushanConfig {
     reg_mis := false.B
   }
 
-  val bp = Module(new BrPredictor)
+  val bp = Module(new BranchPredictor)
   bp.io.jmp_packet <> io.jmp_packet
 
   val pc_init = "h80000000".U(32.W)
