@@ -61,6 +61,7 @@ class Core extends Module with ZhoushanConfig {
   isu.io.rob_addr := rob.io.rob_addr
   isu.io.flush := flush
   isu.io.avail_list := rename.io.avail_list
+  isu.io.rob_empty := rob.io.empty
 
   stall_reg.io.out.ready := rob.io.in.ready && isu.io.in.ready
 
@@ -154,6 +155,9 @@ class Core extends Module with ZhoushanConfig {
   val cycle_cnt = RegInit(0.U(64.W))
   val instr_cnt = RegInit(0.U(64.W))
 
+  BoringUtils.addSource(cycle_cnt, "csr_mcycle")
+  BoringUtils.addSource(instr_cnt, "csr_minstret")
+
   cycle_cnt := cycle_cnt + 1.U
   instr_cnt := instr_cnt + PopCount(cm.map(_.valid))
 
@@ -186,10 +190,6 @@ class Core extends Module with ZhoushanConfig {
     }
   }
 
-  // BoringUtils.addSource(cycle_cnt, "csr_mcycle")
-  // BoringUtils.addSource(instr_cnt, "csr_minstret")
-
-  // todo: add CSR in the future
   if (EnableDifftest) {
     val dt_ae = Module(new DifftestArchEvent)
     dt_ae.io.clock        := clock

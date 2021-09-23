@@ -20,6 +20,8 @@ class IssueUnit extends Module with ZhoushanConfig {
     val avail_list = Input(UInt(PrfSize.W))
     // from ex stage
     val lsu_ready = Input(Bool())
+    // from rob
+    val rob_empty = Input(Bool())
   })
 
   val int_iq = Module(new IntIssueQueueOutOfOrder(entries = IntIssueQueueSize, enq_width = DecodeWidth, deq_width = IssueWidth - 1))
@@ -42,7 +44,7 @@ class IssueUnit extends Module with ZhoushanConfig {
   uop_mem := io.in.bits.vec
 
   for (i <- 0 until DecodeWidth) {
-    when (uop_int(i).fu_code === FU_MEM) {  // todo: modify this in the future
+    when (uop_int(i).fu_code === FU_MEM) {
       uop_int(i).valid := false.B
     }
     when (uop_mem(i).fu_code =/= FU_MEM) {
@@ -52,8 +54,10 @@ class IssueUnit extends Module with ZhoushanConfig {
 
   int_iq.io.in.bits.vec := uop_int
   int_iq.io.in.valid := io.in.valid && Cat(uop_int.map(_.valid)).orR && mem_iq.io.in.ready
+  int_iq.io.rob_empty := io.rob_empty
   mem_iq.io.in.bits.vec := uop_mem
   mem_iq.io.in.valid := io.in.valid && Cat(uop_mem.map(_.valid)).orR && int_iq.io.in.ready
+  mem_iq.io.rob_empty := io.rob_empty
 
   for (i <- 0 until IssueWidth - 1) {
     io.out(i) := int_iq.io.out(i)
@@ -76,6 +80,8 @@ abstract class AbstractIssueQueue(entries: Int, enq_width: Int, deq_width: Int)
     val avail_list = Input(UInt(PrfSize.W))
     // from ex stage
     val fu_ready = Input(Bool())
+    // from rob
+    val rob_empty = Input(Bool())
   })
 
 }
@@ -103,6 +109,12 @@ abstract class AbstractIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_wi
 class IntIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_width: Int)
     extends AbstractIssueQueueOutOfOrder(entries, enq_width, deq_width) {
 
+  val is_csr = Wire(Vec(entries, Bool()))
+  for (i <- 0 until entries) {
+    is_csr(i) := (buf(i).fu_code === Constant.FU_CSR)
+  }
+  val has_csr = Cat(is_csr).orR
+
   /* ---------- deq ------------ */
 
   val deq_vec = Wire(Vec(deq_width, UInt(idx_width.W)))
@@ -114,7 +126,11 @@ class IntIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_width: Int)
     val rs1_avail = io.avail_list(buf(i).rs1_paddr)
     val rs2_avail = io.avail_list(buf(i).rs2_paddr)
     val fu_ready = io.fu_ready
-    ready_list(i) := rs1_avail && rs2_avail && fu_ready
+    if (i == 0) {
+      ready_list(i) := rs1_avail && rs2_avail && fu_ready && (!is_csr(i) || (is_csr(i) && io.rob_empty))
+    } else {
+      ready_list(i) := rs1_avail && rs2_avail && fu_ready && !is_csr(i)
+    }
   }
 
   // todo: currently only support 2-way
@@ -188,7 +204,7 @@ class IntIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_width: Int)
     enq_vec := next_enq_vec
   }
 
-  io.in.ready := enq_ready
+  io.in.ready := enq_ready && !has_csr
 
   /* ---------- flush ---------- */
 

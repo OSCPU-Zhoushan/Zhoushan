@@ -32,7 +32,7 @@ class CsrMip extends Bundle {
   val addr = Csrs.mip
   val romask = "h080".U(64.W)
   val mtip = WireInit(UInt(1.W), 0.U)
-  // BoringUtils.addSink(mtip, "csr_mip_mtip")
+  BoringUtils.addSink(mtip, "csr_mip_mtip")
   def apply(): UInt = Cat(Fill(56, 0.U), mtip, Fill(7, 0.U))(63, 0)
   def apply(x: Int): UInt = if (x == 7) mtip else 0.U
   def access(a: UInt, rdata: UInt, ren: Bool, wdata: UInt,
@@ -50,9 +50,7 @@ class Csr extends Module {
   val io = IO(new Bundle {
     val uop = Input(new MicroOp())
     val in1 = Input(UInt(64.W))
-    val out = Output(UInt(64.W))
-    val jmp = Output(Bool())
-    val jmp_pc = Output(UInt(32.W))
+    val ecp = Output(new ExCommitPacket)
     val intr = Output(Bool())
     val intr_pc = Output(UInt(32.W))
   })
@@ -77,14 +75,15 @@ class Csr extends Module {
   val mip       = new CsrMip
 
   val mcycle    = WireInit(UInt(64.W), 0.U)
-  // BoringUtils.addSink(mcycle, "csr_mcycle")
   val minstret  = WireInit(UInt(64.W), 0.U)
-  // BoringUtils.addSink(minstret, "csr_minstret")
+
+  BoringUtils.addSink(mcycle, "csr_mcycle")
+  BoringUtils.addSink(minstret, "csr_minstret")
 
   // ECALL
   when (csr_code === CSR_ECALL) {
     mepc := uop.pc
-    mcause := 11.U  // Env call from M-mode
+    mcause := 11.U  // env call from M-mode
     mstatus := Cat(mstatus(63, 8), mstatus(3), mstatus(6, 4), 0.U, mstatus(2, 0))
     csr_jmp := true.B
     csr_jmp_pc := Cat(mtvec(31, 2), Fill(2, 0.U))
@@ -140,7 +139,7 @@ class Csr extends Module {
     RegMap(Csrs.mscratch, mscratch),
     RegMap(Csrs.mepc,     mepc    ),
     RegMap(Csrs.mcause,   mcause  ),
-    // RegMap(Csrs.mip,      mip     ),
+    // skip mip
     RegMap(Csrs.mcycle,   mcycle  ),
     RegMap(Csrs.minstret, minstret)
   )
@@ -163,9 +162,12 @@ class Csr extends Module {
   RegMap.access(csr_map, addr, rdata, ren, wdata, wmask, wen)
   mip.access(addr, rdata, ren, wdata, wmask, wen)
 
-  io.out := rdata
-  io.jmp := csr_jmp
-  io.jmp_pc := csr_jmp_pc
+  io.ecp.store_valid := false.B
+  io.ecp.jmp_valid := csr_jmp
+  io.ecp.jmp := csr_jmp
+  io.ecp.jmp_pc := csr_jmp_pc
+  io.ecp.rd_data := rdata
+
   io.intr := intr
   io.intr_pc := intr_pc
 
@@ -182,7 +184,7 @@ class Csr extends Module {
     val dt_cs = Module(new DifftestCSRState)
     dt_cs.io.clock          := clock
     dt_cs.io.coreid         := 0.U
-    dt_cs.io.priviledgeMode := 3.U  // Machine mode
+    dt_cs.io.priviledgeMode := 3.U        // machine mode
     dt_cs.io.mstatus        := mstatus
     dt_cs.io.sstatus        := 0.U
     dt_cs.io.mepc           := mepc

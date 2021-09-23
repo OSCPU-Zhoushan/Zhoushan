@@ -133,7 +133,6 @@ class Execution extends Module with ZhoushanConfig {
 
 // Execution Pipe 0
 //   1 ALU + 1 CSR
-//   todo: add CSR
 class ExPipe0 extends Module {
   val io = IO(new Bundle {
     // input
@@ -144,16 +143,16 @@ class ExPipe0 extends Module {
     val ecp = Output(new ExCommitPacket)
   })
 
-  val uop = io.uop
-  val in1 = io.in1
-  val in2 = io.in2
-
   val alu = Module(new Alu)
-  alu.io.uop := uop
-  alu.io.in1 := in1
-  alu.io.in2 := in2
+  alu.io.uop := io.uop
+  alu.io.in1 := io.in1
+  alu.io.in2 := io.in2
 
-  io.ecp := alu.io.ecp
+  val csr = Module(new Csr)
+  csr.io.uop := io.uop
+  csr.io.in1 := io.in1
+
+  io.ecp := Mux(io.uop.fu_code === FU_CSR, csr.io.ecp, alu.io.ecp)
 }
 
 // Execution Pipe 1
@@ -168,14 +167,10 @@ class ExPipe1 extends Module {
     val ecp = Output(new ExCommitPacket)
   })
 
-  val uop = io.uop
-  val in1 = io.in1
-  val in2 = io.in2
-
   val alu = Module(new Alu)
-  alu.io.uop := uop
-  alu.io.in1 := in1
-  alu.io.in2 := in2
+  alu.io.uop := io.uop
+  alu.io.in1 := io.in1
+  alu.io.in2 := io.in2
 
   io.ecp := alu.io.ecp
 }
@@ -197,14 +192,10 @@ class ExPipe2 extends Module {
     val flush = Input(Bool())
   })
 
-  val uop = io.uop
-  val in1 = io.in1
-  val in2 = io.in2
-
   val lsu = Module(new Lsu)
-  lsu.io.uop := uop
-  lsu.io.in1 := in1
-  lsu.io.in2 := in2
+  lsu.io.uop := io.uop
+  lsu.io.in1 := io.in1
+  lsu.io.in2 := io.in2
   lsu.io.dmem <> io.dmem
   lsu.io.flush := io.flush
 

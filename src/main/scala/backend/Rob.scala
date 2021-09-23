@@ -28,7 +28,10 @@ class Rob extends Module with ZhoushanConfig {
     val cm_rd_data = Vec(deq_width, Output(UInt(64.W)))
     val jmp_packet = Output(new JmpPacket)
     val sq_deq_req = Output(Bool())
+    // flush input
     val flush = Input(Bool())
+    // empty output
+    val empty = Output(Bool())
   })
 
   val rob = SyncReadMem(entries, new MicroOp, SyncReadMem.WriteFirst)
@@ -41,7 +44,8 @@ class Rob extends Module with ZhoushanConfig {
   val deq_flag = getFlag(deq_vec(0))
 
   val count = Mux(enq_flag === deq_flag, enq_ptr - deq_ptr, entries.U + enq_ptr - deq_ptr)
-  val enq_ready = RegInit(true.B)
+
+  io.empty := (enq_flag === deq_flag) && (enq_ptr === deq_ptr)
 
   val num_enq = Mux(io.in.fire(), PopCount(io.in.bits.vec.map(_.valid)), 0.U)
   val num_deq = PopCount(io.cm.map(_.valid))
@@ -52,6 +56,7 @@ class Rob extends Module with ZhoushanConfig {
   val next_valid_entry = num_after_enq
 
   // be careful that enq_ready is register, not wire
+  val enq_ready = RegInit(true.B)
   enq_ready := (entries - enq_width).U >= next_valid_entry
 
   // when instructions are executed, update complete & ecp

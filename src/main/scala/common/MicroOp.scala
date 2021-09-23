@@ -26,8 +26,8 @@ trait Constant {
   val FU_X      = 0.asUInt(3.W)
   val FU_ALU    = 1.asUInt(3.W)
   val FU_JMP    = 2.asUInt(3.W)
-  val FU_MEM    = 3.asUInt(3.W)
-  val FU_CSR    = 4.asUInt(3.W)
+  val FU_CSR    = 3.asUInt(3.W)
+  val FU_MEM    = 4.asUInt(3.W)
 
   val ALU_X     = 0.asUInt(4.W)
   val ALU_ADD   = 1.asUInt(4.W)

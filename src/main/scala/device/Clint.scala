@@ -72,6 +72,6 @@ class Clint extends Module {
 
   val mtip = WireInit(UInt(1.W), 0.U)
   mtip := (mtime >= mtimecmp).asUInt()
-  // BoringUtils.addSource(mtip, "csr_mip_mtip")
+  BoringUtils.addSource(mtip, "csr_mip_mtip")
 
 }
