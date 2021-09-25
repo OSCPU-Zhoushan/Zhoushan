@@ -51,8 +51,6 @@ class Csr extends Module {
     val uop = Input(new MicroOp())
     val in1 = Input(UInt(64.W))
     val ecp = Output(new ExCommitPacket)
-    val intr = Output(Bool())
-    val intr_pc = Output(UInt(32.W))
   })
 
   val uop = io.uop
@@ -97,8 +95,8 @@ class Csr extends Module {
   }
 
   // Interrupt
-  val s_idle :: s_wait :: Nil = Enum(2)
-  val intr_state = RegInit(s_idle)
+  val s_intr_idle :: s_intr_wait :: Nil = Enum(2)
+  val intr_state = RegInit(s_intr_idle)
 
   val intr = WireInit(Bool(), false.B)
   val intr_pc = WireInit(UInt(32.W), 0.U)
@@ -110,12 +108,12 @@ class Csr extends Module {
 
   intr_reg := false.B
   switch (intr_state) {
-    is (s_idle) {
+    is (s_intr_idle) {
       when (intr_global_en && intr_clint_en) {
-        intr_state := s_wait
+        intr_state := s_intr_wait
       }
     }
-    is (s_wait) {
+    is (s_intr_wait) {
       when (uop.valid && mip(7) === 1.U) {
         mepc := uop.pc
         mcause := "h8000000000000007".U
@@ -124,7 +122,7 @@ class Csr extends Module {
         intr_pc := Cat(mtvec(31, 2), Fill(2, 0.U))
         intr_reg := true.B
         intr_no := 7.U
-        intr_state := s_idle
+        intr_state := s_intr_idle
       }
     }
   }
