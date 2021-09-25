@@ -148,6 +148,7 @@ class Csr extends Module {
   mip.access(addr, rdata, ren, wdata, wmask, wen)
 
   io.ecp.store_valid := false.B
+  io.ecp.mmio := false.B
   io.ecp.jmp_valid := csr_jmp
   io.ecp.jmp := csr_jmp
   io.ecp.jmp_pc := csr_jmp_pc

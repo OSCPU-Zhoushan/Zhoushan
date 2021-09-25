@@ -6,6 +6,7 @@ import zhoushan.Constant._
 
 class ExCommitPacket extends Bundle {
   val store_valid = Bool()
+  val mmio = Bool()
   val jmp_valid = Bool()
   val jmp = Bool()
   val jmp_pc = UInt(32.W)

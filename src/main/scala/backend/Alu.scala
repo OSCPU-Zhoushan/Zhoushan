@@ -58,6 +58,7 @@ class Alu extends Module {
   ))
 
   io.ecp.store_valid := false.B
+  io.ecp.mmio := false.B
   io.ecp.jmp_valid := (uop.fu_code === FU_JMP)
   io.ecp.jmp := jmp
   io.ecp.jmp_pc := jmp_pc

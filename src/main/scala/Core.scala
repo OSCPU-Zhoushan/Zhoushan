@@ -113,6 +113,7 @@ class Core extends Module with ZhoushanConfig {
 
   val cm = rob.io.cm
   val cm_rd_data = rob.io.cm_rd_data
+  val cm_mmio = rob.io.cm_mmio
 
   /* ----- Difftest ------------------------------ */
 
@@ -122,7 +123,8 @@ class Core extends Module with ZhoushanConfig {
   if (EnableDifftest) {
     for (i <- 0 until CommitWidth) {
       val skip = (cm(i).inst === Instructions.PUTCH) ||
-                 (cm(i).fu_code === Constant.FU_CSR && cm(i).inst(31, 20) === Csrs.mcycle)
+                 (cm(i).fu_code === Constant.FU_CSR && cm(i).inst(31, 20) === Csrs.mcycle) ||
+                 cm_mmio(i)
 
       val dt_ic = Module(new DifftestInstrCommit)
       dt_ic.io.clock    := clock

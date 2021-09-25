@@ -27,6 +27,7 @@ class Rob extends Module with ZhoushanConfig {
     // commit stage
     val cm = Vec(deq_width, Output(new MicroOp))
     val cm_rd_data = Vec(deq_width, Output(UInt(64.W)))
+    val cm_mmio = Vec(deq_width, Output(Bool()))
     val jmp_packet = Output(new JmpPacket)
     val sq_deq_req = Output(Bool())
     // flush input
@@ -37,6 +38,7 @@ class Rob extends Module with ZhoushanConfig {
 
   val cm = Wire(Vec(deq_width, new MicroOp))
   val cm_rd_data = Wire(Vec(deq_width, UInt(64.W)))
+  val cm_mmio = Wire(Vec(deq_width, Bool()))
   val sq_deq_req = Wire(Bool())
 
   val rob = SyncReadMem(entries, new MicroOp, SyncReadMem.WriteFirst)
@@ -229,6 +231,7 @@ class Rob extends Module with ZhoushanConfig {
     }
     cm(i) := deq_uop(i)
     cm_rd_data(i) := deq_ecp(i).rd_data
+    cm_mmio(i) := deq_ecp(i).mmio
     jmp_valid(i) := deq_ecp(i).jmp_valid
     store_valid(i) := deq_ecp(i).store_valid
     if (i == 0) {
@@ -346,6 +349,7 @@ class Rob extends Module with ZhoushanConfig {
     io.cm(i).valid := cm(i).valid && !intr
   }
   io.cm_rd_data := cm_rd_data
+  io.cm_mmio := cm_mmio
   io.sq_deq_req := sq_deq_req && !intr
 
 }

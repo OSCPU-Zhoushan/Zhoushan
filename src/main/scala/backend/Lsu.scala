@@ -49,6 +49,11 @@ class Lsu extends Module {
   val addr_offset = addr(2, 0)
   val wdata = in2_real
 
+  val mmio = RegInit(false.B)
+  when (uop.valid) {
+    mmio := (addr(31) === 0.U)
+  }
+
   val mask = MuxLookup(addr_offset, 0.U, Array(
     "b000".U -> "b11111111".U(8.W),
     "b001".U -> "b11111110".U(8.W),
@@ -146,6 +151,7 @@ class Lsu extends Module {
 
   io.ecp := 0.U.asTypeOf(new ExCommitPacket)
   io.ecp.store_valid := store_valid
+  io.ecp.mmio := mmio
   io.ecp.rd_data := load_out
   io.busy := req.valid || (state === s_wait_r && !resp.fire()) || (state === s_wait_w && !resp.fire())
 
