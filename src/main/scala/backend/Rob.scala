@@ -118,11 +118,11 @@ class Rob extends Module with ZhoushanConfig {
   // be careful of async read complete
   val complete_mask = WireInit(VecInit(Seq.fill(deq_width)(false.B)))
   for (i <- 0 until deq_width) {
-    val deq_addr_async = getIdx(deq_vec(i))
+    val complete_addr_async = getIdx(deq_vec(i))
     if (i == 0) {
-      complete_mask(i) := complete(deq_addr_async)
+      complete_mask(i) := complete(complete_addr_async)
     } else {
-      complete_mask(i) := complete_mask(i - 1) && complete(deq_addr_async)
+      complete_mask(i) := complete_mask(i - 1) && complete(complete_addr_async)
     }
   }
 
@@ -140,19 +140,28 @@ class Rob extends Module with ZhoushanConfig {
 
   // csr instruction ready to issue signal
   io.csr_ready := false.B
+  val csr_in_flight = RegInit(false.B)
+
+  val deq_addr_sync = Wire(Vec(deq_width, UInt(addr_width.W)))
+  val deq_uop = Wire(Vec(deq_width, new MicroOp))
+  val deq_addr_async = Wire(Vec(deq_width, UInt(addr_width.W)))
+  val deq_ecp = Wire(Vec(deq_width, new ExCommitPacket))
 
   for (i <- 0 until deq_width) {
-    val deq_addr_sync = getIdx(next_deq_vec(i))
-    val deq_uop = rob.read(deq_addr_sync)
-    val deq_addr_async = getIdx(deq_vec(i))
-    val deq_ecp = ecp(deq_addr_async)
-    when (deq_uop.fu_code === FU_CSR) {
-      io.csr_ready := true.B
+    deq_addr_sync(i) := getIdx(next_deq_vec(i))
+    deq_uop(i) := rob.read(deq_addr_sync(i))
+    deq_addr_async(i) := getIdx(deq_vec(i))
+    deq_ecp(i) := ecp(deq_addr_async(i))
+    if (i == 0) {
+      when (deq_uop(i).fu_code === FU_CSR && !csr_in_flight) {
+        io.csr_ready := true.B
+        csr_in_flight := true.B
+      }
     }
-    io.cm(i) := deq_uop
-    io.cm_rd_data(i) := deq_ecp.rd_data
-    jmp_valid(i) := deq_ecp.jmp_valid
-    store_valid(i) := deq_ecp.store_valid
+    io.cm(i) := deq_uop(i)
+    io.cm_rd_data(i) := deq_ecp(i).rd_data
+    jmp_valid(i) := deq_ecp(i).jmp_valid
+    store_valid(i) := deq_ecp(i).store_valid
     if (i == 0) {
       jmp_mask(i) := true.B
       store_mask(i) := true.B
@@ -171,6 +180,11 @@ class Rob extends Module with ZhoushanConfig {
                         Mux(io.cm(0).valid && io.cm(0).rd_en && io.cm(1).rd_en, io.cm(0).rd_addr =/= io.cm(1).rd_addr, true.B)
     }
 
+    // update csr_in_flight status register
+    when (io.cm(i).valid && csr_in_flight) {
+      csr_in_flight := false.B
+    }
+
     // update sq_deq_req
     when (io.cm(i).valid && store_valid(i)) {
       io.sq_deq_req := true.B
@@ -180,33 +194,33 @@ class Rob extends Module with ZhoushanConfig {
     jmp_1h(i) := jmp_valid(i) && io.cm(i).valid
     when (jmp_1h(i)) {
       io.jmp_packet.valid   := true.B
-      io.jmp_packet.inst_pc := deq_uop.pc
-      io.jmp_packet.jmp     := deq_ecp.jmp
-      io.jmp_packet.jmp_pc  := deq_ecp.jmp_pc
+      io.jmp_packet.inst_pc := deq_uop(i).pc
+      io.jmp_packet.jmp     := deq_ecp(i).jmp
+      io.jmp_packet.jmp_pc  := deq_ecp(i).jmp_pc
       io.jmp_packet.mis     := Mux(io.jmp_packet.jmp, 
-                                   (deq_uop.pred_br && (io.jmp_packet.jmp_pc =/= deq_uop.pred_bpc)) || !deq_uop.pred_br,
-                                   deq_uop.pred_br)
+                                   (deq_uop(i).pred_br && (io.jmp_packet.jmp_pc =/= deq_uop(i).pred_bpc)) || !deq_uop(i).pred_br,
+                                   deq_uop(i).pred_br)
       io.jmp_packet.intr    := false.B  // todo
 
       // debug info
-      io.jmp_packet.pred_br := deq_uop.pred_br
-      io.jmp_packet.pred_bpc := deq_uop.pred_bpc
+      io.jmp_packet.pred_br := deq_uop(i).pred_br
+      io.jmp_packet.pred_bpc := deq_uop(i).pred_bpc
 
       // ref: riscv-spec-20191213 page 21-22
-      val rd_link = (deq_uop.rd_addr === 1.U || deq_uop.rd_addr === 5.U)
-      val rs1_link = (deq_uop.rs1_addr === 1.U || deq_uop.rs1_addr === 5.U)
+      val rd_link = (deq_uop(i).rd_addr === 1.U || deq_uop(i).rd_addr === 5.U)
+      val rs1_link = (deq_uop(i).rs1_addr === 1.U || deq_uop(i).rs1_addr === 5.U)
       val ras_type = WireInit(RAS_X)
-      when (deq_uop.jmp_code === JMP_JAL) {
+      when (deq_uop(i).jmp_code === JMP_JAL) {
         when (rd_link) {
           ras_type := RAS_PUSH
         }
       }
-      when (deq_uop.jmp_code === JMP_JALR) {
+      when (deq_uop(i).jmp_code === JMP_JALR) {
         ras_type := MuxLookup(Cat(rd_link.asUInt(), rs1_link.asUInt()), RAS_X, Array(
           "b00".U -> RAS_X,
           "b01".U -> RAS_POP,
           "b10".U -> RAS_PUSH,
-          "b11".U -> Mux(deq_uop.rd_addr === deq_uop.rs1_addr, RAS_PUSH, RAS_POP_THEN_PUSH)
+          "b11".U -> Mux(deq_uop(i).rd_addr === deq_uop(i).rs1_addr, RAS_PUSH, RAS_POP_THEN_PUSH)
         ))
       }
       io.jmp_packet.ras_type := ras_type
