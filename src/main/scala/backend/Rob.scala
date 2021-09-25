@@ -35,6 +35,10 @@ class Rob extends Module with ZhoushanConfig {
     val csr_ready = Output(Bool())
   })
 
+  val cm = Wire(Vec(deq_width, new MicroOp))
+  val cm_rd_data = Wire(Vec(deq_width, UInt(64.W)))
+  val sq_deq_req = Wire(Bool())
+
   val rob = SyncReadMem(entries, new MicroOp, SyncReadMem.WriteFirst)
 
   val enq_vec = RegInit(VecInit((0 until enq_width).map(_.U(addr_width.W))))
@@ -47,7 +51,7 @@ class Rob extends Module with ZhoushanConfig {
   val count = Mux(enq_flag === deq_flag, enq_ptr - deq_ptr, entries.U + enq_ptr - deq_ptr)
 
   val num_enq = Mux(io.in.fire(), PopCount(io.in.bits.vec.map(_.valid)), 0.U)
-  val num_deq = PopCount(io.cm.map(_.valid))
+  val num_deq = PopCount(cm.map(_.valid))
 
   // even though deq_width = 2, we may deq only 1 instruction each time
   val num_try_deq = Mux(count >= 1.U, 1.U, count)
@@ -137,7 +141,7 @@ class Rob extends Module with ZhoushanConfig {
   val store_valid = WireInit(VecInit(Seq.fill(deq_width)(false.B)))
   val store_mask = WireInit(VecInit(Seq.fill(deq_width)(false.B)))
 
-  io.sq_deq_req := false.B
+  sq_deq_req := false.B
 
   // CSR instruction ready to issue signal
   io.csr_ready := false.B
@@ -186,27 +190,30 @@ class Rob extends Module with ZhoushanConfig {
       }
     }
     is (s_intr_wait) {
-      for (i <- 0 until deq_width) {
-        when (io.cm(i).valid && csr_mip_mtip_intr) {
-          intr_mstatus := Cat(csr_mstatus(63, 8), csr_mstatus(3), csr_mstatus(6, 4), 0.U, csr_mstatus(2, 0))
-          intr_mepc := io.cm(i).pc
-          intr_mcause := "h8000000000000007".U
-          intr := true.B
-          intr_jmp_pc := Cat(csr_mtvec(31, 2), Fill(2, 0.U))
-          intr_state := s_intr_idle
-        }
+      when (cm(0).valid && csr_mip_mtip_intr && !csr_in_flight) {
+        intr_mstatus := Cat(csr_mstatus(63, 8), csr_mstatus(3), csr_mstatus(6, 4), 0.U, csr_mstatus(2, 0))
+        intr_mepc := cm(0).pc
+        intr_mcause := "h8000000000000007".U
+        intr := true.B
+        intr_jmp_pc := Cat(csr_mtvec(31, 2), Fill(2, 0.U))
+        intr_state := s_intr_idle
       }
     }
   }
 
   // difftest for arch event
-  if (ZhoushanConfig.EnableDifftest) {
+  if (EnableDifftest) {
     val dt_ae = Module(new DifftestArchEvent)
     dt_ae.io.clock        := clock
     dt_ae.io.coreid       := 0.U
-    dt_ae.io.intrNO       := Mux(intr, intr_mcause, 0.U)
+    dt_ae.io.intrNO       := RegNext(Mux(intr, intr_mcause, 0.U))
     dt_ae.io.cause        := 0.U
-    dt_ae.io.exceptionPC  := Mux(intr, intr_mepc, 0.U)
+    dt_ae.io.exceptionPC  := RegNext(Mux(intr, intr_mepc, 0.U))
+    if (DebugArchEvent) {
+      when (dt_ae.io.intrNO =/= 0.U) {
+        printf("%d: [DT-AE] intrNO=%x ePC=%x\n", DebugTimer(), dt_ae.io.intrNO, dt_ae.io.exceptionPC)
+      }
+    }
   }
 
   for (i <- 0 until deq_width) {
@@ -220,8 +227,8 @@ class Rob extends Module with ZhoushanConfig {
         csr_in_flight := true.B
       }
     }
-    io.cm(i) := deq_uop(i)
-    io.cm_rd_data(i) := deq_ecp(i).rd_data
+    cm(i) := deq_uop(i)
+    cm_rd_data(i) := deq_ecp(i).rd_data
     jmp_valid(i) := deq_ecp(i).jmp_valid
     store_valid(i) := deq_ecp(i).store_valid
     if (i == 0) {
@@ -235,25 +242,25 @@ class Rob extends Module with ZhoushanConfig {
     // resolve WAW dependency
     // don't commit two instructions with same rd_addr at the same time
     if (i == 0) {
-      io.cm(i).valid := valid_vec(i) && complete_mask(i) && jmp_mask(i) && store_mask(i)
+      cm(i).valid := valid_vec(i) && complete_mask(i) && jmp_mask(i) && store_mask(i)
     } else {
       // todo: currently only support 2-way commit
-      io.cm(i).valid := valid_vec(i) && complete_mask(i) && jmp_mask(i) && store_mask(i) &&
-                        Mux(io.cm(0).valid && io.cm(0).rd_en && io.cm(1).rd_en, io.cm(0).rd_addr =/= io.cm(1).rd_addr, true.B)
+      cm(i).valid := valid_vec(i) && complete_mask(i) && jmp_mask(i) && store_mask(i) &&
+                        Mux(cm(0).valid && cm(0).rd_en && cm(1).rd_en, cm(0).rd_addr =/= cm(1).rd_addr, true.B)
     }
 
     // update csr_in_flight status register
-    when (io.cm(i).valid && csr_in_flight) {
+    when (cm(i).valid && csr_in_flight) {
       csr_in_flight := false.B
     }
 
     // update sq_deq_req
-    when (io.cm(i).valid && store_valid(i)) {
-      io.sq_deq_req := true.B
+    when (cm(i).valid && store_valid(i)) {
+      sq_deq_req := true.B
     }
 
     // update jmp_packet
-    jmp_1h(i) := jmp_valid(i) && io.cm(i).valid
+    jmp_1h(i) := jmp_valid(i) && cm(i).valid
     when (jmp_1h(i)) {
       io.jmp_packet.valid   := true.B
       io.jmp_packet.inst_pc := deq_uop(i).pc
@@ -331,5 +338,14 @@ class Rob extends Module with ZhoushanConfig {
     enq_vec := VecInit((0 until enq_width).map(_.U(addr_width.W)))
     deq_vec := VecInit((0 until deq_width).map(_.U(addr_width.W)))
   }
+
+  /* --------------- output -------------- */
+
+  io.cm := cm
+  for (i <- 0 until deq_width) {
+    io.cm(i).valid := cm(i).valid && !intr
+  }
+  io.cm_rd_data := cm_rd_data
+  io.sq_deq_req := sq_deq_req && !intr
 
 }

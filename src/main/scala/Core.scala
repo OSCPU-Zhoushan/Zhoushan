@@ -191,13 +191,6 @@ class Core extends Module with ZhoushanConfig {
   }
 
   if (EnableDifftest) {
-    val dt_ae = Module(new DifftestArchEvent)
-    dt_ae.io.clock        := clock
-    dt_ae.io.coreid       := 0.U
-    dt_ae.io.intrNO       := 0.U
-    dt_ae.io.cause        := 0.U
-    dt_ae.io.exceptionPC  := 0.U
-
     val dt_cs = Module(new DifftestCSRState)
     dt_cs.io.clock          := clock
     dt_cs.io.coreid         := 0.U

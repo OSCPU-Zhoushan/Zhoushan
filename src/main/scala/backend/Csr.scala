@@ -171,7 +171,7 @@ class Csr extends Module {
     dt_cs.io.mcause         := mcause
     dt_cs.io.scause         := 0.U
     dt_cs.io.satp           := 0.U
-    dt_cs.io.mip            := mip()
+    dt_cs.io.mip            := 0.U // mip()
     dt_cs.io.mie            := mie
     dt_cs.io.mscratch       := mscratch
     dt_cs.io.sscratch       := 0.U

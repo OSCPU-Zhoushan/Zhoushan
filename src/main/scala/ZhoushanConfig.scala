@@ -40,6 +40,7 @@ trait ZhoushanConfig {
   val DebugDCache = false
   val DebugBranchPredictorRas = false
   val DebugBranchPredictorBtb = false
+  val DebugArchEvent = false
 }
 
 object ZhoushanConfig extends ZhoushanConfig { }
