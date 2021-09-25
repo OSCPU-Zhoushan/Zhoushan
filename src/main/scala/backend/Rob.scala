@@ -5,6 +5,7 @@ import chisel3.util._
 import chisel3.util.experimental._
 import zhoushan.Constant._
 import zhoushan.RasConstant._
+import difftest._
 
 class Rob extends Module with ZhoushanConfig {
   val entries = RobSize
@@ -138,14 +139,75 @@ class Rob extends Module with ZhoushanConfig {
 
   io.sq_deq_req := false.B
 
-  // csr instruction ready to issue signal
+  // CSR instruction ready to issue signal
   io.csr_ready := false.B
   val csr_in_flight = RegInit(false.B)
 
+  // dep uop (async) & ecp (sync)
   val deq_addr_sync = Wire(Vec(deq_width, UInt(addr_width.W)))
   val deq_uop = Wire(Vec(deq_width, new MicroOp))
   val deq_addr_async = Wire(Vec(deq_width, UInt(addr_width.W)))
   val deq_ecp = Wire(Vec(deq_width, new ExCommitPacket))
+
+  // CSR registers from/to CSR unit
+  val csr_mstatus = WireInit(UInt(64.W), "h00001800".U)
+  val csr_mie     = WireInit(UInt(64.W), 0.U)
+  val csr_mtvec   = WireInit(UInt(64.W), 0.U)
+  val csr_mip_mtip_intr = WireInit(Bool(), false.B)
+
+  BoringUtils.addSink(csr_mstatus, "csr_mstatus")
+  BoringUtils.addSink(csr_mie, "csr_mie")
+  BoringUtils.addSink(csr_mtvec, "csr_mtvec")
+  BoringUtils.addSink(csr_mip_mtip_intr, "csr_mip_mtip_intr")
+
+  val intr         = WireInit(Bool(), false.B)
+  val intr_mstatus = WireInit(UInt(64.W), "h00001800".U)
+  val intr_mepc    = WireInit(UInt(64.W), 0.U)
+  val intr_mcause  = WireInit(UInt(64.W), 0.U)
+
+  BoringUtils.addSource(intr, "intr")
+  BoringUtils.addSource(intr_mstatus, "intr_mstatus")
+  BoringUtils.addSource(intr_mepc, "intr_mepc")
+  BoringUtils.addSource(intr_mcause, "intr_mcause")
+
+  // interrupt
+  val s_intr_idle :: s_intr_wait :: Nil = Enum(2)
+  val intr_state = RegInit(s_intr_idle)
+
+  val intr_jmp_pc = WireInit(UInt(32.W), 0.U)
+
+  val intr_global_en = (csr_mstatus(3) === 1.U)
+  val intr_clint_en = (csr_mie(7) === 1.U)
+
+  switch (intr_state) {
+    is (s_intr_idle) {
+      when (intr_global_en && intr_clint_en) {
+        intr_state := s_intr_wait
+      }
+    }
+    is (s_intr_wait) {
+      for (i <- 0 until deq_width) {
+        when (io.cm(i).valid && csr_mip_mtip_intr) {
+          intr_mstatus := Cat(csr_mstatus(63, 8), csr_mstatus(3), csr_mstatus(6, 4), 0.U, csr_mstatus(2, 0))
+          intr_mepc := io.cm(i).pc
+          intr_mcause := "h8000000000000007".U
+          intr := true.B
+          intr_jmp_pc := Cat(csr_mtvec(31, 2), Fill(2, 0.U))
+          intr_state := s_intr_idle
+        }
+      }
+    }
+  }
+
+  // difftest for arch event
+  if (ZhoushanConfig.EnableDifftest) {
+    val dt_ae = Module(new DifftestArchEvent)
+    dt_ae.io.clock        := clock
+    dt_ae.io.coreid       := 0.U
+    dt_ae.io.intrNO       := Mux(intr, intr_mcause, 0.U)
+    dt_ae.io.cause        := 0.U
+    dt_ae.io.exceptionPC  := Mux(intr, intr_mepc, 0.U)
+  }
 
   for (i <- 0 until deq_width) {
     deq_addr_sync(i) := getIdx(next_deq_vec(i))
@@ -200,7 +262,7 @@ class Rob extends Module with ZhoushanConfig {
       io.jmp_packet.mis     := Mux(io.jmp_packet.jmp, 
                                    (deq_uop(i).pred_br && (io.jmp_packet.jmp_pc =/= deq_uop(i).pred_bpc)) || !deq_uop(i).pred_br,
                                    deq_uop(i).pred_br)
-      io.jmp_packet.intr    := false.B  // todo
+      io.jmp_packet.intr    := false.B
 
       // debug info
       io.jmp_packet.pred_br := deq_uop(i).pred_br
@@ -227,11 +289,23 @@ class Rob extends Module with ZhoushanConfig {
     }
   }
 
+  // update jmp_packet for interrupt
+  when (intr) {
+    io.jmp_packet.valid   := true.B
+    io.jmp_packet.inst_pc := intr_mepc
+    io.jmp_packet.jmp     := true.B
+    io.jmp_packet.jmp_pc  := intr_jmp_pc
+    io.jmp_packet.mis     := true.B
+    io.jmp_packet.intr    := true.B
+    io.jmp_packet.pred_br := false.B
+    io.jmp_packet.pred_bpc := 0.U
+  }
+
   if (DebugJmpPacket) {
     when (io.jmp_packet.valid) {
-      printf("%d: [ JMP ] pc=%x pred=%x->%x real=%x->%x mis=%x\n", DebugTimer(),
+      printf("%d: [ JMP ] pc=%x pred=%x->%x real=%x->%x mis=%x intr=%x\n", DebugTimer(),
              io.jmp_packet.inst_pc, io.jmp_packet.pred_br, io.jmp_packet.pred_bpc,
-             io.jmp_packet.jmp, io.jmp_packet.jmp_pc, io.jmp_packet.mis)
+             io.jmp_packet.jmp, io.jmp_packet.jmp_pc, io.jmp_packet.mis, io.jmp_packet.intr)
     }
   }
 

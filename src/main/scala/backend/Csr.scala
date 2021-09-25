@@ -40,9 +40,7 @@ class CsrMip extends Bundle {
     when (addr === a && ren) {
       rdata := apply()
     }
-    when (addr === a && wen) {
-      
-    }
+    when (addr === a && wen) { }
   }
 }
 
@@ -72,6 +70,11 @@ class Csr extends Module {
   val mcause    = RegInit(UInt(64.W), 0.U)
   val mip       = new CsrMip
 
+  BoringUtils.addSource(mstatus, "csr_mstatus")
+  BoringUtils.addSource(mie, "csr_mie")
+  BoringUtils.addSource(mtvec, "csr_mtvec")
+  BoringUtils.addSource(mip(7).asBool(), "csr_mip_mtip_intr")
+
   val mcycle    = WireInit(UInt(64.W), 0.U)
   val minstret  = WireInit(UInt(64.W), 0.U)
 
@@ -94,37 +97,21 @@ class Csr extends Module {
     csr_jmp_pc := mepc
   }
 
-  // Interrupt
-  val s_intr_idle :: s_intr_wait :: Nil = Enum(2)
-  val intr_state = RegInit(s_intr_idle)
+  // interrupt
+  val intr         = WireInit(Bool(), false.B)
+  val intr_mstatus = WireInit(UInt(64.W), "h00001800".U)
+  val intr_mepc    = WireInit(UInt(64.W), 0.U)
+  val intr_mcause  = WireInit(UInt(64.W), 0.U)
 
-  val intr = WireInit(Bool(), false.B)
-  val intr_pc = WireInit(UInt(32.W), 0.U)
-  val intr_reg = RegInit(Bool(), false.B)
-  val intr_no = RegInit(UInt(64.W), 0.U)
+  BoringUtils.addSink(intr, "intr")
+  BoringUtils.addSink(intr_mstatus, "intr_mstatus")
+  BoringUtils.addSink(intr_mepc, "intr_mepc")
+  BoringUtils.addSink(intr_mcause, "intr_mcause")
 
-  val intr_global_en = (mstatus(3) === 1.U)
-  val intr_clint_en = (mie(7) === 1.U)
-
-  intr_reg := false.B
-  switch (intr_state) {
-    is (s_intr_idle) {
-      when (intr_global_en && intr_clint_en) {
-        intr_state := s_intr_wait
-      }
-    }
-    is (s_intr_wait) {
-      when (uop.valid && mip(7) === 1.U) {
-        mepc := uop.pc
-        mcause := "h8000000000000007".U
-        mstatus := Cat(mstatus(63, 8), mstatus(3), mstatus(6, 4), 0.U, mstatus(2, 0))
-        intr := true.B
-        intr_pc := Cat(mtvec(31, 2), Fill(2, 0.U))
-        intr_reg := true.B
-        intr_no := 7.U
-        intr_state := s_intr_idle
-      }
-    }
+  when (intr) {
+    mstatus := intr_mstatus
+    mepc := intr_mepc
+    mcause := intr_mcause
   }
 
   // CSR register map
@@ -166,19 +153,9 @@ class Csr extends Module {
   io.ecp.jmp_pc := csr_jmp_pc
   io.ecp.rd_data := rdata
 
-  io.intr := intr
-  io.intr_pc := intr_pc
-
-  // difftest for arch event & CSR state
+  // difftest for CSR state
 
   if (ZhoushanConfig.EnableDifftest) {
-    val dt_ae = Module(new DifftestArchEvent)
-    dt_ae.io.clock        := clock
-    dt_ae.io.coreid       := 0.U
-    dt_ae.io.intrNO       := Mux(intr_reg, intr_no, 0.U)
-    dt_ae.io.cause        := 0.U
-    dt_ae.io.exceptionPC  := Mux(intr_reg, mepc, 0.U)
-
     val dt_cs = Module(new DifftestCSRState)
     dt_cs.io.clock          := clock
     dt_cs.io.coreid         := 0.U
