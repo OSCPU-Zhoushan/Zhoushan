@@ -38,7 +38,7 @@ class CsrMip extends Bundle {
   def access(a: UInt, rdata: UInt, ren: Bool, wdata: UInt,
              wmask: UInt, wen: Bool): Unit = {
     when (addr === a && ren) {
-      rdata := apply()
+      rdata := 0.U // apply()
     }
     when (addr === a && wen) { }
   }
