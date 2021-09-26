@@ -80,8 +80,10 @@ class Clint extends Module {
   BoringUtils.addSource(mtip, "csr_mip_mtip")
 
   // debug info
-  when (mtime =/= RegNext(mtime)) {
-    printf("%d: [CLINT] mtime=%d mtimecmp=%d mtip=%x\n", DebugTimer(), mtime, mtimecmp, mtip)
+  if (ZhoushanConfig.DebugClint) {
+    when (mtime =/= RegNext(mtime)) {
+      printf("%d: [CLINT] mtime=%d mtimecmp=%d mtip=%x\n", DebugTimer(), mtime, mtimecmp, mtip)
+    }
   }
 
 }
