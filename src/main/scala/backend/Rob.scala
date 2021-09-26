@@ -245,7 +245,7 @@ class Rob extends Module with ZhoushanConfig {
       // if branch instr 0 is commited, we allow instr 1 to be commited only
       //   when 1) instr 0 not mis-predict, and 2) instr 1 is not branch instr
       jmp_mask(i) := Mux(jmp_valid(0), !jmp_mis(0) && !jmp_valid(1), true.B)
-      store_mask(i) := !store_mask(0)
+      store_mask(i) := Mux(store_valid(0), !store_valid(1), true.B)
     }
     // resolve WAW dependency
     // don't commit two instructions with same rd_addr at the same time
