@@ -79,7 +79,13 @@ class Core extends Module with ZhoushanConfig {
   execution.io.rs1_data := prf.io.rs1_data
   execution.io.rs2_data := prf.io.rs2_data
 
-  rename.io.exe := execution.io.out
+  for (i <- 0 until IssueWidth) {
+    if (i < IssueWidth - 1) {
+      rename.io.exe(i) := prf.io.out(i)
+    } else {
+      rename.io.exe(i) := execution.io.out(i)
+    }
+  }
 
   rob.io.exe := execution.io.out
   rob.io.exe_ecp := execution.io.out_ecp
