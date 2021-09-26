@@ -24,7 +24,8 @@ trait ZhoushanConfig {
   val PrfSize = 64
   val StoreQueueSize = 4
   // Settings
-  val EnableDifftest = true
+  val EnableDifftest = false
+  val EnableAddModulePrefix = true
   val EnableMisRateCounter = true
   val EnableQueueAnalyzer = false
   // Debug Info

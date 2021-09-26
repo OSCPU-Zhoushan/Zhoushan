@@ -3,7 +3,7 @@ package zhoushan
 import chisel3._
 import chisel3.util._
 
-class FpgaTop extends Module {
+class RealTop extends Module {
   val io = IO(new Bundle {
     val memAXI_0 = new AxiIO
   })
