@@ -215,4 +215,23 @@ class Core extends Module with ZhoushanConfig {
     dt_cs.io.mideleg        := 0.U
     dt_cs.io.medeleg        := 0.U
   }
+
+  if (EnableQueueAnalyzer) {
+    val profile_queue_ib_count     = WireInit(UInt(8.W), 0.U)
+    val profile_queue_iq_int_count = WireInit(UInt(8.W), 0.U)
+    val profile_queue_iq_mem_count = WireInit(UInt(8.W), 0.U)
+    val profile_queue_rob_count    = WireInit(UInt(8.W), 0.U)
+    val profile_queue_sq_count     = WireInit(UInt(8.W), 0.U)
+
+    BoringUtils.addSink(profile_queue_ib_count,     "profile_queue_ib_count")
+    BoringUtils.addSink(profile_queue_iq_int_count, "profile_queue_iq_int_count")
+    BoringUtils.addSink(profile_queue_iq_mem_count, "profile_queue_iq_mem_count")
+    BoringUtils.addSink(profile_queue_rob_count,    "profile_queue_rob_count")
+    BoringUtils.addSink(profile_queue_sq_count,     "profile_queue_sq_count")
+
+    printf("%d: [QUEUE] ib=%d iq_int=%d iq_mem=%d rob=%d sq=%d\n", DebugTimer(),
+           profile_queue_ib_count, profile_queue_iq_int_count, profile_queue_iq_mem_count,
+           profile_queue_rob_count, profile_queue_sq_count)
+  }
+
 }

@@ -26,6 +26,7 @@ trait ZhoushanConfig {
   // Settings
   val EnableDifftest = true
   val EnableMisRateCounter = true
+  val EnableQueueAnalyzer = false
   // Debug Info
   val DebugRename = false
   val DebugRenameVerbose = false

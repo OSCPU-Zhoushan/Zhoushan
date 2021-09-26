@@ -2,6 +2,7 @@ package zhoushan
 
 import chisel3._
 import chisel3.util._
+import chisel3.util.experimental._
 
 class StoreQueueEntry extends Bundle with AxiParameters {
   val addr = UInt(AxiAddrWidth.W)
@@ -11,6 +12,8 @@ class StoreQueueEntry extends Bundle with AxiParameters {
 }
 
 class StoreQueue extends Module with ZhoushanConfig {
+  val entries = StoreQueueSize
+
   val io = IO(new Bundle {
     // flush request from ROB
     val flush = Input(Bool())
@@ -23,9 +26,9 @@ class StoreQueue extends Module with ZhoushanConfig {
     val deq_req = Input(Bool())
   })
 
-  val sq = Mem(StoreQueueSize, new StoreQueueEntry)
-  val enq_ptr = Counter(StoreQueueSize)
-  val deq_ptr = Counter(StoreQueueSize)
+  val sq = Mem(entries, new StoreQueueEntry)
+  val enq_ptr = Counter(entries)
+  val deq_ptr = Counter(entries)
   val maybe_full = RegInit(false.B)
   val empty = (enq_ptr.value === deq_ptr.value) && !maybe_full
   val full = (enq_ptr.value === deq_ptr.value) && maybe_full
@@ -36,7 +39,7 @@ class StoreQueue extends Module with ZhoushanConfig {
   val deq_idle :: deq_wait :: Nil = Enum(2)
   val deq_state = RegInit(deq_idle)
 
-  val deq_req_counter = RegInit(UInt((log2Up(StoreQueueSize) + 1).W), 0.U)
+  val deq_req_counter = RegInit(UInt((log2Up(entries) + 1).W), 0.U)
   val deq_req_empty = (deq_req_counter === 0.U)
 
   val deq_fire = WireInit(false.B)
@@ -115,9 +118,9 @@ class StoreQueue extends Module with ZhoushanConfig {
 
   /* ---------- Load Logic ----------- */
 
-  val load_addr_match = WireInit(VecInit(Seq.fill(StoreQueueSize)(false.B)))
+  val load_addr_match = WireInit(VecInit(Seq.fill(entries)(false.B)))
 
-  for (i <- 0 until StoreQueueSize) {
+  for (i <- 0 until entries) {
     load_addr_match(i) := sq(i).valid && (sq(i).addr === io.in.req.bits.addr)
   }
 
@@ -133,7 +136,7 @@ class StoreQueue extends Module with ZhoushanConfig {
     enq_ptr.reset()
     deq_ptr.reset()
     maybe_full := false.B
-    for (i <- 0 until StoreQueueSize) {
+    for (i <- 0 until entries) {
       sq(i).valid := false.B
     }
   }
@@ -211,5 +214,14 @@ class StoreQueue extends Module with ZhoushanConfig {
   io.out_ld.req.bits.id    := SqLoadId.U
 
   io.out_ld.resp.ready     := io.in.resp.ready
+
+  /* ---------- debug ---------------- */
+
+  if (EnableDifftest && EnableQueueAnalyzer) {
+    val ptr_match = enq_ptr.value === deq_ptr.value
+    val ptr_diff = enq_ptr.value - deq_ptr.value
+    val queue_sq_count = Mux(maybe_full && ptr_match, entries.U, 0.U) | ptr_diff
+    BoringUtils.addSource(queue_sq_count, "profile_queue_sq_count")
+  }
 
 }

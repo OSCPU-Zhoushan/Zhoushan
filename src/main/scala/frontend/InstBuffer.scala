@@ -2,6 +2,7 @@ package zhoushan
 
 import chisel3._
 import chisel3.util._
+import chisel3.util.experimental._
 
 class InstPacket extends Bundle {
   val pc = UInt(32.W)
@@ -126,6 +127,13 @@ class InstBuffer extends Module with ZhoushanConfig {
     enq_ready := true.B
     enq_vec := VecInit((0 until enq_width).map(_.U(addr_width.W)))
     deq_vec := VecInit((0 until deq_width).map(_.U(addr_width.W)))
+  }
+
+  // debug
+
+  if (EnableDifftest && EnableQueueAnalyzer) {
+    val queue_ib_count = count
+    BoringUtils.addSource(queue_ib_count, "profile_queue_ib_count")
   }
 
 }

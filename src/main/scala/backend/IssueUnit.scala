@@ -2,6 +2,7 @@ package zhoushan
 
 import chisel3._
 import chisel3.util._
+import chisel3.util.experimental._
 import zhoushan.Constant._
 
 class MicroOpVec(vec_width: Int) extends Bundle {
@@ -225,6 +226,13 @@ class IntIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_width: Int)
       printf("\n")
     }
   }
+
+  /* ---------- debug ---------- */
+
+  if (EnableDifftest && EnableQueueAnalyzer) {
+    val queue_iq_int_count = enq_ptr
+    BoringUtils.addSource(queue_iq_int_count, "profile_queue_iq_int_count")
+  }
 }
 
 class MemIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_width: Int)
@@ -335,6 +343,13 @@ class MemIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_width: Int)
       }
       printf("\n")
     }
+  }
+
+  /* ---------- debug ---------- */
+
+  if (EnableDifftest && EnableQueueAnalyzer) {
+    val queue_iq_mem_count = enq_ptr
+    BoringUtils.addSource(queue_iq_mem_count, "profile_queue_iq_mem_count")
   }
 }
 

@@ -320,19 +320,6 @@ class Rob extends Module with ZhoushanConfig {
     }
   }
 
-  if (EnableDifftest && EnableMisRateCounter) {
-    val jmp_counter = RegInit(UInt(64.W), 0.U)
-    val mis_counter = RegInit(UInt(64.W), 0.U)
-    when (io.jmp_packet.valid) {
-      jmp_counter := jmp_counter + 1.U
-      when (io.jmp_packet.mis) {
-        mis_counter := mis_counter + 1.U
-      }
-    }
-    BoringUtils.addSource(jmp_counter, "profile_jmp_counter")
-    BoringUtils.addSource(mis_counter, "profile_mis_counter")
-  }
-
   /* --------------- flush --------------- */
 
   when (io.flush) {
@@ -352,5 +339,25 @@ class Rob extends Module with ZhoushanConfig {
   io.cm_rd_data := cm_rd_data
   io.cm_mmio := cm_mmio
   io.sq_deq_req := sq_deq_req && !intr
+
+  /* --------------- debug --------------- */
+
+  if (EnableDifftest && EnableMisRateCounter) {
+    val jmp_counter = RegInit(UInt(64.W), 0.U)
+    val mis_counter = RegInit(UInt(64.W), 0.U)
+    when (io.jmp_packet.valid) {
+      jmp_counter := jmp_counter + 1.U
+      when (io.jmp_packet.mis) {
+        mis_counter := mis_counter + 1.U
+      }
+    }
+    BoringUtils.addSource(jmp_counter, "profile_jmp_counter")
+    BoringUtils.addSource(mis_counter, "profile_mis_counter")
+  }
+
+  if (EnableDifftest && EnableQueueAnalyzer) {
+    val queue_rob_count = count
+    BoringUtils.addSource(queue_rob_count, "profile_queue_rob_count")
+  }
 
 }
