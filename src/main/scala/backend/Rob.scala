@@ -51,6 +51,7 @@ class Rob extends Module with ZhoushanConfig {
   val deq_flag = getFlag(deq_vec(0))
 
   val count = Mux(enq_flag === deq_flag, enq_ptr - deq_ptr, entries.U + enq_ptr - deq_ptr)
+  val rob_empty = (enq_flag === deq_flag) && (enq_ptr === deq_ptr)
 
   val num_enq = Mux(io.in.fire(), PopCount(io.in.bits.vec.map(_.valid)), 0.U)
   val num_deq = PopCount(cm.map(_.valid))
@@ -224,7 +225,7 @@ class Rob extends Module with ZhoushanConfig {
     deq_addr_async(i) := getIdx(deq_vec(i))
     deq_ecp(i) := ecp(deq_addr_async(i))
     if (i == 0) {
-      when (deq_uop(i).fu_code === FU_CSR && !csr_in_flight) {
+      when (deq_uop(i).fu_code === FU_CSR && !csr_in_flight && !rob_empty) {
         io.csr_ready := true.B
         csr_in_flight := true.B
       }
