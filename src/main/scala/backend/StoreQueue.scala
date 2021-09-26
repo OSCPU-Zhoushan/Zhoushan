@@ -145,7 +145,7 @@ class StoreQueue extends Module with ZhoushanConfig {
     is (flush_idle) {
       // no flush signal
       when (io.flush) {
-        when (deq_req_empty) {
+        when (deq_req_empty && !io.deq_req) {
           flush_all()
           if (DebugStoreQueue) {
             printf("%d: [SQ - F] SQ empty - OK\n", DebugTimer())
