@@ -152,6 +152,9 @@ class Csr extends Module {
   io.ecp.jmp_valid := csr_jmp
   io.ecp.jmp := csr_jmp
   io.ecp.jmp_pc := csr_jmp_pc
+  io.ecp.mis := Mux(csr_jmp, 
+                    (uop.pred_br && (csr_jmp_pc =/= uop.pred_bpc)) || !uop.pred_br,
+                    uop.pred_br)
   io.ecp.rd_data := rdata
 
   // difftest for CSR state

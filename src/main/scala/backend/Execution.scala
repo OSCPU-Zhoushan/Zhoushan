@@ -10,6 +10,7 @@ class ExCommitPacket extends Bundle {
   val jmp_valid = Bool()
   val jmp = Bool()
   val jmp_pc = UInt(32.W)
+  val mis = Bool()
   val rd_data = UInt(64.W)
 }
 

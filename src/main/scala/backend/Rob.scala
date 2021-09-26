@@ -136,6 +136,7 @@ class Rob extends Module with ZhoushanConfig {
 
   // set the jmp mask, store mask & deq, generate jmp_packet for IF & deq_req for SQ
   val jmp_valid = WireInit(VecInit(Seq.fill(deq_width)(false.B)))
+  val jmp_mis = WireInit(VecInit(Seq.fill(deq_width)(false.B)))
   val jmp_mask = WireInit(VecInit(Seq.fill(deq_width)(false.B)))
   val jmp_1h = WireInit(VecInit(Seq.fill(deq_width)(false.B)))
 
@@ -234,13 +235,16 @@ class Rob extends Module with ZhoushanConfig {
     cm_rd_data(i) := deq_ecp(i).rd_data
     cm_mmio(i) := deq_ecp(i).mmio
     jmp_valid(i) := deq_ecp(i).jmp_valid
+    jmp_mis(i) := deq_ecp(i).mis
     store_valid(i) := deq_ecp(i).store_valid
     if (i == 0) {
       jmp_mask(i) := true.B
       store_mask(i) := true.B
     } else {
       // todo: currently only support 2-way commit
-      jmp_mask(i) := !jmp_valid(0)
+      // if branch instr 0 is commited, we allow instr 1 to be commited only
+      //   when 1) instr 0 not mis-predict, and 2) instr 1 is not branch instr
+      jmp_mask(i) := Mux(jmp_valid(0), !jmp_mis(0) && !jmp_valid(1), true.B)
       store_mask(i) := !store_mask(0)
     }
     // resolve WAW dependency
@@ -270,9 +274,7 @@ class Rob extends Module with ZhoushanConfig {
       io.jmp_packet.inst_pc := deq_uop(i).pc
       io.jmp_packet.jmp     := deq_ecp(i).jmp
       io.jmp_packet.jmp_pc  := deq_ecp(i).jmp_pc
-      io.jmp_packet.mis     := Mux(io.jmp_packet.jmp, 
-                                   (deq_uop(i).pred_br && (io.jmp_packet.jmp_pc =/= deq_uop(i).pred_bpc)) || !deq_uop(i).pred_br,
-                                   deq_uop(i).pred_br)
+      io.jmp_packet.mis     := deq_ecp(i).mis
       io.jmp_packet.intr    := false.B
 
       // debug info
