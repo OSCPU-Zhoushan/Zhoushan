@@ -35,6 +35,20 @@ class Prf extends Module with ZhoushanConfig {
     rs2_data(i) := Mux((rs2_paddr(i) =/= 0.U), prf(rs2_paddr(i)), 0.U)
   }
 
+  // currently we only support execution pipe 0/1 bypassing
+  for (i <- 0 until IssueWidth) {
+    for (j <- 0 until IssueWidth - 1) {
+      when (io.rd_en(j) && (io.rd_paddr(j) =/= 0.U)) {
+        when (io.rd_paddr(j) === rs1_paddr(i)) {
+          rs1_data(i) := io.rd_data(j)
+        }
+        when (io.rd_paddr(j) === rs2_paddr(i)) {
+          rs2_data(i) := io.rd_data(j)
+        }
+      }
+    }
+  }
+
   // pipeline registers
 
   val out_uop = RegInit(VecInit(Seq.fill(IssueWidth)(0.U.asTypeOf(new MicroOp))))
