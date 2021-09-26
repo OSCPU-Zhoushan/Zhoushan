@@ -37,7 +37,7 @@ class InstFetch extends Module with ZhoushanConfig {
   val bp = Module(new BranchPredictor)
   bp.io.jmp_packet <> io.jmp_packet
 
-  val pc_init = "h80000000".U(32.W)
+  val pc_init = ResetPc.U(32.W)
   val pc = RegInit(pc_init)
   val pc_base = Cat(pc(31, 3), Fill(3, 0.U))      // 64-bit aligned pc_base
   val pc_valid = RegInit("b11".U(2.W))
