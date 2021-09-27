@@ -9,7 +9,7 @@ class SimTop extends Module {
     val logCtrl = new LogCtrlIO
     val perfInfo = new PerfInfoIO
     val uart = new UARTIO
-    val memAXI_0 = new AxiIO
+    val memAXI_0 = if (ZhoushanConfig.EnableOscpuSocAxi) new OscpuSocAxiIO else new AxiIO
   })
 
   val core = Module(new Core)
