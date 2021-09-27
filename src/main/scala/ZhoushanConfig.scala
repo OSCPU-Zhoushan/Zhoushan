@@ -25,9 +25,8 @@ trait ZhoushanConfig {
   val StoreQueueSize = 4
   // Settings
   val ResetPc = "h80000000"
-  val TargetOscpuSoc = true
+  val TargetOscpuSoc = false
   val EnableDifftest = !TargetOscpuSoc
-  val EnableAddModulePrefix = TargetOscpuSoc
   val EnableMisRateCounter = EnableDifftest
   val EnableQueueAnalyzer = false
   val EnableOscpuSocAxi = TargetOscpuSoc
