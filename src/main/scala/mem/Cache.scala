@@ -226,7 +226,7 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
     s2_reg_dat_w := s2_dat_w
   }
 
-  replace_way := Cat(plru0(s2_idx), 
+  replace_way := Cat(plru0(s2_idx),
                      Mux(plru0(s2_idx) === 0.U, plru1(s2_idx), plru2(s2_idx)))
 
   // generate the write-back address by concatenating the tag stored in meta
@@ -245,7 +245,7 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
   val s2_hit_real = Mux(RegNext(pipeline_fire), s2_hit, s2_reg_hit)
   val s2_dirty_real = Mux(RegNext(pipeline_fire), s2_dirty, s2_reg_dirty)
 
-  val hit_ready = s2_hit_real && 
+  val hit_ready = s2_hit_real &&
                   Mux(s2_wen, state === s_complete, state === s_idle)
   val miss_ready = (state === s_complete)
 
@@ -262,13 +262,13 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
   // handshake signals with memory
   out.req.valid := (state === s_miss_req_r) || (state === s_miss_req_w1) || (state === s_miss_req_w2)
   out.req.bits.id := id.U
-  out.req.bits.addr := Mux(state === s_miss_req_r, 
-                           Cat(s2_addr(31, 4), Fill(4, 0.U)), 
+  out.req.bits.addr := Mux(state === s_miss_req_r,
+                           Cat(s2_addr(31, 4), Fill(4, 0.U)),
                            Cat(wb_addr(31, 4), Fill(4, 0.U)))
   out.req.bits.aen := (state === s_miss_req_r) || (state === s_miss_req_w1)
   out.req.bits.ren := (state === s_miss_req_r)
-  out.req.bits.wdata := Mux(state === s_miss_req_w1, 
-                            s2_reg_dat_w(63, 0), 
+  out.req.bits.wdata := Mux(state === s_miss_req_w1,
+                            s2_reg_dat_w(63, 0),
                             s2_reg_dat_w(127, 64))
   out.req.bits.wmask := "hff".U(8.W)
   out.req.bits.wlast := (state === s_miss_req_w2)
@@ -313,7 +313,7 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
               sram(i).io.en := true.B
               sram(i).io.wen := true.B
               sram(i).io.addr := s2_idx
-              sram(i).io.wdata := Mux(s2_offs === 1.U, 
+              sram(i).io.wdata := Mux(s2_offs === 1.U,
                                       Cat(MaskData(s2_rdata(127, 64), s2_wdata, MaskExpand(s2_wmask)), s2_rdata(63, 0)),
                                       Cat(s2_rdata(127, 64), MaskData(s2_rdata(63, 0), s2_wdata, MaskExpand(s2_wmask))))
               meta(i).io.idx := s2_idx
@@ -356,7 +356,7 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
             sram(i).io.wen := true.B
             sram(i).io.addr := s2_idx
             when (s2_wen) {
-              sram(i).io.wdata := Mux(s2_offs === 1.U, 
+              sram(i).io.wdata := Mux(s2_offs === 1.U,
                                       Cat(MaskData(wdata2, s2_wdata, MaskExpand(s2_wmask)), wdata1),
                                       Cat(wdata2, MaskData(wdata1, s2_wdata, MaskExpand(s2_wmask))))
             } .otherwise {

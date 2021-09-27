@@ -62,7 +62,7 @@ class Alu extends Module {
   io.ecp.jmp_valid := (uop.fu_code === FU_JMP)
   io.ecp.jmp := jmp
   io.ecp.jmp_pc := jmp_pc
-  io.ecp.mis := Mux(jmp, 
+  io.ecp.mis := Mux(jmp,
                     (uop.pred_br && (jmp_pc =/= uop.pred_bpc)) || !uop.pred_br,
                     uop.pred_br)
   io.ecp.rd_data := alu_out | npc_to_rd

@@ -160,7 +160,7 @@ class Lsu extends Module {
   //    word  -> offset = 101/110/111
   //    dword -> offset != 000
   val addr_unaligned = RegInit(false.B)
-  addr_unaligned := Mux(uop.fu_code === FU_MEM, 
+  addr_unaligned := Mux(uop.fu_code === FU_MEM,
     MuxLookup(uop.mem_size, false.B, Array(
       MEM_HALF  -> (addr_offset === "b111".U),
       MEM_WORD  -> (addr_offset.asUInt() > "b100".U),

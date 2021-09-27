@@ -140,7 +140,7 @@ class Csr extends Module {
   )
 
   // CSR register read/write
-  
+
   val addr = uop.inst(31, 20)
   val rdata = WireInit(UInt(64.W), 0.U)
   val ren = csr_rw
@@ -162,7 +162,7 @@ class Csr extends Module {
   io.ecp.jmp_valid := csr_jmp
   io.ecp.jmp := csr_jmp
   io.ecp.jmp_pc := csr_jmp_pc
-  io.ecp.mis := Mux(csr_jmp, 
+  io.ecp.mis := Mux(csr_jmp,
                     (uop.pred_br && (csr_jmp_pc =/= uop.pred_bpc)) || !uop.pred_br,
                     uop.pred_br)
   io.ecp.rd_data := rdata

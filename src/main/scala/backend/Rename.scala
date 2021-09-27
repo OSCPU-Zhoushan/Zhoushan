@@ -213,7 +213,7 @@ class PrfStateTable extends Module with PrfStateConstant with ZhoushanConfig {
   for (i <- 0 until CommitWidth) {
     when (io.cm(i) =/= 0.U) {
       table(io.cm(i)) := COMMITTED
-    } 
+    }
   }
 
   for (i <- 0 until CommitWidth) {
@@ -230,7 +230,7 @@ class PrfStateTable extends Module with PrfStateConstant with ZhoushanConfig {
     }
   }
 
-  // default 
+  // default
   table(0) := COMMITTED
 
   if (DebugRenameVerbose) {

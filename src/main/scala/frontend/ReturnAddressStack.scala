@@ -37,7 +37,7 @@ class ReturnAddressStack extends Module with BpParameters with ZhoushanConfig {
     sp := sp_dec
   }
   io.top_pc := Mux(RegNext(io.push_en), RegNext(io.push_pc), stack_top_pc)
-  
+
   when (io.push_en) {
     ras.write(sp, io.push_pc)
     sp := sp_inc

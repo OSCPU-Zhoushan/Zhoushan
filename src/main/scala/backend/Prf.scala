@@ -69,7 +69,7 @@ class Prf extends Module with ZhoushanConfig {
       out_rs2_data(i) := rs2_data(i)
     }
   }
-  
+
   io.out := out_uop
   io.rs1_data := out_rs1_data
   io.rs2_data := out_rs2_data

@@ -122,7 +122,7 @@ class BranchTargetBuffer4WayAssociative extends AbstractBranchTargetBuffer {
   wentry.tag := io.wtag
   wentry.target := io.wtarget
   wentry.ras_type := io.wras_type
-  val replace_way = Cat(plru0(io.waddr), 
+  val replace_way = Cat(plru0(io.waddr),
                         Mux(plru0(io.waddr) === 0.U, plru1(io.waddr), plru2(io.waddr)))
 
   val w_rdata = WireInit(VecInit(Seq.fill(4)(0.U.asTypeOf(new BtbEntry))))

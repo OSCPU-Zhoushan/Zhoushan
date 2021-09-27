@@ -62,17 +62,17 @@ class Decoder extends Module {
   uop.pc := io.in.pc
   uop.npc := io.in.pc + 4.U
   uop.inst := inst
-  
+
   uop.rs1_addr := inst(19, 15)
   uop.rs2_addr := inst(24, 20)
   uop.rd_addr := inst(11, 7)
 
   uop.pred_br := io.in.pred_br
   uop.pred_bpc := io.in.pred_bpc
-  
+
   val ctrl = ListLookup(inst,
-                  //   v  fu_code alu_code  jmp_code  mem_code mem_size   csr_code   w  rs1_src       rs2_src  rd_en  imm_type  
-                  List(N, FU_X,   ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_X,     N, RS_X,         RS_X,        N, IMM_X    ), 
+                  //   v  fu_code alu_code  jmp_code  mem_code mem_size   csr_code   w  rs1_src       rs2_src  rd_en  imm_type
+                  List(N, FU_X,   ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_X,     N, RS_X,         RS_X,        N, IMM_X    ),
     Array(
       // RV32I
       LUI     ->  List(Y, FU_ALU, ALU_ADD,  JMP_X,    MEM_X,   MEM_X,     CSR_X,     N, RS_FROM_ZERO, RS_FROM_IMM, Y, IMM_U    ),
