@@ -145,8 +145,8 @@ class Csr extends Module {
   val rdata = WireInit(UInt(64.W), 0.U)
   val ren = csr_rw
   val wdata = Wire(UInt(64.W))
-  val wmask = "hffffffff".U
-  val wen = csr_rw && (in1 =/= 0.U)
+  val wmask = "hffffffffffffffff".U
+  val wen = csr_rw // && (in1 =/= 0.U)
 
   wdata := MuxLookup(uop.csr_code, 0.U, Array(
     CSR_RW -> in1,
