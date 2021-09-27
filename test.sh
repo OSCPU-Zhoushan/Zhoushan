@@ -34,7 +34,43 @@ function riscv_tests {
   wait
 }
 
-while getopts 'qcrt:w:' OPT; do
+function rename {
+  filename=./build/ysyx_210128.v
+  cp ./build/RealTop.v ${filename}
+  sed -i 's/io_master_aw_ready/io_master_awready/g' ${filename}
+  sed -i 's/io_master_aw_valid/io_master_awvalid/g' ${filename}
+  sed -i 's/io_master_aw_bits_/io_master_aw/g' ${filename}
+  sed -i 's/io_master_w_ready/io_master_wready/g' ${filename}
+  sed -i 's/io_master_w_valid/io_master_wvalid/g' ${filename}
+  sed -i 's/io_master_w_bits_/io_master_w/g' ${filename}
+  sed -i 's/io_master_b_ready/io_master_bready/g' ${filename}
+  sed -i 's/io_master_b_valid/io_master_bvalid/g' ${filename}
+  sed -i 's/io_master_b_bits_/io_master_b/g' ${filename}
+  sed -i 's/io_master_ar_ready/io_master_arready/g' ${filename}
+  sed -i 's/io_master_ar_valid/io_master_arvalid/g' ${filename}
+  sed -i 's/io_master_ar_bits_/io_master_ar/g' ${filename}
+  sed -i 's/io_master_r_ready/io_master_rready/g' ${filename}
+  sed -i 's/io_master_r_valid/io_master_rvalid/g' ${filename}
+  sed -i 's/io_master_r_bits_/io_master_r/g' ${filename}
+  sed -i 's/io_slave_aw_ready/io_slave_awready/g' ${filename}
+  sed -i 's/io_slave_aw_valid/io_slave_awvalid/g' ${filename}
+  sed -i 's/io_slave_aw_bits_/io_slave_aw/g' ${filename}
+  sed -i 's/io_slave_w_ready/io_slave_wready/g' ${filename}
+  sed -i 's/io_slave_w_valid/io_slave_wvalid/g' ${filename}
+  sed -i 's/io_slave_w_bits_/io_slave_w/g' ${filename}
+  sed -i 's/io_slave_b_ready/io_slave_bready/g' ${filename}
+  sed -i 's/io_slave_b_valid/io_slave_bvalid/g' ${filename}
+  sed -i 's/io_slave_b_bits_/io_slave_b/g' ${filename}
+  sed -i 's/io_slave_ar_ready/io_slave_arready/g' ${filename}
+  sed -i 's/io_slave_ar_valid/io_slave_arvalid/g' ${filename}
+  sed -i 's/io_slave_ar_bits_/io_slave_ar/g' ${filename}
+  sed -i 's/io_slave_r_ready/io_slave_rready/g' ${filename}
+  sed -i 's/io_slave_r_valid/io_slave_rvalid/g' ${filename}
+  sed -i 's/io_slave_r_bits_/io_slave_r/g' ${filename}
+  sed -i 's/ysyx_210128_RealTop/ysyx_210128/g' ${filename}
+}
+
+while getopts 'qcrt:w:n' OPT; do
   case $OPT in
     q)
       quick_tests;;
@@ -48,6 +84,8 @@ while getopts 'qcrt:w:' OPT; do
     w)
       example="$OPTARG"
       ./build/emu -i ../am-kernels/tests/cpu-tests/build/${example}-riscv64-mycpu.bin -b 0 --dump-wave --wave-path=./build/wave.vcd;;
+    n)
+      rename;;
     ?)
       echo "Error: missing arguments"
   esac
