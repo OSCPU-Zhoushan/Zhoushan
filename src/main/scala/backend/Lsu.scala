@@ -16,28 +16,20 @@ class Lsu extends Module {
     val flush = Input(Bool())
   })
 
-  val uop = io.uop
-  val reg_uop = RegInit(0.U.asTypeOf(new MicroOp))
-  val uop_real = Mux(uop.valid, uop, reg_uop)
-  val in1 = io.in1
-  val reg_in1 = RegInit(0.U(64.W))
-  val in1_real = Mux(uop.valid, in1, reg_in1)
-  val in2 = io.in2
-  val reg_in2 = RegInit(0.U(64.W))
-  val in2_real = Mux(uop.valid, in2, reg_in2)
+  val lsu_update = io.uop.valid
+
+  val uop = HoldUnlessWithFlush(io.uop, lsu_update, io.flush)
+  val in1 = HoldUnlessWithFlush(io.in1, lsu_update, io.flush)
+  val in2 = HoldUnlessWithFlush(io.in2, lsu_update, io.flush)
 
   val completed = RegInit(true.B)
-
-  when (uop.valid) {
-    reg_uop := uop
-    reg_in1 := in1
-    reg_in2 := in2
+  when (lsu_update) {
     completed := false.B
   }
 
-  val is_mem = (uop_real.fu_code === FU_MEM)
-  val is_load = (uop_real.mem_code === MEM_LD || uop_real.mem_code === MEM_LDU)
-  val is_store = (uop_real.mem_code === MEM_ST)
+  val is_mem = (uop.fu_code === FU_MEM)
+  val is_load = (uop.mem_code === MEM_LD || uop.mem_code === MEM_LDU)
+  val is_store = (uop.mem_code === MEM_ST)
 
   val s_idle :: s_wait_r :: s_wait_w :: Nil = Enum(3)
   val state = RegInit(s_idle)
@@ -45,9 +37,9 @@ class Lsu extends Module {
   val req = io.dmem.req
   val resp = io.dmem.resp
 
-  val addr = (in1_real + SignExt32_64(uop_real.imm))(31, 0)
+  val addr = (in1 + SignExt32_64(uop.imm))(31, 0)
   val addr_offset = addr(2, 0)
-  val wdata = in2_real
+  val wdata = in2
 
   val mmio = RegInit(false.B)
   when (uop.valid) {
@@ -64,7 +56,7 @@ class Lsu extends Module {
     "b110".U -> "b11000000".U(8.W),
     "b111".U -> "b10000000".U(8.W)
   ))
-  val wmask = MuxLookup(uop_real.mem_size, 0.U, Array(
+  val wmask = MuxLookup(uop.mem_size, 0.U, Array(
     MEM_BYTE  -> "b00000001".U(8.W),
     MEM_HALF  -> "b00000011".U(8.W),
     MEM_WORD  -> "b00001111".U(8.W),
@@ -78,8 +70,8 @@ class Lsu extends Module {
   req.bits.wen := is_store
   req.bits.user := 0.U
   req.bits.id := 0.U
-  req.valid := uop_real.valid && (state === s_idle) &&
-               (is_load || is_store) && (uop.valid || !completed)
+  req.valid := uop.valid && (state === s_idle) &&
+               (is_load || is_store) && (lsu_update || !completed)
 
   resp.ready := true.B  // must be always true due to potential flush signal
 
@@ -100,7 +92,8 @@ class Lsu extends Module {
       when (resp.fire()) {
         load_data := resp.bits.rdata >> (addr_offset << 3)
         if (ZhoushanConfig.DebugLsu) {
-          printf("%d: [LOAD ] pc=%x addr=%x rdata=%x -> %x\n", DebugTimer(), uop_real.pc, addr, resp.bits.rdata, resp.bits.rdata >> (addr_offset << 3))
+          printf("%d: [LOAD ] pc=%x addr=%x rdata=%x -> %x\n", DebugTimer(),
+                 uop.pc, addr, resp.bits.rdata, resp.bits.rdata >> (addr_offset << 3))
         }
         completed := true.B
         state := s_idle
@@ -109,7 +102,8 @@ class Lsu extends Module {
     is (s_wait_w) {
       when (resp.fire()) {
         if (ZhoushanConfig.DebugLsu) {
-          printf("%d: [STORE] pc=%x addr=%x wdata=%x -> %x wmask=%x\n", DebugTimer(), uop_real.pc, addr, in2_real, req.bits.wdata, req.bits.wmask)
+          printf("%d: [STORE] pc=%x addr=%x wdata=%x -> %x wmask=%x\n", DebugTimer(),
+                 uop.pc, addr, in2, req.bits.wdata, req.bits.wmask)
         }
         completed := true.B
         state := s_idle
@@ -119,9 +113,6 @@ class Lsu extends Module {
 
   // when flush, invalidate the current load/store request
   when (io.flush) {
-    reg_uop := 0.U.asTypeOf(new MicroOp)
-    reg_in1 := 0.U
-    reg_in2 := 0.U
     completed := true.B
     state := s_idle
   }
@@ -130,21 +121,21 @@ class Lsu extends Module {
   val ldu_out = Wire(UInt(64.W))
   val load_out = Wire(UInt(64.W))
 
-  ld_out := Mux(uop_real.mem_code === MEM_LD, MuxLookup(uop_real.mem_size, 0.U, Array(
+  ld_out := Mux(uop.mem_code === MEM_LD, MuxLookup(uop.mem_size, 0.U, Array(
     MEM_BYTE  -> Cat(Fill(56, load_data(7)), load_data(7, 0)),
     MEM_HALF  -> Cat(Fill(48, load_data(15)), load_data(15, 0)),
     MEM_WORD  -> Cat(Fill(32, load_data(31)), load_data(31, 0)),
     MEM_DWORD -> load_data
   )), 0.U)
 
-  ldu_out := Mux(uop_real.mem_code === MEM_LDU, MuxLookup(uop_real.mem_size, 0.U, Array(
+  ldu_out := Mux(uop.mem_code === MEM_LDU, MuxLookup(uop.mem_size, 0.U, Array(
     MEM_BYTE  -> Cat(Fill(56, 0.U), load_data(7, 0)),
     MEM_HALF  -> Cat(Fill(48, 0.U), load_data(15, 0)),
     MEM_WORD  -> Cat(Fill(32, 0.U), load_data(31, 0)),
     MEM_DWORD -> load_data
   )), 0.U)
 
-  load_out := MuxLookup(uop_real.mem_code, 0.U, Array(
+  load_out := MuxLookup(uop.mem_code, 0.U, Array(
     MEM_LD  -> ld_out,
     MEM_LDU -> ldu_out
   ))
