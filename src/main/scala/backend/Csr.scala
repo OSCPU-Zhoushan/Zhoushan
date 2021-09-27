@@ -165,7 +165,7 @@ class Csr extends Module {
     dt_cs.io.coreid         := 0.U
     dt_cs.io.priviledgeMode := 3.U        // machine mode
     dt_cs.io.mstatus        := mstatus
-    dt_cs.io.sstatus        := mstatus & "h80000003000DE122".U
+    dt_cs.io.sstatus        := mstatus & "h80000003000de122".U
     dt_cs.io.mepc           := mepc
     dt_cs.io.sepc           := 0.U
     dt_cs.io.mtval          := 0.U
