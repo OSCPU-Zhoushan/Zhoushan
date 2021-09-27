@@ -6,7 +6,7 @@ object TopMain extends App {
       chisel3.stage.ChiselGeneratorAnnotation(() => new SimTop())
     ))
   } else {
-    if (ZhoushanConfig.EnableAddModulePrefix) {
+    if (ZhoushanConfig.TargetOscpuSoc) {
       (new chisel3.stage.ChiselStage).execute(args, Seq(
         chisel3.stage.ChiselGeneratorAnnotation(() => new RealTop()),
         firrtl.stage.RunFirrtlTransformAnnotation(new AddModulePrefix()),
