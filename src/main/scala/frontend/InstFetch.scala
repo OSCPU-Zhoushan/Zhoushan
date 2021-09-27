@@ -34,46 +34,40 @@ class InstFetch extends Module with ZhoushanConfig {
     reg_mis := false.B
   }
 
+  // branch predictor
   val bp = Module(new BranchPredictor)
-  bp.io.jmp_packet <> io.jmp_packet
+  val bp_update = req.fire()
 
+  // program counter
   val pc_init = ResetPc.U(32.W)
   val pc = RegInit(pc_init)
-  val pc_base = Cat(pc(31, 3), Fill(3, 0.U))      // 64-bit aligned pc_base
+  val pc_base = Cat(pc(31, 3), Fill(3, 0.U))  // 64-bit aligned
   val pc_valid = RegInit("b11".U(2.W))
 
-  val npc_s = pc_base + (4 * FetchWidth).U        // next pc sequential
+  // next pc sequential
+  val npc_s = pc_base + (4 * FetchWidth).U
 
-  val npc_p = bp.io.pred_bpc                      // next pc predicted
-  val reg_npc_p = RegInit(0.U(32.W))
-  val npc_p_real = Mux(RegNext(!bp.io.pc_en), reg_npc_p, npc_p)
-
-  val pred_br = Cat(bp.io.pred_br.reverse) & Fill(2, bp.io.pred_valid && !mis).asUInt()
-  val reg_pred_br = RegInit(UInt(FetchWidth.W), 0.U)
-  val pred_br_real = Mux(RegNext(!bp.io.pc_en), reg_pred_br, pred_br)
-
-  when (mis) {
-    reg_pred_br := 0.U
-  } .elsewhen (!bp.io.pc_en && RegNext(bp.io.pc_en)) {
-    reg_npc_p := npc_p
-    reg_pred_br := pred_br
-  }
+  // next pc predicted
+  val npc_p = HoldUnless(bp.io.pred_bpc, bp_update)
+  val pred_br = HoldUnlessWithFlush(Cat(bp.io.pred_br.reverse) & Fill(2, bp.io.pred_valid && !mis).asUInt(), bp_update, mis)
 
   // update pc by npc
   // priority: redirection > branch prediction = sequential pc
-  val npc = Mux(mis, mis_pc, Mux(pred_br_real.orR, npc_p_real, npc_s))
+  val npc = Mux(mis, mis_pc, Mux(pred_br.orR, npc_p, npc_s))
   val npc_valid = WireInit("b11".U(2.W))
   when (mis) {
     when (mis_pc(2) === 1.U) {
       npc_valid := "b10".U
     }
-  } .elsewhen (pred_br_real.orR) {
-    when (npc_p_real(2) === 1.U) {
+  } .elsewhen (pred_br.orR) {
+    when (npc_p(2) === 1.U) {
       npc_valid := "b10".U
     }
   }
 
-  bp.io.pc_en := req.fire()
+  // branch predictor input
+  bp.io.jmp_packet <> io.jmp_packet
+  bp.io.pc_en := bp_update
   bp.io.pc := npc
 
   val pc_update = mis || req.fire()
@@ -91,7 +85,7 @@ class InstFetch extends Module with ZhoushanConfig {
   req.bits.wdata := 0.U
   req.bits.wmask := 0.U
   req.bits.wen   := false.B
-  req.bits.user  := Cat(pred_br_real, pc_valid, npc, pc_base)
+  req.bits.user  := Cat(pred_br, pc_valid, npc, pc_base)
   req.bits.id    := 0.U
   req.valid      := io.out.ready
 
