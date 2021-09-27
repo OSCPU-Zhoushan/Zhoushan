@@ -52,7 +52,7 @@ class InstBuffer extends Module with ZhoushanConfig {
    *
    */
 
-  val idx_width = log2Ceil(entries)
+  val idx_width = log2Up(entries)
   val addr_width = idx_width + 1  // MSB is flag bit
   def getIdx(x: UInt): UInt = x(idx_width - 1, 0)
   def getFlag(x: UInt): Bool = x(addr_width - 1).asBool()
@@ -80,7 +80,7 @@ class InstBuffer extends Module with ZhoushanConfig {
 
   // enq
 
-  val offset = Wire(Vec(enq_width, UInt(log2Ceil(enq_width + 1).W)))
+  val offset = Wire(Vec(enq_width, UInt(log2Up(enq_width).W)))
   for (i <- 0 until enq_width) {
     if (i == 0) {
       offset(i) := 0.U
@@ -95,7 +95,8 @@ class InstBuffer extends Module with ZhoushanConfig {
     enq := io.in.bits.vec(i)
 
     when (io.in.bits.vec(i).valid && io.in.fire() && !io.flush) {
-      buf.write(getIdx(enq_vec(offset(i))), enq)
+      val enq_addr = getIdx(enq_vec(offset(i)))
+      buf.write(enq_addr, enq)
     }
   }
 

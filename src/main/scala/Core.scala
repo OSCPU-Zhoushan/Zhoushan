@@ -121,12 +121,21 @@ class Core extends Module with ZhoushanConfig {
   val cm_rd_data = rob.io.cm_rd_data
   val cm_mmio = rob.io.cm_mmio
 
-  /* ----- Difftest ------------------------------ */
+  /* ----- CSR & Difftest ------------------------ */
 
-  val rf_a0 = WireInit(0.U(64.W))
-  BoringUtils.addSink(rf_a0, "rf_a0")
+  val cycle_cnt = RegInit(0.U(64.W))
+  val instr_cnt = RegInit(0.U(64.W))
+
+  BoringUtils.addSource(cycle_cnt, "csr_mcycle")
+  BoringUtils.addSource(instr_cnt, "csr_minstret")
+
+  cycle_cnt := cycle_cnt + 1.U
+  instr_cnt := instr_cnt + PopCount(cm.map(_.valid))
 
   if (EnableDifftest) {
+    val rf_a0 = WireInit(0.U(64.W))
+    BoringUtils.addSink(rf_a0, "rf_a0")
+
     for (i <- 0 until CommitWidth) {
       val skip = (cm(i).inst === Instructions.PUTCH) ||
                  (cm(i).fu_code === Constant.FU_CSR && cm(i).inst(31, 20) === Csrs.mcycle) ||
@@ -158,18 +167,7 @@ class Core extends Module with ZhoushanConfig {
         }
       }
     }
-  }
 
-  val cycle_cnt = RegInit(0.U(64.W))
-  val instr_cnt = RegInit(0.U(64.W))
-
-  BoringUtils.addSource(cycle_cnt, "csr_mcycle")
-  BoringUtils.addSource(instr_cnt, "csr_minstret")
-
-  cycle_cnt := cycle_cnt + 1.U
-  instr_cnt := instr_cnt + PopCount(cm.map(_.valid))
-
-  if (EnableDifftest) {
     val trap = Cat(cm.map(_.inst === "h0000006b".U).reverse) & Cat(cm.map(_.valid).reverse)
     val trap_idx = OHToUInt(trap)
 
@@ -196,9 +194,7 @@ class Core extends Module with ZhoushanConfig {
         printf("Jump: %d, Mis: %d\n", profile_jmp_counter, profile_mis_counter)
       }
     }
-  }
 
-  if (EnableDifftest) {
     val dt_cs = Module(new DifftestCSRState)
     dt_cs.io.clock          := clock
     dt_cs.io.coreid         := 0.U

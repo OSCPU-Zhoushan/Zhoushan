@@ -17,25 +17,30 @@ abstract class AbstractPatternHistoryTable extends Module with BpParameters with
 
 class PatternHistoryTableLocal extends AbstractPatternHistoryTable {
 
-  val pht = for (j <- 0 until PhtWidth) yield {
-    val pht = SyncReadMem(PhtSize, UInt(2.W), SyncReadMem.WriteFirst)
-    pht
+  val pht_1 = for (j <- 0 until PhtWidth) yield {
+    val pht_1 = SyncReadMem(PhtSize, UInt(1.W), SyncReadMem.WriteFirst)
+    pht_1
+  }
+
+  val pht_0 = for (j <- 0 until PhtWidth) yield {
+    val pht_0 = SyncReadMem(PhtSize, UInt(1.W), SyncReadMem.WriteFirst)
+    pht_0
   }
 
   // read from pht
   for (i <- 0 until FetchWidth) {
-    val pht_rdata = WireInit(VecInit(Seq.fill(PhtWidth)(0.U(2.W))))
+    val pht_rdata_1 = WireInit(VecInit(Seq.fill(PhtWidth)(0.U(1.W))))
 
     // stage 1
     for (j <- 0 until PhtWidth) {
-      pht_rdata(j) := pht(j).read(io.raddr(i))
+      pht_rdata_1(j) := pht_1(j).read(io.raddr(i))
     }
 
     // stage 2
     io.rdirect(i) := false.B
     for (j <- 0 until PhtWidth) {
       when (RegNext(io.rindex(i)) === j.U) {
-        io.rdirect(i) := pht_rdata(j)(1).asBool()
+        io.rdirect(i) := pht_rdata_1(j).asBool()
       }
     }
   }
@@ -47,7 +52,7 @@ class PatternHistoryTableLocal extends AbstractPatternHistoryTable {
 
   // stage 1
   for (j <- 0 until PhtWidth) {
-    pht_wdata(j) := pht(j).read(io.waddr)
+    pht_wdata(j) := Cat(pht_1(j).read(io.waddr), pht_0(j).read(io.waddr))
   }
 
   // stage 2
@@ -67,7 +72,8 @@ class PatternHistoryTableLocal extends AbstractPatternHistoryTable {
   when (RegNext(io.wen)) {
     for (j <- 0 until PhtWidth) {
       when (RegNext(io.windex === j.U)) {
-        pht(j).write(RegNext(io.waddr), pht_wdata_w)
+        pht_1(j).write(RegNext(io.waddr), pht_wdata_w(1))
+        pht_0(j).write(RegNext(io.waddr), pht_wdata_w(0))
       }
     }
   }
@@ -76,17 +82,18 @@ class PatternHistoryTableLocal extends AbstractPatternHistoryTable {
 
 class PatternHistoryTableGlobal extends AbstractPatternHistoryTable {
 
-  val pht = SyncReadMem(PhtSize, UInt(2.W), SyncReadMem.WriteFirst)
+  val pht_1 = SyncReadMem(PhtSize, UInt(1.W), SyncReadMem.WriteFirst)
+  val pht_0 = SyncReadMem(PhtSize, UInt(1.W), SyncReadMem.WriteFirst)
 
   // read from pht
   for (i <- 0 until FetchWidth) {
-    val pht_rdata = WireInit(0.U(2.W))
+    val pht_rdata_1 = WireInit(0.U(2.W))
 
     // stage 1
-    pht_rdata := pht.read(io.raddr(i))
+    pht_rdata_1 := pht_1.read(io.raddr(i))
 
     // stage 2
-    io.rdirect(i) := pht_rdata(1).asBool()
+    io.rdirect(i) := pht_rdata_1(1).asBool()
   }
 
   // write to pht
@@ -95,7 +102,7 @@ class PatternHistoryTableGlobal extends AbstractPatternHistoryTable {
   val pht_wdata_w = WireInit(UInt(2.W), 0.U)  // then write PHT state
 
   // stage 1
-  pht_wdata := pht.read(io.waddr)
+  pht_wdata := Cat(pht_1.read(io.waddr), pht_0.read(io.waddr))
 
   // stage 2
   when (RegNext(io.wen)) {
@@ -108,7 +115,8 @@ class PatternHistoryTableGlobal extends AbstractPatternHistoryTable {
     3.U -> Mux(RegNext(io.wjmp), 3.U, 2.U)    // strongly taken
   ))
   when (RegNext(io.wen)) {
-    pht.write(RegNext(io.waddr), pht_wdata_w)
+    pht_1.write(RegNext(io.waddr), pht_wdata_w(1))
+    pht_0.write(RegNext(io.waddr), pht_wdata_w(0))
   }
 
 }

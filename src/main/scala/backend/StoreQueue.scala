@@ -26,7 +26,7 @@ class StoreQueue extends Module with ZhoushanConfig {
     val deq_req = Input(Bool())
   })
 
-  val sq = Mem(entries, new StoreQueueEntry)
+  val sq = RegInit(VecInit(Seq.fill(entries)(0.U.asTypeOf(new StoreQueueEntry))))
   val enq_ptr = Counter(entries)
   val deq_ptr = Counter(entries)
   val maybe_full = RegInit(false.B)

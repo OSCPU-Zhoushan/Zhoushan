@@ -28,13 +28,17 @@ class IssueUnit extends Module with ZhoushanConfig {
   val int_iq = Module(new IntIssueQueueOutOfOrder(entries = IntIssueQueueSize, enq_width = DecodeWidth, deq_width = IssueWidth - 1))
   int_iq.io.flush := io.flush
   int_iq.io.rob_addr := io.rob_addr
-  int_iq.io.avail_list := io.avail_list
+  for (i <- 0 until PrfSize) {
+    int_iq.io.avail_list(i) := io.avail_list(i).asBool()
+  }
   int_iq.io.fu_ready := true.B
 
   val mem_iq = Module(new MemIssueQueueOutOfOrder(entries = MemIssueQueueSize, enq_width = DecodeWidth, deq_width = 1))
   mem_iq.io.flush := io.flush
   mem_iq.io.rob_addr := io.rob_addr
-  mem_iq.io.avail_list := io.avail_list
+  for (i <- 0 until PrfSize) {
+    mem_iq.io.avail_list(i) := io.avail_list(i).asBool()
+  }
   mem_iq.io.fu_ready := io.lsu_ready
 
   // routing network
@@ -78,7 +82,7 @@ abstract class AbstractIssueQueue(entries: Int, enq_width: Int, deq_width: Int)
     val rob_addr = Vec(enq_width, Input(UInt(log2Up(RobSize).W)))
     val out = Vec(deq_width, Output(new MicroOp))
     // from rename stage
-    val avail_list = Input(UInt(PrfSize.W))
+    val avail_list = Vec(PrfSize, Input(Bool()))
     // from ex stage
     val fu_ready = Input(Bool())
     // from rob
@@ -179,7 +183,7 @@ class IntIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_width: Int)
 
   /* ---------- enq ------------ */
 
-  val enq_offset = Wire(Vec(enq_width, UInt(log2Ceil(enq_width + 1).W)))
+  val enq_offset = Wire(Vec(enq_width, UInt(log2Up(enq_width + 1).W)))
   for (i <- 0 until enq_width) {
     if (i == 0) {
       enq_offset(i) := 0.U
@@ -297,7 +301,7 @@ class MemIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_width: Int)
 
   /* ---------- enq ------------ */
 
-  val enq_offset = Wire(Vec(enq_width, UInt(log2Ceil(enq_width + 1).W)))
+  val enq_offset = Wire(Vec(enq_width, UInt(log2Up(enq_width + 1).W)))
   for (i <- 0 until enq_width) {
     if (i == 0) {
       enq_offset(i) := 0.U
@@ -383,7 +387,7 @@ class IssueQueueInOrder(entries: Int, enq_width: Int, deq_width: Int) extends Ab
 
   // enq
 
-  val offset = Wire(Vec(enq_width, UInt(log2Ceil(enq_width + 1).W)))
+  val offset = Wire(Vec(enq_width, UInt(log2Up(enq_width).W)))
   for (i <- 0 until enq_width) {
     if (i == 0) {
       offset(i) := 0.U

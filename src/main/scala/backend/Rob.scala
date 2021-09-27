@@ -72,7 +72,7 @@ class Rob extends Module with ZhoushanConfig {
 
   /* --------------- enq ----------------- */
 
-  val offset = Wire(Vec(enq_width, UInt(log2Ceil(enq_width + 1).W)))
+  val offset = Wire(Vec(enq_width, UInt(log2Up(enq_width).W)))
   for (i <- 0 until enq_width) {
     if (i == 0) {
       offset(i) := 0.U
@@ -158,13 +158,13 @@ class Rob extends Module with ZhoushanConfig {
   val deq_ecp = Wire(Vec(deq_width, new ExCommitPacket))
 
   // CSR registers from/to CSR unit
-  val csr_mstatus = WireInit(UInt(64.W), "h00001800".U)
-  val csr_mie     = WireInit(UInt(64.W), 0.U)
-  val csr_mtvec   = WireInit(UInt(64.W), 0.U)
+  val csr_mstatus       = WireInit(UInt(64.W), "h00001800".U)
+  val csr_mie_mtie      = WireInit(Bool(), false.B)
+  val csr_mtvec         = WireInit(UInt(64.W), 0.U)
   val csr_mip_mtip_intr = WireInit(Bool(), false.B)
 
   BoringUtils.addSink(csr_mstatus, "csr_mstatus")
-  BoringUtils.addSink(csr_mie, "csr_mie")
+  BoringUtils.addSink(csr_mie_mtie, "csr_mie_mtie")
   BoringUtils.addSink(csr_mtvec, "csr_mtvec")
   BoringUtils.addSink(csr_mip_mtip_intr, "csr_mip_mtip_intr")
 
@@ -185,7 +185,7 @@ class Rob extends Module with ZhoushanConfig {
   val intr_jmp_pc = WireInit(UInt(32.W), 0.U)
 
   val intr_global_en = (csr_mstatus(3) === 1.U)
-  val intr_clint_en = (csr_mie(7) === 1.U)
+  val intr_clint_en = csr_mie_mtie
 
   switch (intr_state) {
     is (s_intr_idle) {
