@@ -81,6 +81,16 @@ class Csr extends Module {
   BoringUtils.addSink(mcycle, "csr_mcycle")
   BoringUtils.addSink(minstret, "csr_minstret")
 
+  // CSR write function with side effect
+
+  def mstatusWriteFunction(mstatus: UInt): UInt = {
+    def get_mstatus_xs(mstatus: UInt): UInt = mstatus(16, 15)
+    def get_mstatus_fs(mstatus: UInt): UInt = mstatus(14, 13)
+    val mstatus_sd = ((get_mstatus_xs(mstatus) === "b11".U) || (get_mstatus_fs(mstatus) === "b11".U)).asUInt()
+    val mstatus_new = Cat(mstatus_sd, mstatus(62, 0))
+    mstatus_new
+  }
+
   // ECALL
   when (csr_code === CSR_ECALL) {
     mepc := uop.pc
@@ -117,15 +127,15 @@ class Csr extends Module {
   // CSR register map
 
   val csr_map = Map(
-    RegMap(Csrs.mhartid,  mhartid ),
-    RegMap(Csrs.mstatus,  mstatus ),
-    RegMap(Csrs.mie,      mie     ),
-    RegMap(Csrs.mtvec,    mtvec   ),
+    RegMap(Csrs.mhartid , mhartid ),
+    RegMap(Csrs.mstatus , mstatus , mstatusWriteFunction),
+    RegMap(Csrs.mie     , mie     ),
+    RegMap(Csrs.mtvec   , mtvec   ),
     RegMap(Csrs.mscratch, mscratch),
-    RegMap(Csrs.mepc,     mepc    ),
-    RegMap(Csrs.mcause,   mcause  ),
+    RegMap(Csrs.mepc    , mepc    ),
+    RegMap(Csrs.mcause  , mcause  ),
     // skip mip
-    RegMap(Csrs.mcycle,   mcycle  ),
+    RegMap(Csrs.mcycle  , mcycle  ),
     RegMap(Csrs.minstret, minstret)
   )
 
