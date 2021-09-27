@@ -183,7 +183,7 @@ class IntIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_width: Int)
 
   /* ---------- enq ------------ */
 
-  val enq_offset = Wire(Vec(enq_width, UInt(log2Up(enq_width + 1).W)))
+  val enq_offset = Wire(Vec(enq_width, UInt(log2Up(enq_width).W)))
   for (i <- 0 until enq_width) {
     if (i == 0) {
       enq_offset(i) := 0.U
@@ -301,7 +301,7 @@ class MemIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_width: Int)
 
   /* ---------- enq ------------ */
 
-  val enq_offset = Wire(Vec(enq_width, UInt(log2Up(enq_width + 1).W)))
+  val enq_offset = Wire(Vec(enq_width, UInt(log2Up(enq_width).W)))
   for (i <- 0 until enq_width) {
     if (i == 0) {
       enq_offset(i) := 0.U

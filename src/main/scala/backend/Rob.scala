@@ -160,12 +160,12 @@ class Rob extends Module with ZhoushanConfig {
   // CSR registers from/to CSR unit
   val csr_mstatus       = WireInit(UInt(64.W), "h00001800".U)
   val csr_mie_mtie      = WireInit(Bool(), false.B)
-  val csr_mtvec         = WireInit(UInt(64.W), 0.U)
+  val csr_mtvec_idx     = WireInit(UInt(30.W), 0.U)
   val csr_mip_mtip_intr = WireInit(Bool(), false.B)
 
   BoringUtils.addSink(csr_mstatus, "csr_mstatus")
   BoringUtils.addSink(csr_mie_mtie, "csr_mie_mtie")
-  BoringUtils.addSink(csr_mtvec, "csr_mtvec")
+  BoringUtils.addSink(csr_mtvec_idx, "csr_mtvec_idx")
   BoringUtils.addSink(csr_mip_mtip_intr, "csr_mip_mtip_intr")
 
   val intr         = WireInit(Bool(), false.B)
@@ -199,7 +199,7 @@ class Rob extends Module with ZhoushanConfig {
         intr_mepc := cm(0).pc
         intr_mcause := "h8000000000000007".U
         intr := true.B
-        intr_jmp_pc := Cat(csr_mtvec(31, 2), Fill(2, 0.U))
+        intr_jmp_pc := Cat(csr_mtvec_idx, Fill(2, 0.U))
         intr_state := s_intr_idle
       }
     }

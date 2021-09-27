@@ -30,7 +30,9 @@ abstract class AbstractBranchTargetBuffer extends Module with BpParameters with 
 
 class BranchTargetBufferDirectMapped extends AbstractBranchTargetBuffer {
 
-  val btb = SyncReadMem(BtbSize, new BtbEntry, SyncReadMem.WriteFirst)
+  val btb_tag = SyncReadMem(BtbSize, UInt(BtbTagSize.W), SyncReadMem.WriteFirst)
+  val btb_target = SyncReadMem(BtbSize, UInt(32.W), SyncReadMem.WriteFirst)
+  val btb_ras_type = SyncReadMem(BtbSize, UInt(2.W), SyncReadMem.WriteFirst)
 
   val valid = RegInit(VecInit(Seq.fill(BtbSize)(false.B)))
 
@@ -40,7 +42,9 @@ class BranchTargetBufferDirectMapped extends AbstractBranchTargetBuffer {
     io.rhit(i) := false.B
     io.rtarget(i) := 0.U
     io.rras_type(i) := RAS_X
-    rdata := btb.read(io.raddr(i))
+    rdata.tag := btb_tag.read(io.raddr(i))
+    rdata.target := btb_target.read(io.raddr(i))
+    rdata.ras_type := btb_ras_type.read(io.raddr(i))
     rvalid := valid(io.raddr(i))
     when (rvalid && (rdata.tag === RegNext(io.rtag(i)))) {
       io.rhit(i) := true.B
@@ -54,7 +58,9 @@ class BranchTargetBufferDirectMapped extends AbstractBranchTargetBuffer {
   wentry.target := io.wtarget
   wentry.ras_type := io.wras_type
   when (io.wen) {
-    btb.write(io.waddr, wentry)
+    btb_tag.write(io.waddr, wentry.tag)
+    btb_target.write(io.waddr, wentry.target)
+    btb_ras_type.write(io.waddr, wentry.ras_type)
     valid(io.waddr) := true.B
     if (DebugBranchPredictorRas) {
       when (wentry.ras_type =/= RAS_X) {
@@ -70,9 +76,17 @@ class BranchTargetBuffer4WayAssociative extends AbstractBranchTargetBuffer {
   // todo: we need to check hit status before write, otherwise we have multi way for the same addr
 
   // 4-way associative btb
-  val btb = for (i <- 0 until 4) yield {
-    val btb = SyncReadMem(BtbSize / 4, new BtbEntry, SyncReadMem.WriteFirst)
-    btb
+  val btb_tag = for (i <- 0 until 4) yield {
+    val btb_tag = SyncReadMem(BtbSize / 4, UInt(BtbTagSize.W), SyncReadMem.WriteFirst)
+    btb_tag
+  }
+  val btb_target = for (i <- 0 until 4) yield {
+    val btb_target = SyncReadMem(BtbSize / 4, UInt(32.W), SyncReadMem.WriteFirst)
+    btb_target
+  }
+  val btb_ras_type = for (i <- 0 until 4) yield {
+    val btb_ras_type = SyncReadMem(BtbSize / 4, UInt(2.W), SyncReadMem.WriteFirst)
+    btb_ras_type
   }
 
   val valid = RegInit(VecInit(Seq.fill(4)(VecInit(Seq.fill(BtbSize / 4)(false.B)))))
@@ -100,7 +114,9 @@ class BranchTargetBuffer4WayAssociative extends AbstractBranchTargetBuffer {
     io.rtarget(i) := 0.U
     io.rras_type(i) := RAS_X
     for (j <- 0 until 4) {
-      rdata(j) := btb(j).read(io.raddr(i))
+      rdata(j).tag := btb_tag(j).read(io.raddr(i))
+      rdata(j).target := btb_target(j).read(io.raddr(i))
+      rdata(j).ras_type := btb_ras_type(j).read(io.raddr(i))
       rvalid(j) := valid(j)(io.raddr(i))
       when (rvalid(j) && (rdata(j).tag === RegNext(io.rtag(i)))) {
         io.rhit(i) := true.B
@@ -131,7 +147,9 @@ class BranchTargetBuffer4WayAssociative extends AbstractBranchTargetBuffer {
   val w_way = WireInit(0.U(replace_way.getWidth.W))
 
   for (j <- 0 until 4) {
-    w_rdata(j) := btb(j).read(io.waddr)
+    w_rdata(j).tag := btb_tag(j).read(io.waddr)
+    // w_rdata(j).target := btb_target(j).read(io.waddr)  // unused, skip
+    w_rdata(j).ras_type := btb_ras_type(j).read(io.waddr)
     w_rvalid(j) := valid(j)(io.waddr)
     when (w_rvalid(j) && (w_rdata(j).tag === RegNext(io.wtag))) {
       w_hit := true.B
@@ -143,7 +161,9 @@ class BranchTargetBuffer4WayAssociative extends AbstractBranchTargetBuffer {
     when (w_hit) {
       for (j <- 0 until 4) {
         when (w_way === j.U) {
-          btb(j).write(RegNext(io.waddr), RegNext(wentry))
+          btb_tag(j).write(RegNext(io.waddr), RegNext(wentry.tag))
+          btb_target(j).write(RegNext(io.waddr), RegNext(wentry.target))
+          btb_ras_type(j).write(RegNext(io.waddr), RegNext(wentry.ras_type))
           updatePlruTree(RegNext(io.waddr), j.U)
           if (DebugBranchPredictorBtb) {
             printf("%d: [BTB-W] addr=%d way=%x w_hit=1\n", DebugTimer(), RegNext(io.waddr), j.U)
@@ -153,7 +173,9 @@ class BranchTargetBuffer4WayAssociative extends AbstractBranchTargetBuffer {
     } .otherwise {
       for (j <- 0 until 4) {
         when (replace_way === j.U) {
-          btb(j).write(RegNext(io.waddr), RegNext(wentry))
+          btb_tag(j).write(RegNext(io.waddr), RegNext(wentry.tag))
+          btb_target(j).write(RegNext(io.waddr), RegNext(wentry.target))
+          btb_ras_type(j).write(RegNext(io.waddr), RegNext(wentry.ras_type))
           valid(j)(RegNext(io.waddr)) := true.B
           updatePlruTree(RegNext(io.waddr), j.U)
           if (DebugBranchPredictorBtb) {

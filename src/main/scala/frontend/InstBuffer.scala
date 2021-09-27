@@ -95,7 +95,8 @@ class InstBuffer extends Module with ZhoushanConfig {
     enq := io.in.bits.vec(i)
 
     when (io.in.bits.vec(i).valid && io.in.fire() && !io.flush) {
-      val enq_addr = getIdx(enq_vec(offset(i)))
+      val enq_addr = Wire(UInt(idx_width.W))
+      enq_addr := getIdx(enq_vec(offset(i)))
       buf.write(enq_addr, enq)
     }
   }

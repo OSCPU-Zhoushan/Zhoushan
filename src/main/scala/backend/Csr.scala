@@ -72,7 +72,7 @@ class Csr extends Module {
 
   BoringUtils.addSource(mstatus, "csr_mstatus")
   BoringUtils.addSource(mie(7).asBool(), "csr_mie_mtie")
-  BoringUtils.addSource(mtvec, "csr_mtvec")
+  BoringUtils.addSource(mtvec(31, 2), "csr_mtvec_idx")
   BoringUtils.addSource(mip(7).asBool(), "csr_mip_mtip_intr")
 
   val mcycle    = WireInit(UInt(64.W), 0.U)

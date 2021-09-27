@@ -24,7 +24,7 @@ trait BpParameters {
   val BtbAddrSize = log2Up(BtbSize) -
                     (if (BtbAssociative) 2    // -2 due to 4-way associative
                     else 0)                   // -0 due to direct mapped
-  val BtbTagSize = 29 - BtbAddrSize           // 31 - BtbAddrSize - 2
+  val BtbTagSize = 30 - BtbAddrSize           // 32 - BtbAddrSize - 2
   // Return Address Stack
   val RasEnable = false
   val RasSize = 16
