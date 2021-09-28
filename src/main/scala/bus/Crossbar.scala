@@ -84,12 +84,24 @@ class CacheBusCrossbar1to2 extends Module {
     val to_1 = Input(Bool())
   })
 
+  val in_flight_req = RegInit(VecInit(Seq.fill(2)(0.U(8.W))))
+  for (i <- 0 until 2) {
+    when (io.out(i).req.fire() && !io.out(i).resp.fire()) {
+      in_flight_req(i) := in_flight_req(i) + 1.U
+    } .elsewhen (io.out(i).resp.fire() && !io.out(i).req.fire()) {
+      in_flight_req(i) := in_flight_req(i) - 1.U
+    }
+  }
+
+  val req_0_ready = (in_flight_req(1) === 0.U)
+  val req_1_ready = (in_flight_req(0) === 0.U)
+
   // req logic
   io.out(0).req.bits := io.in.req.bits
   io.out(1).req.bits := io.in.req.bits
-  io.out(0).req.valid := io.in.req.valid && !io.to_1
-  io.out(1).req.valid := io.in.req.valid && io.to_1
-  io.in.req.ready := Mux(io.to_1, io.out(1).req.ready, io.out(0).req.ready)
+  io.out(0).req.valid := io.in.req.valid && !io.to_1 && req_0_ready
+  io.out(1).req.valid := io.in.req.valid && io.to_1 && req_1_ready
+  io.in.req.ready := Mux(io.to_1, io.out(1).req.ready && req_1_ready, io.out(0).req.ready && req_0_ready)
 
   val arbiter = Module(new RRArbiter(new CacheBusResp, 2))
   arbiter.io.in(0) <> io.out(0).resp
