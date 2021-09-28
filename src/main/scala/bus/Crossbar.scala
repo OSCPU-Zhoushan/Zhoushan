@@ -3,20 +3,22 @@ package zhoushan
 import chisel3._
 import chisel3.util._
 
-class CoreBusCrossbar2to1 extends Module {
+class CoreBusCrossbarNto1(n: Int) extends Module {
   val io = IO(new Bundle {
-    val in = Flipped(Vec(2, new CoreBusIO))
+    val in = Flipped(Vec(n, new CoreBusIO))
     val out = new CoreBusIO
   })
 
-  val arbiter = Module(new RRArbiter(new CoreBusReq, 2))
-  val chosen = RegInit(UInt(1.W), 0.U)
-  arbiter.io.in(0) <> io.in(0).req
-  arbiter.io.in(1) <> io.in(1).req
+  val arbiter = Module(new RRArbiter(new CoreBusReq, n))
+  val chosen = RegInit(UInt(log2Up(n).W), 0.U)
+  for (i <- 0 until n) {
+    arbiter.io.in(i) <> io.in(i).req
+  }
 
   // req logic
-  io.in(0).req.ready := (arbiter.io.chosen === 0.U) && io.out.req.ready
-  io.in(1).req.ready := (arbiter.io.chosen === 1.U) && io.out.req.ready
+  for (i <- 0 until n) {
+    io.in(i).req.ready := (arbiter.io.chosen === i.U) && io.out.req.ready
+  }
   (io.out.req, arbiter.io.out) match { case (l, r) => {
     l.bits := r.bits
     l.valid := r.valid
@@ -24,38 +26,36 @@ class CoreBusCrossbar2to1 extends Module {
   }}
 
   // resp logic - send to corresponding master device
-  io.in(0).resp.bits := io.out.resp.bits
-  io.in(1).resp.bits := io.out.resp.bits
-  when (io.out.resp.bits.id === ZhoushanConfig.InstCacheId.U) {
-    io.out.resp.ready := io.in(0).resp.ready
-    io.in(0).resp.valid := io.out.resp.valid
-    io.in(1).resp.valid := false.B
-  } .elsewhen (io.out.resp.bits.id === ZhoushanConfig.DataCacheId.U) {
-    io.out.resp.ready := io.in(1).resp.ready
-    io.in(0).resp.valid := false.B
-    io.in(1).resp.valid := io.out.resp.valid
-  } .otherwise {
+  for (i <- 0 until n) {
+    io.in(i).resp.bits := io.out.resp.bits
+    io.in(i).resp.valid := false.B
     io.out.resp.ready := false.B
-    io.in(0).resp.valid := false.B
-    io.in(1).resp.valid := false.B
+  }
+  for (i <- 0 until n) {
+    when (io.out.resp.bits.id === (i + 1).U) {
+      io.out.resp.ready := io.in(i).resp.ready
+      io.in(i).resp.valid := io.out.resp.valid
+    }
   }
 
 }
 
-class CacheBusCrossbar2to1 extends Module {
+class CacheBusCrossbarNto1(n: Int) extends Module {
   val io = IO(new Bundle {
-    val in = Flipped(Vec(2, new CacheBusIO))
+    val in = Flipped(Vec(n, new CacheBusIO))
     val out = new CacheBusIO
   })
 
-  val arbiter = Module(new RRArbiter(new CacheBusReq, 2))
-  val chosen = RegInit(UInt(1.W), 0.U)
-  arbiter.io.in(0) <> io.in(0).req
-  arbiter.io.in(1) <> io.in(1).req
+  val arbiter = Module(new RRArbiter(new CacheBusReq, n))
+  val chosen = RegInit(UInt(log2Up(n).W), 0.U)
+  for (i <- 0 until n) {
+    arbiter.io.in(i) <> io.in(i).req
+  }
 
   // req logic
-  io.in(0).req.ready := (arbiter.io.chosen === 0.U) && io.out.req.ready
-  io.in(1).req.ready := (arbiter.io.chosen === 1.U) && io.out.req.ready
+  for (i <- 0 until n) {
+    io.in(i).req.ready := (arbiter.io.chosen === i.U) && io.out.req.ready
+  }
   (io.out.req, arbiter.io.out) match { case (l, r) => {
     l.bits := r.bits
     l.valid := r.valid
@@ -63,20 +63,16 @@ class CacheBusCrossbar2to1 extends Module {
   }}
 
   // resp logic - send to corresponding master device
-  io.in(0).resp.bits := io.out.resp.bits
-  io.in(1).resp.bits := io.out.resp.bits
-  when (io.out.resp.bits.id === ZhoushanConfig.SqStoreId.U) {
-    io.out.resp.ready := io.in(0).resp.ready
-    io.in(0).resp.valid := io.out.resp.valid
-    io.in(1).resp.valid := false.B
-  } .elsewhen (io.out.resp.bits.id === ZhoushanConfig.SqLoadId.U) {
-    io.out.resp.ready := io.in(1).resp.ready
-    io.in(0).resp.valid := false.B
-    io.in(1).resp.valid := io.out.resp.valid
-  } .otherwise {
+  for (i <- 0 until n) {
+    io.in(i).resp.bits := io.out.resp.bits
+    io.in(i).resp.valid := false.B
     io.out.resp.ready := false.B
-    io.in(0).resp.valid := false.B
-    io.in(1).resp.valid := false.B
+  }
+  for (i <- 0 until n) {
+    when (io.out.resp.bits.id === (i + 1).U) {
+      io.out.resp.ready := io.in(i).resp.ready
+      io.in(i).resp.valid := io.out.resp.valid
+    }
   }
 
 }
@@ -85,23 +81,15 @@ class CacheBusCrossbar1to2 extends Module {
   val io = IO(new Bundle {
     val in = Flipped(new CacheBusIO)
     val out = Vec(2, new CacheBusIO)
+    val to_1 = Input(Bool())
   })
-
-  // 0 -> dmem
-  // 1 -> CLINT
-
-  val ClintAddrBase = ZhoushanConfig.ClintAddrBase.U
-  val ClintAddrSize = ZhoushanConfig.ClintAddrSize.U
-
-  val addr = io.in.req.bits.addr
-  val to_clint = (addr >= ClintAddrBase && addr < ClintAddrBase + ClintAddrSize)
 
   // req logic
   io.out(0).req.bits := io.in.req.bits
   io.out(1).req.bits := io.in.req.bits
-  io.out(0).req.valid := io.in.req.valid && !to_clint
-  io.out(1).req.valid := io.in.req.valid && to_clint
-  io.in.req.ready := Mux(to_clint, io.out(1).req.ready, io.out(0).req.ready)
+  io.out(0).req.valid := io.in.req.valid && !io.to_1
+  io.out(1).req.valid := io.in.req.valid && io.to_1
+  io.in.req.ready := Mux(io.to_1, io.out(1).req.ready, io.out(0).req.ready)
 
   val arbiter = Module(new RRArbiter(new CacheBusResp, 2))
   arbiter.io.in(0) <> io.out(0).resp

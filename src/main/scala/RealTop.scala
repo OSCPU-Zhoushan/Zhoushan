@@ -12,7 +12,7 @@ class RealTop extends Module {
 
   val core = Module(new Core)
 
-  val crossbar2to1 = Module(new CoreBusCrossbar2to1)
+  val crossbar2to1 = Module(new CoreBusCrossbarNto1(2))
   crossbar2to1.io.in(0) <> core.io.imem
   crossbar2to1.io.in(1) <> core.io.dmem
 
