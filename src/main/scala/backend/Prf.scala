@@ -21,7 +21,7 @@ class Prf extends Module with ZhoushanConfig {
 
   for (i <- 0 until IssueWidth) {
     when (io.rd_en(i) && (io.rd_paddr(i) =/= 0.U)) {
-      prf(io.rd_paddr(i)) := io.rd_data(i);
+      prf(io.rd_paddr(i)) := io.rd_data(i)
     }
   }
 
