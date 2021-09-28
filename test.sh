@@ -1,5 +1,7 @@
 #!/bin/bash
 
+ysyxid=000000
+
 function quick_tests {
   quick_tests=(add-longlong add bit bubble-sort fact fib hello-str \
 load-store max quick-sort recursion select-sort string sum unalign)
@@ -35,7 +37,7 @@ function riscv_tests {
 }
 
 function rename {
-  filename=./build/ysyx_210128.v
+  filename=./build/ysyx_${ysyxid}.v
   cp ./build/RealTop.v ${filename}
   sed -i 's/io_master_aw_ready/io_master_awready/g' ${filename}
   sed -i 's/io_master_aw_valid/io_master_awvalid/g' ${filename}
@@ -67,7 +69,7 @@ function rename {
   sed -i 's/io_slave_r_ready/io_slave_rready/g' ${filename}
   sed -i 's/io_slave_r_valid/io_slave_rvalid/g' ${filename}
   sed -i 's/io_slave_r_bits_/io_slave_r/g' ${filename}
-  sed -i 's/ysyx_210128_RealTop/ysyx_210128/g' ${filename}
+  sed -i "s/ysyx_${ysyxid}_RealTop/ysyx_${ysyxid}/g" ${filename}
 }
 
 while getopts 'qcrt:w:n' OPT; do
