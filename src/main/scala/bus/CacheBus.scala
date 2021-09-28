@@ -50,6 +50,7 @@ class CacheBus2CoreBus(id: Int) extends Module with AxiParameters {
   out.req.bits.wlast  := true.B
   out.req.bits.wen    := in.req.bits.wen
   out.req.bits.len    := 0.U
+  out.req.bits.size   := 0.U
 
   out.resp.ready      := in.resp.ready
   in.resp.valid       := out.resp.valid

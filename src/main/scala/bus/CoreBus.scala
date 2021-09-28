@@ -20,6 +20,7 @@ class CoreBusReq extends Bundle with CoreBusId with AxiParameters {
   val wlast = Output(Bool())
   val wen = Output(Bool())
   val len = Output(UInt(8.W))
+  val size = Output(UInt(1.W))  // 0 -> 32 bit, 1 -> 64 bit
 }
 
 class CoreBusResp extends Bundle with CoreBusId with AxiParameters {
@@ -48,7 +49,7 @@ class CoreBus2Axi extends Module with AxiParameters {
   out.aw.bits.addr  := in.req.bits.addr
   out.aw.bits.id    := in.req.bits.id
   out.aw.bits.len   := in.req.bits.len
-  out.aw.bits.size  := "b011".U         // 8 bytes in transfer
+  out.aw.bits.size  := Cat("b01".U, in.req.bits.size)
   out.aw.bits.burst := "b01".U
   if (!ZhoushanConfig.EnableOscpuSocAxi) {
     val out = io.out.asInstanceOf[AxiIO]
@@ -68,7 +69,7 @@ class CoreBus2Axi extends Module with AxiParameters {
   out.ar.bits.addr  := in.req.bits.addr
   out.ar.bits.id    := in.req.bits.id
   out.ar.bits.len   := in.req.bits.len
-  out.ar.bits.size  := "b011".U         // 8 bytes in transfer
+  out.ar.bits.size  := Cat("b01".U, in.req.bits.size)
   out.ar.bits.burst := "b01".U
   if (!ZhoushanConfig.EnableOscpuSocAxi) {
     val out = io.out.asInstanceOf[AxiIO]
