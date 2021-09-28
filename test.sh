@@ -87,7 +87,8 @@ while getopts 'qcrt:w:n' OPT; do
       example="$OPTARG"
       ./build/emu -i ../am-kernels/tests/cpu-tests/build/${example}-riscv64-mycpu.bin -b 0 --dump-wave --wave-path=./build/wave.vcd;;
     n)
-      rename;;
+      rename
+      cp ./src/test/vsrc/SimTop.v ./build/;;
     ?)
       echo "Error: missing arguments"
   esac
