@@ -23,4 +23,4 @@ help:
 clean:
 	-rm -rf $(BUILD_DIR)
 
-.PHONY: verilog help reformat checkformat clean
+.PHONY: clean
