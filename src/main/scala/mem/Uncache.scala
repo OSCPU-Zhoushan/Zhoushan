@@ -25,9 +25,11 @@ class Uncache(id: Int) extends Module with ZhoushanConfig {
   out.req.bits.len    := 0.U
   out.req.bits.size   := 1.U
 
+  val resp_id = HoldUnless(in.req.bits.id, in.req.fire())
+
   out.resp.ready      := in.resp.ready
   in.resp.valid       := out.resp.valid
-  in.resp.bits.id     := id.U
+  in.resp.bits.id     := resp_id
   in.resp.bits.rdata  := out.resp.bits.rdata
   in.resp.bits.user   := 0.U
 }
