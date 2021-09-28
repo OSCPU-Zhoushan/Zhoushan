@@ -10,7 +10,7 @@ object TopMain extends App {
       (new chisel3.stage.ChiselStage).execute(args, Seq(
         chisel3.stage.ChiselGeneratorAnnotation(() => new RealTop()),
         firrtl.stage.RunFirrtlTransformAnnotation(new AddModulePrefix()),
-        ModulePrefixAnnotation("ysyx_210128_")
+        ModulePrefixAnnotation(s"ysyx_${ZhoushanConfig.OscpuId}_")
       ))
     } else {
       (new chisel3.stage.ChiselStage).execute(args, Seq(

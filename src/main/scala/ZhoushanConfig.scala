@@ -30,6 +30,7 @@ trait ZhoushanConfig {
   val EnableQueueAnalyzer = false
   val EnableOscpuSocAxi = TargetOscpuSoc
   val ResetPc = if (TargetOscpuSoc) "h30000000" else "h80000000"
+  val OscpuId = "000000"
   // Debug Info
   val DebugRename = false
   val DebugRenameVerbose = false
