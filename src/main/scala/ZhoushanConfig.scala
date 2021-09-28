@@ -9,6 +9,8 @@ trait ZhoushanConfig {
   // Bus ID
   val InstCacheId = 1
   val DataCacheId = 2
+  val InstUncacheId = 3
+  val DataUncacheId = 4
   val SqStoreId = 1
   val SqLoadId = 2
   // Constants
@@ -24,7 +26,7 @@ trait ZhoushanConfig {
   val PrfSize = 64
   val StoreQueueSize = 4
   // Settings
-  val TargetOscpuSoc = true
+  val TargetOscpuSoc = false
   val EnableDifftest = !TargetOscpuSoc
   val EnableMisRateCounter = EnableDifftest
   val EnableQueueAnalyzer = false

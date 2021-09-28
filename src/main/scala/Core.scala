@@ -7,8 +7,7 @@ import difftest._
 
 class Core extends Module with ZhoushanConfig {
   val io = IO(new Bundle {
-    val imem = new CoreBusIO
-    val dmem = new CoreBusIO
+    val core_bus = Vec(4, new CoreBusIO)
   })
 
   val flush = WireInit(false.B)
@@ -17,9 +16,10 @@ class Core extends Module with ZhoushanConfig {
 
   val fetch = Module(new InstFetch)
 
-  val icache = Module(new Cache(id = InstCacheId))
+  val icache = Module(new CacheController(id_cache = InstCacheId, id_uncache = InstUncacheId))
   icache.io.in <> fetch.io.imem
-  icache.io.out <> io.imem
+  icache.io.out_cache <> io.core_bus(0)
+  icache.io.out_uncache <> io.core_bus(1)
 
   /* ----- Stage 2 - Instruction Buffer (IB) ----- */
 
@@ -108,9 +108,10 @@ class Core extends Module with ZhoushanConfig {
   val cb1to2_to_clint = (cb1to2_addr >= ClintAddrBase.U && cb1to2_addr < ClintAddrBase.U + ClintAddrSize.U)
   crossbar1to2.io.to_1 := cb1to2_to_clint
 
-  val dcache = Module(new Cache(DataCacheId))
+  val dcache = Module(new CacheController(id_cache = DataCacheId, id_uncache = DataUncacheId))
   dcache.io.in <> crossbar1to2.io.out(0)
-  dcache.io.out <> io.dmem
+  dcache.io.out_cache <> io.core_bus(2)
+  dcache.io.out_uncache <> io.core_bus(3)
 
   val clint = Module(new Clint)
   clint.io.in <> crossbar1to2.io.out(1)

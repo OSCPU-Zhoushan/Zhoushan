@@ -14,12 +14,11 @@ class SimTop extends Module {
 
   val core = Module(new Core)
 
-  val crossbar2to1 = Module(new CoreBusCrossbarNto1(2))
-  crossbar2to1.io.in(0) <> core.io.imem
-  crossbar2to1.io.in(1) <> core.io.dmem
+  val crossbar = Module(new CoreBusCrossbarNto1(4))
+  crossbar.io.in <> core.io.core_bus
 
   val core2axi = Module(new CoreBus2Axi)
-  core2axi.in <> crossbar2to1.io.out
+  core2axi.in <> crossbar.io.out
   core2axi.out <> io.memAXI_0
 
   io.uart.out.valid := false.B
