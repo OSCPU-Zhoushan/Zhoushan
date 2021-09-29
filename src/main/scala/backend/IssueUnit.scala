@@ -222,7 +222,7 @@ class IntIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_width: Int)
 
   if (DebugIntIssueQueue) {
     for (i <- 0 until entries / 8) {
-      printf("%d: [IQ - I] ", DebugTimer());
+      printf("%d: [IQ - I] ", DebugTimer())
       for (j <- 0 until 8) {
         val idx = i * 8 + j
         printf("%d-%x(%x)\t", idx.U, buf(idx).pc, buf(idx).valid)
@@ -340,7 +340,7 @@ class MemIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_width: Int)
 
   if (DebugMemIssueQueue) {
     for (i <- 0 until entries / 8) {
-      printf("%d: [IQ - I] ", DebugTimer());
+      printf("%d: [IQ - I] ", DebugTimer())
       for (j <- 0 until 8) {
         val idx = i * 8 + j
         printf("%d-%x(%x)\t", idx.U, buf(idx).pc, buf(idx).valid)
