@@ -96,24 +96,32 @@ class CacheBusCrossbar1to2 extends Module {
   val req_0_ready = (in_flight_req(1) === 0.U)
   val req_1_ready = (in_flight_req(0) === 0.U)
 
+  val channel = RegInit(0.U(1.W))
+  for (i <- 0 until 2) {
+    when (io.out(i).req.fire()) {
+      channel := i.U
+    }
+  }
+
   // req logic
-  io.out(0).req.bits := io.in.req.bits
-  io.out(1).req.bits := io.in.req.bits
+  io.out(0).req.bits  := io.in.req.bits
+  io.out(1).req.bits  := io.in.req.bits
   io.out(0).req.valid := io.in.req.valid && !io.to_1 && req_0_ready
   io.out(1).req.valid := io.in.req.valid && io.to_1 && req_1_ready
-  io.in.req.ready := Mux(io.to_1, io.out(1).req.ready && req_1_ready, io.out(0).req.ready && req_0_ready)
-
-  val arbiter = Module(new RRArbiter(new CacheBusResp, 2))
-  arbiter.io.in(0) <> io.out(0).resp
-  arbiter.io.in(1) <> io.out(1).resp
+  io.in.req.ready     := Mux(io.to_1, io.out(1).req.ready && req_1_ready, io.out(0).req.ready && req_0_ready)
 
   // resp logic
-  io.out(0).resp.ready := (arbiter.io.chosen === 0.U) && io.in.resp.ready
-  io.out(1).resp.ready := (arbiter.io.chosen === 1.U) && io.in.resp.ready
-  (io.in.resp, arbiter.io.out) match { case (l, r) => {
-    l.bits := r.bits
-    l.valid := r.valid
-    r.ready := l.ready
-  }}
+  io.out(0).resp.ready  := io.in.resp.ready && (channel === 0.U)
+  io.out(1).resp.ready  := io.in.resp.ready && (channel === 1.U)
+  io.in.resp.bits.id    := 0.U
+  io.in.resp.bits.user  := 0.U
+  io.in.resp.bits.rdata := 0.U
+  io.in.resp.valid      := false.B
+  for (i <- 0 until 2) {
+    when (channel === i.U) {
+      io.in.resp.bits := io.out(i).resp.bits
+      io.in.resp.valid := io.out(i).resp.valid
+    }
+  }
 
 }
