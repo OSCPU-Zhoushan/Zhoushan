@@ -12,56 +12,48 @@ class Decode extends Module with ZhoushanConfig {
     val flush = Input(Bool())
   })
 
+  // store InstPacket when out is not ready
+  val reg_in = RegInit(VecInit(Seq.fill(DecodeWidth)(0.U.asTypeOf(new InstPacket))))
+  val reg_in_valid = RegInit(false.B)
+
+  when (io.flush || io.out.fire()) {
+    reg_in_valid := false.B
+  } .elsewhen (io.in.valid && !io.flush && !io.out.ready) {
+    reg_in := io.in.bits.vec
+    reg_in_valid := true.B
+  }
+
   val decoder = for (i <- 0 until DecodeWidth) yield {
     val decoder = Module(new Decoder)
     decoder
   }
 
   for (i <- 0 until DecodeWidth) {
-    decoder(i).io.in <> io.in.bits.vec(i).bits
-    decoder(i).io.in_valid := io.in.valid && io.in.bits.vec(i).valid
+    decoder(i).io.in := Mux(io.in.valid, io.in.bits.vec(i), reg_in(i))
+    decoder(i).io.in_valid := io.in.valid || reg_in_valid
   }
 
-  // pipeline registers
-
-  val reg_uop = RegInit(VecInit(Seq.fill(IssueWidth)(0.U.asTypeOf(new MicroOp))))
-  val reg_valid = RegInit(false.B)
-
-  when (io.in.valid && !io.flush) {
-    for (i <- 0 until IssueWidth) {
-      reg_uop(i) := decoder(i).io.uop
-    }
-    reg_valid := !io.out.ready
-  } .elsewhen (io.flush) {
-    for (i <- 0 until IssueWidth) {
-      reg_uop(i) := 0.U.asTypeOf(new MicroOp)
-    }
-    reg_valid := false.B
-  }
-
-  val out_uop = RegInit(VecInit(Seq.fill(IssueWidth)(0.U.asTypeOf(new MicroOp))))
-
+  // handshake signals
   io.in.ready := io.out.ready
-  when (io.flush) {
-    for (i <- 0 until IssueWidth) {
-      out_uop(i) := 0.U.asTypeOf(new MicroOp)
-    }
-  } .elsewhen (io.out.ready) {
-    for (i <- 0 until IssueWidth) {
-      out_uop(i) := Mux(reg_valid && !io.in.valid, reg_uop(i), decoder(i).io.uop)
-    }
+
+  when (io.out.ready && RegNext(!io.out.ready)) {
+    io.out.valid := reg_in_valid
+    reg_in_valid := false.B
+  } .otherwise {
+    io.out.valid := io.in.valid
   }
 
-  io.out.valid := Cat(out_uop.map(_.valid)).orR
-  io.out.bits.vec := out_uop
+  for (i <- 0 until DecodeWidth) {
+    io.out.bits.vec(i) := Mux(io.out.fire(), decoder(i).io.out, 0.U.asTypeOf(new MicroOp))
+  }
 
 }
 
 class Decoder extends Module {
   val io = IO(new Bundle {
-    val in = Flipped(new InstPacket)
+    val in = Input(new InstPacket)
     val in_valid = Input(Bool())
-    val uop = Output(new MicroOp)
+    val out = Output(new MicroOp)
   })
 
   val inst = io.in.inst
@@ -70,17 +62,17 @@ class Decoder extends Module {
   uop.pc := io.in.pc
   uop.npc := io.in.pc + 4.U
   uop.inst := inst
-  
+
   uop.rs1_addr := inst(19, 15)
   uop.rs2_addr := inst(24, 20)
   uop.rd_addr := inst(11, 7)
 
   uop.pred_br := io.in.pred_br
   uop.pred_bpc := io.in.pred_bpc
-  
+
   val ctrl = ListLookup(inst,
-                  //   v  fu_code alu_code  jmp_code  mem_code mem_size   csr_code   w  rs1_src       rs2_src  rd_en  imm_type  
-                  List(N, FU_X,   ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_X,     N, RS_X,         RS_X,        N, IMM_X    ), 
+                  //   v  fu_code alu_code  jmp_code  mem_code mem_size   csr_code   w  rs1_src       rs2_src  rd_en  imm_type
+                  List(N, FU_X,   ALU_X,    JMP_X,    MEM_X,   MEM_X,     CSR_X,     N, RS_X,         RS_X,        N, IMM_X    ),
     Array(
       // RV32I
       LUI     ->  List(Y, FU_ALU, ALU_ADD,  JMP_X,    MEM_X,   MEM_X,     CSR_X,     N, RS_FROM_ZERO, RS_FROM_IMM, Y, IMM_U    ),
@@ -154,7 +146,7 @@ class Decoder extends Module {
   val (valid : Bool)  :: fu_code :: alu_code :: jmp_code       :: mem_code :: mem_size :: csr_code :: c0 = ctrl
   val (w_type : Bool) :: rs1_src :: rs2_src  :: (rd_en : Bool) :: imm_type :: Nil                        = c0
 
-  uop.valid := valid
+  uop.valid := valid && io.in.valid
   uop.fu_code := fu_code
   uop.alu_code := alu_code
   uop.jmp_code := jmp_code
@@ -164,7 +156,7 @@ class Decoder extends Module {
   uop.w_type := w_type
   uop.rs1_src := rs1_src
   uop.rs2_src := rs2_src
-  uop.rd_en := rd_en
+  uop.rd_en := rd_en && (uop.rd_addr =/= 0.U)
 
   val imm_i = Cat(Fill(21, inst(31)), inst(30, 20))
   val imm_s = Cat(Fill(21, inst(31)), inst(30, 25), inst(11, 7))
@@ -184,6 +176,6 @@ class Decoder extends Module {
     IMM_CSR -> imm_csr
   ))
 
-  io.uop := Mux(io.in_valid, uop, 0.U.asTypeOf(new MicroOp))
+  io.out := Mux(io.in_valid, uop, 0.U.asTypeOf(new MicroOp))
 
 }

@@ -3,32 +3,45 @@ package zhoushan
 import chisel3._
 import chisel3.util._
 import zhoushan.Constant._
-import zhoushan.RasConstant._
+
+class ExCommitPacket extends Bundle {
+  val store_valid = Bool()
+  val mmio = Bool()
+  val jmp_valid = Bool()
+  val jmp = Bool()
+  val jmp_pc = UInt(32.W)
+  val mis = Bool()
+  val rd_data = UInt(64.W)
+}
 
 class Execution extends Module with ZhoushanConfig {
   val io = IO(new Bundle {
     // input
-    val in = Flipped(Decoupled(new MicroOpVec(IssueWidth)))
+    val in = Vec(IssueWidth, Input(new MicroOp))
     val rs1_data = Vec(IssueWidth, Input(UInt(64.W)))
     val rs2_data = Vec(IssueWidth, Input(UInt(64.W)))
     // output
-    val out = new MicroOpVec(IssueWidth)
+    val out = Vec(IssueWidth, Output(new MicroOp))
+    val out_ecp = Vec(IssueWidth, Output(new ExCommitPacket))
     val rd_en = Vec(IssueWidth, Output(Bool()))
-    val rd_addr = Vec(IssueWidth, Output(UInt(5.W)))
+    val rd_paddr = Vec(IssueWidth, Output(UInt(log2Up(PrfSize).W)))
     val rd_data = Vec(IssueWidth, Output(UInt(64.W)))
-    val jmp_packet = Output(new JmpPacket)
-    val dmem = new CacheBusIO
-    val intr = Output(Bool())
+    // from subsequent stage
+    val flush = Input(Bool())
+    // to previous stage
+    val lsu_ready = Output(Bool())
+    // dmem
+    val dmem_st = new CacheBusIO
+    val dmem_ld = new CacheBusIO
   })
 
-  val uop = Mux(io.in.valid, io.in.bits.vec, VecInit(Seq.fill(IssueWidth)(0.U.asTypeOf(new MicroOp))))
-  val reg_uop = RegInit(VecInit(Seq.fill(IssueWidth)(0.U.asTypeOf(new MicroOp))))
-  val reg_valid = RegNext(!io.in.ready) && io.in.ready
+  val uop = io.in
 
-  when (io.in.valid) {
-    for (i <- 0 until IssueWidth) {
-      reg_uop(i) := uop(i)
-    }
+  val reg_uop_lsu = RegInit(0.U.asTypeOf(new MicroOp))
+  val reg_valid = RegNext(!io.lsu_ready) && io.lsu_ready
+
+  when (uop(IssueWidth - 1).valid) {
+    reg_uop_lsu := uop(IssueWidth - 1)
   }
 
   val in1_0 = Wire(Vec(IssueWidth, UInt(64.W)))
@@ -59,172 +72,139 @@ class Execution extends Module with ZhoushanConfig {
   pipe0.io.uop := uop(0)
   pipe0.io.in1 := in1(0)
   pipe0.io.in2 := in2(0)
-  io.jmp_packet := pipe0.io.jmp_packet
-  io.dmem <> pipe0.io.dmem
-  io.intr := pipe0.io.intr
 
   val pipe1 = Module(new ExPipe1)
   pipe1.io.uop := uop(1)
   pipe1.io.in1 := in1(1)
   pipe1.io.in2 := in2(1)
 
-  val reg_pipe1_result = RegInit(0.U(64.W))
-  when (pipe0.io.busy && io.in.valid) {
-    reg_pipe1_result := pipe1.io.result
-  }
-
-  io.in.ready := !pipe0.io.busy
+  val pipe2 = Module(new ExPipe2)
+  pipe2.io.uop := uop(2)
+  pipe2.io.in1 := in1(2)
+  pipe2.io.in2 := in2(2)
+  io.lsu_ready := pipe2.io.ready
+  pipe2.io.dmem_st <> io.dmem_st
+  pipe2.io.dmem_ld <> io.dmem_ld
+  pipe2.io.flush := io.flush
 
   // pipeline registers
 
   val out_uop = RegInit(VecInit(Seq.fill(IssueWidth)(0.U.asTypeOf(new MicroOp))))
+  val out_ecp = RegInit(VecInit(Seq.fill(IssueWidth)(0.U.asTypeOf(new ExCommitPacket))))
   val out_rd_en = WireInit(VecInit(Seq.fill(IssueWidth)(false.B)))
-  val out_rd_addr = WireInit(VecInit(Seq.fill(IssueWidth)(0.U(5.W))))
+  val out_rd_paddr = WireInit(VecInit(Seq.fill(IssueWidth)(0.U(log2Up(PrfSize).W))))
   val out_rd_data = WireInit(VecInit(Seq.fill(IssueWidth)(0.U(64.W))))
 
-  when (io.intr) {
+  when (io.flush) {
     for (i <- 0 until IssueWidth) {
       out_uop(i) := 0.U.asTypeOf(new MicroOp)
-      out_rd_en(i) := 0.U
-      out_rd_addr(i) := 0.U
+      out_ecp(i) := 0.U.asTypeOf(new ExCommitPacket)
+      out_rd_en(i) := false.B
+      out_rd_paddr(i) := 0.U
       out_rd_data(i) := 0.U
     }
-  } .elsewhen (pipe0.io.jmp_packet.mis) {
-    for (i <- 0 until IssueWidth) {
-      if (i == 0) {
-        out_uop(i) := Mux(reg_valid, reg_uop(i), uop(i))
-        out_rd_en(i) := Mux(reg_valid, reg_uop(i).rd_en, uop(i).rd_en)
-        out_rd_addr(i) := Mux(reg_valid, reg_uop(i).rd_addr, uop(i).rd_addr)
-        out_rd_data(i) := pipe0.io.result
-      } else {
-        out_uop(i) := 0.U.asTypeOf(new MicroOp)
-        out_rd_en(i) := false.B
-        out_rd_addr(i) := 0.U
-        out_rd_data(i) := 0.U
-      }
-    }
-  } .elsewhen (!pipe0.io.busy) {
-    for (i <- 0 until IssueWidth) {
-      out_uop(i) := Mux(reg_valid, reg_uop(i), uop(i))
-      out_rd_en(i) := Mux(reg_valid, reg_uop(i).rd_en, uop(i).rd_en)
-      out_rd_addr(i) := Mux(reg_valid, reg_uop(i).rd_addr, uop(i).rd_addr)
-    }
-    out_rd_data(0) := pipe0.io.result
-    out_rd_data(1) := Mux(reg_valid, reg_pipe1_result, pipe1.io.result)
+    reg_uop_lsu := 0.U.asTypeOf(new MicroOp)
   } .otherwise {
-    for (i <- 0 until IssueWidth) {
-      out_uop(i) := 0.U.asTypeOf(new MicroOp)
-      out_rd_en(i) := 0.U
-      out_rd_addr(i) := 0.U
-      out_rd_data(i) := 0.U
-    }
+    // pipe 0
+    out_uop     (0) := uop(0)
+    out_ecp     (0) := pipe0.io.ecp
+    out_rd_en   (0) := uop(0).rd_en
+    out_rd_paddr(0) := uop(0).rd_paddr
+    out_rd_data (0) := pipe0.io.ecp.rd_data
+
+    // pipe 1
+    out_uop     (1) := uop(1)
+    out_ecp     (1) := pipe1.io.ecp
+    out_rd_en   (1) := uop(1).rd_en
+    out_rd_paddr(1) := uop(1).rd_paddr
+    out_rd_data (1) := pipe1.io.ecp.rd_data
+
+    // pipe 2
+    out_uop     (2) := Mux(reg_valid, reg_uop_lsu, 0.U.asTypeOf(new MicroOp))
+    out_ecp     (2) := pipe2.io.ecp
+    out_rd_en   (2) := Mux(reg_valid, reg_uop_lsu.rd_en, false.B)
+    out_rd_paddr(2) := reg_uop_lsu.rd_paddr
+    out_rd_data (2) := pipe2.io.ecp.rd_data
   }
 
-  io.out.vec := out_uop
-  io.rd_en := out_rd_en
-  io.rd_addr := out_rd_addr
-  io.rd_data := out_rd_data
+  io.out      := out_uop
+  io.out_ecp  := out_ecp
+  io.rd_en    := out_rd_en
+  io.rd_paddr := out_rd_paddr
+  io.rd_data  := out_rd_data
 
 }
 
+// Execution Pipe 0
+//   1 ALU + 1 CSR
 class ExPipe0 extends Module {
   val io = IO(new Bundle {
+    // input
     val uop = Input(new MicroOp)
     val in1 = Input(UInt(64.W))
     val in2 = Input(UInt(64.W))
-    val result = Output(UInt(64.W))
-    val busy = Output(Bool())
-    val jmp_packet = Output(new JmpPacket)
-    val dmem = new CacheBusIO
-    val intr = Output(Bool())
+    // output
+    val ecp = Output(new ExCommitPacket)
   })
 
-  val intr = WireInit(false.B)
-
-  val uop = io.uop
-  val in1 = io.in1
-  val in2 = io.in2
-
   val alu = Module(new Alu)
-  alu.io.uop := uop
-  alu.io.in1 := in1
-  alu.io.in2 := in2
-
-  val lsu = Module(new Lsu)
-  lsu.io.uop := uop
-  lsu.io.in1 := in1
-  lsu.io.in2 := in2
-  lsu.io.dmem <> io.dmem
-  lsu.io.intr := intr
+  alu.io.uop := io.uop
+  alu.io.in1 := io.in1
+  alu.io.in2 := io.in2
 
   val csr = Module(new Csr)
-  csr.io.uop := uop
-  csr.io.in1 := in1
-  intr := csr.io.intr
+  csr.io.uop := io.uop
+  csr.io.in1 := io.in1
 
-  val busy = lsu.io.busy
-
-  val jmp = MuxLookup(uop.fu_code, false.B, Array(
-    FU_JMP -> alu.io.jmp,
-    FU_CSR -> csr.io.jmp
-  )) || intr
-
-  val jmp_pc = Mux(intr, csr.io.intr_pc, 
-    MuxLookup(uop.fu_code, 0.U, Array(
-      FU_JMP -> alu.io.jmp_pc,
-      FU_CSR -> csr.io.jmp_pc
-    )
-  ))
-
-  io.result := alu.io.out | lsu.io.out | csr.io.out
-  io.busy := busy
-  io.intr := intr
-
-  val mis_predict = Mux(jmp, (uop.pred_br && (jmp_pc =/= uop.pred_bpc)) || !uop.pred_br, uop.pred_br)
-
-  io.jmp_packet.valid := (uop.fu_code === FU_JMP) || csr.io.jmp || csr.io.intr
-  io.jmp_packet.inst_pc := uop.pc
-  io.jmp_packet.jmp := jmp
-  io.jmp_packet.jmp_pc := jmp_pc
-  io.jmp_packet.mis := io.jmp_packet.valid && mis_predict
-  io.jmp_packet.intr := intr
-
-  // ref: riscv-spec-20191213 page 21-22
-  val rd_link = (uop.rd_addr === 1.U || uop.rd_addr === 5.U)
-  val rs1_link = (uop.rs1_addr === 1.U || uop.rs1_addr === 5.U)
-  val ras_type = WireInit(RAS_X)
-  when (uop.jmp_code === JMP_JAL) {
-    when (rd_link) {
-      ras_type := RAS_PUSH
-    }
-  }
-  when (uop.jmp_code === JMP_JALR) {
-    ras_type := MuxLookup(Cat(rd_link.asUInt(), rs1_link.asUInt()), RAS_X, Array(
-      "b00".U -> RAS_X,
-      "b01".U -> RAS_POP,
-      "b10".U -> RAS_PUSH,
-      "b11".U -> Mux(uop.rd_addr === uop.rs1_addr, RAS_PUSH, RAS_POP_THEN_PUSH)
-    ))
-  }
-  io.jmp_packet.ras_type := ras_type
+  io.ecp := Mux(io.uop.fu_code === FU_CSR, csr.io.ecp, alu.io.ecp)
 }
 
+// Execution Pipe 1
+//   1 ALU
 class ExPipe1 extends Module {
   val io = IO(new Bundle {
+    // input
     val uop = Input(new MicroOp)
     val in1 = Input(UInt(64.W))
     val in2 = Input(UInt(64.W))
-    val result = Output(UInt(64.W))
+    // output
+    val ecp = Output(new ExCommitPacket)
   })
 
-  val uop = io.uop
-  val in1 = io.in1
-  val in2 = io.in2
-
   val alu = Module(new Alu)
-  alu.io.uop := uop
-  alu.io.in1 := in1
-  alu.io.in2 := in2
+  alu.io.uop := io.uop
+  alu.io.in1 := io.in1
+  alu.io.in2 := io.in2
 
-  io.result := alu.io.out
+  io.ecp := alu.io.ecp
+}
+
+// Execution Pipe 2
+//   1 LSU
+class ExPipe2 extends Module {
+  val io = IO(new Bundle {
+    // input
+    val uop = Input(new MicroOp)
+    val in1 = Input(UInt(64.W))
+    val in2 = Input(UInt(64.W))
+    // output
+    val ecp = Output(new ExCommitPacket)
+    val ready = Output(Bool())
+    // dmem
+    val dmem_st = new CacheBusIO
+    val dmem_ld = new CacheBusIO
+    // flush signal
+    val flush = Input(Bool())
+  })
+
+  val lsu = Module(new Lsu)
+  lsu.io.uop := io.uop
+  lsu.io.in1 := io.in1
+  lsu.io.in2 := io.in2
+  lsu.io.dmem_st <> io.dmem_st
+  lsu.io.dmem_ld <> io.dmem_ld
+  lsu.io.flush := io.flush
+
+  io.ecp := lsu.io.ecp
+  io.ready := !lsu.io.busy
 }

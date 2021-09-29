@@ -2,16 +2,18 @@ package zhoushan
 
 import chisel3._
 import chisel3.util._
+import chisel3.util.experimental._
 
 class InstPacket extends Bundle {
-  val pc = Output(UInt(32.W))
-  val inst = Output(UInt(32.W))
-  val pred_br = Output(Bool())
-  val pred_bpc = Output(UInt(32.W))
+  val pc = UInt(32.W)
+  val inst = UInt(32.W)
+  val pred_br = Bool()
+  val pred_bpc = UInt(32.W)
+  val valid = Bool()
 }
 
 class InstPacketVec(vec_width: Int) extends Bundle with ZhoushanConfig {
-  val vec = Vec(vec_width, Valid(new InstPacket))
+  val vec = Vec(vec_width, Output(new InstPacket))
 }
 
 class InstBuffer extends Module with ZhoushanConfig {
@@ -50,7 +52,7 @@ class InstBuffer extends Module with ZhoushanConfig {
    *
    */
 
-  val idx_width = log2Ceil(entries)
+  val idx_width = log2Up(entries)
   val addr_width = idx_width + 1  // MSB is flag bit
   def getIdx(x: UInt): UInt = x(idx_width - 1, 0)
   def getFlag(x: UInt): Bool = x(addr_width - 1).asBool()
@@ -78,7 +80,7 @@ class InstBuffer extends Module with ZhoushanConfig {
 
   // enq
 
-  val offset = Wire(Vec(enq_width, UInt(log2Ceil(enq_width + 1).W)))
+  val offset = Wire(Vec(enq_width, UInt(log2Up(enq_width).W)))
   for (i <- 0 until enq_width) {
     if (i == 0) {
       offset(i) := 0.U
@@ -90,10 +92,12 @@ class InstBuffer extends Module with ZhoushanConfig {
 
   for (i <- 0 until enq_width) {
     val enq = Wire(new InstPacket)
-    enq := io.in.bits.vec(i).bits
+    enq := io.in.bits.vec(i)
 
     when (io.in.bits.vec(i).valid && io.in.fire() && !io.flush) {
-      buf.write(getIdx(enq_vec(offset(i))), enq)
+      val enq_addr = Wire(UInt(idx_width.W))
+      enq_addr := getIdx(enq_vec(offset(i)))
+      buf.write(enq_addr, enq)
     }
   }
 
@@ -113,7 +117,7 @@ class InstBuffer extends Module with ZhoushanConfig {
 
   for (i <- 0 until deq_width) {
     val deq = buf.read(getIdx(next_deq_vec(i)))
-    io.out.bits.vec(i).bits := deq
+    io.out.bits.vec(i) := deq
     io.out.bits.vec(i).valid := valid_vec(i)
   }
 
@@ -125,6 +129,13 @@ class InstBuffer extends Module with ZhoushanConfig {
     enq_ready := true.B
     enq_vec := VecInit((0 until enq_width).map(_.U(addr_width.W)))
     deq_vec := VecInit((0 until deq_width).map(_.U(addr_width.W)))
+  }
+
+  // debug
+
+  if (EnableDifftest && EnableQueueAnalyzer) {
+    val queue_ib_count = count
+    BoringUtils.addSource(queue_ib_count, "profile_queue_ib_count")
   }
 
 }

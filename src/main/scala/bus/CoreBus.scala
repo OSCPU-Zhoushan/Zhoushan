@@ -3,7 +3,7 @@ package zhoushan
 import chisel3._
 import chisel3.util._
 
-// Simple Axi is an simplified bus implementation modified from AXI4
+// CoreBus is an simplified bus implementation modified from AXI4
 // AXI4    - Duplex
 // CoreBus - Simplex, enough for IF (read only) and MEM stage
 
@@ -20,6 +20,7 @@ class CoreBusReq extends Bundle with CoreBusId with AxiParameters {
   val wlast = Output(Bool())
   val wen = Output(Bool())
   val len = Output(UInt(8.W))
+  val size = Output(UInt(1.W))  // 0 -> 32 bit, 1 -> 64 bit
 }
 
 class CoreBusResp extends Bundle with CoreBusId with AxiParameters {
@@ -36,7 +37,7 @@ class CoreBusIO extends Bundle {
 class CoreBus2Axi extends Module with AxiParameters {
   val io = IO(new Bundle {
     val in = Flipped(new CoreBusIO)
-    val out = new AxiIO
+    val out = if (ZhoushanConfig.EnableOscpuSocAxi) new OscpuSocAxiIO else new AxiIO
   })
 
   val in = io.in
@@ -46,15 +47,18 @@ class CoreBus2Axi extends Module with AxiParameters {
 
   out.aw.valid      := in.req.valid && in.req.bits.aen && in.req.bits.wen
   out.aw.bits.addr  := in.req.bits.addr
-  out.aw.bits.prot  := "b001".U         // privileged access
   out.aw.bits.id    := in.req.bits.id
-  out.aw.bits.user  := 0.U
   out.aw.bits.len   := in.req.bits.len
-  out.aw.bits.size  := "b011".U         // 8 bytes in transfer
-  out.aw.bits.burst := "b01".U          // INCR mode, not used so far
-  out.aw.bits.lock  := false.B
-  out.aw.bits.cache := 0.U
-  out.aw.bits.qos   := 0.U
+  out.aw.bits.size  := Cat("b01".U, in.req.bits.size)
+  out.aw.bits.burst := "b01".U
+  if (!ZhoushanConfig.EnableOscpuSocAxi) {
+    val out = io.out.asInstanceOf[AxiIO]
+    out.aw.bits.user  := 0.U
+    out.aw.bits.prot  := "b001".U       // privileged access
+    out.aw.bits.lock  := false.B
+    out.aw.bits.cache := 0.U
+    out.aw.bits.qos   := 0.U
+  }
 
   out.w.valid       := in.req.valid && in.req.bits.wen
   out.w.bits.data   := in.req.bits.wdata
@@ -63,15 +67,18 @@ class CoreBus2Axi extends Module with AxiParameters {
 
   out.ar.valid      := in.req.valid && in.req.bits.aen && in.req.bits.ren
   out.ar.bits.addr  := in.req.bits.addr
-  out.ar.bits.prot  := "b001".U         // privileged access
   out.ar.bits.id    := in.req.bits.id
-  out.ar.bits.user  := 0.U
   out.ar.bits.len   := in.req.bits.len
-  out.ar.bits.size  := "b011".U         // 8 bytes in transfer
-  out.ar.bits.burst := "b01".U          // INCR mode, not used so far
-  out.ar.bits.lock  := false.B
-  out.ar.bits.cache := 0.U
-  out.ar.bits.qos   := 0.U
+  out.ar.bits.size  := Cat("b01".U, in.req.bits.size)
+  out.ar.bits.burst := "b01".U
+  if (!ZhoushanConfig.EnableOscpuSocAxi) {
+    val out = io.out.asInstanceOf[AxiIO]
+    out.ar.bits.user  := 0.U
+    out.ar.bits.prot  := "b001".U       // privileged access
+    out.ar.bits.lock  := false.B
+    out.ar.bits.cache := 0.U
+    out.ar.bits.qos   := 0.U
+  }
 
   /* ----- CoreBus Input Ctrl Signal Logic ---------------------- */
 
