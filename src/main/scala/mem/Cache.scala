@@ -215,7 +215,6 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
     s2_wmask := s1_wmask
     s2_user  := s1_user
     s2_id    := s1_id
-    state    := Mux(s1_valid, s_idle, s_invalid)
   } .elsewhen (!pipeline_fire && RegNext(pipeline_fire)) {
     // meanwhile, when the FSM is triggered in stage 2, we need to temporarily
     // store the data in registers
@@ -251,7 +250,7 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
 
   // handshake signals with IF unit
   in.req.ready := pipeline_ready
-  in.resp.valid := (s2_hit_real && !s2_wen) || (state === s_complete)
+  in.resp.valid := (s2_hit_real && !s2_wen && (state =/= s_invalid)) || (state === s_complete)
   in.resp.bits.rdata := 0.U
   in.resp.bits.user := s2_user
   in.resp.bits.id := s2_id
@@ -387,6 +386,14 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
     }
     is (s_complete) {
       in.resp.bits.rdata := RegNext(Mux(s2_offs.asBool(), wdata2, wdata1))
+      when (in.resp.fire()) {
+        state := s_invalid
+      }
     }
   }
+
+  when (pipeline_fire) {
+    state := Mux(s1_valid, s_idle, s_invalid)
+  }
+
 }
