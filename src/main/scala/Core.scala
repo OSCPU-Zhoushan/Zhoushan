@@ -94,7 +94,8 @@ class Core extends Module with ZhoushanConfig {
 
   val sq = Module(new StoreQueue)
   sq.io.flush := flush
-  sq.io.in <> execution.io.dmem
+  sq.io.in_st <> execution.io.dmem_st
+  sq.io.in_ld <> execution.io.dmem_ld
   sq.io.deq_req := rob.io.sq_deq_req
 
   val crossbar2to1 = Module(new CacheBusCrossbarNto1(2))

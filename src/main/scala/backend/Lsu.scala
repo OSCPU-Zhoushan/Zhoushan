@@ -12,7 +12,8 @@ class Lsu extends Module {
     val in2 = Input(UInt(64.W))
     val ecp = Output(new ExCommitPacket)
     val busy = Output(Bool())
-    val dmem = new CacheBusIO
+    val dmem_st = new CacheBusIO
+    val dmem_ld = new CacheBusIO
     val flush = Input(Bool())
   })
 
@@ -34,8 +35,10 @@ class Lsu extends Module {
   val s_idle :: s_wait_r :: s_wait_w :: Nil = Enum(3)
   val state = RegInit(s_idle)
 
-  val req = io.dmem.req
-  val resp = io.dmem.resp
+  val st_req = io.dmem_st.req
+  val st_resp = io.dmem_st.resp
+  val ld_req = io.dmem_ld.req
+  val ld_resp = io.dmem_ld.resp
 
   val addr = (in1 + SignExt32_64(uop.imm))(31, 0)
   val addr_offset = addr(2, 0)
@@ -63,47 +66,59 @@ class Lsu extends Module {
     MEM_DWORD -> "b11111111".U(8.W)
   ))
 
-  req.bits.addr := Cat(addr(31, 3), Fill(3, 0.U))
-  req.bits.ren := is_load
-  req.bits.wdata := (wdata << (addr_offset << 3))(63, 0)
-  req.bits.wmask := mask & ((wmask << addr_offset)(7, 0))
-  req.bits.wen := is_store
-  req.bits.user := 0.U
-  req.bits.id := 0.U
-  req.valid := uop.valid && (state === s_idle) &&
-               (is_load || is_store) && (lsu_update || !completed)
+  st_req.bits.addr  := Cat(addr(31, 3), Fill(3, 0.U))
+  st_req.bits.ren   := false.B
+  st_req.bits.wdata := (wdata << (addr_offset << 3))(63, 0)
+  st_req.bits.wmask := mask & ((wmask << addr_offset)(7, 0))
+  st_req.bits.wen   := true.B
+  st_req.bits.user  := 0.U
+  st_req.bits.id    := 0.U
+  st_req.valid      := uop.valid && (state === s_idle) &&
+                       is_store && (lsu_update || !completed)
 
-  resp.ready := resp.valid  // must be always true due to potential flush signal
+  st_resp.ready     := st_resp.valid
+
+  ld_req.bits.addr  := Cat(addr(31, 3), Fill(3, 0.U))
+  ld_req.bits.ren   := true.B
+  ld_req.bits.wdata := 0.U
+  ld_req.bits.wmask := 0.U
+  ld_req.bits.wen   := false.B
+  ld_req.bits.user  := 0.U
+  ld_req.bits.id    := 0.U
+  ld_req.valid      := uop.valid && (state === s_idle) &&
+                       is_load && (lsu_update || !completed)
+
+  ld_resp.ready     := ld_resp.valid
 
   val load_data = WireInit(UInt(64.W), 0.U)
   val store_valid = RegInit(false.B)
 
   switch (state) {
     is (s_idle) {
-      when (is_load && req.fire()) {
+      when (ld_req.fire()) {
         state := s_wait_r
         store_valid := false.B
-      } .elsewhen (is_store && req.fire()) {
+      } .elsewhen (st_req.fire()) {
         state := s_wait_w
         store_valid := true.B
       }
     }
     is (s_wait_r) {
-      when (resp.fire()) {
-        load_data := resp.bits.rdata >> (addr_offset << 3)
+      when (ld_resp.fire()) {
+        load_data := ld_resp.bits.rdata >> (addr_offset << 3)
         if (ZhoushanConfig.DebugLsu) {
           printf("%d: [LOAD ] pc=%x addr=%x rdata=%x -> %x\n", DebugTimer(),
-                 uop.pc, addr, resp.bits.rdata, resp.bits.rdata >> (addr_offset << 3))
+                 uop.pc, addr, ld_resp.bits.rdata, ld_resp.bits.rdata >> (addr_offset << 3))
         }
         completed := true.B
         state := s_idle
       }
     }
     is (s_wait_w) {
-      when (resp.fire()) {
+      when (st_resp.fire()) {
         if (ZhoushanConfig.DebugLsu) {
           printf("%d: [STORE] pc=%x addr=%x wdata=%x -> %x wmask=%x\n", DebugTimer(),
-                 uop.pc, addr, in2, req.bits.wdata, req.bits.wmask)
+                 uop.pc, addr, in2, st_req.bits.wdata, st_req.bits.wmask)
         }
         completed := true.B
         state := s_idle
@@ -144,7 +159,7 @@ class Lsu extends Module {
   io.ecp.store_valid := store_valid
   io.ecp.mmio := mmio
   io.ecp.rd_data := load_out
-  io.busy := req.valid || (state === s_wait_r && !resp.fire()) || (state === s_wait_w && !resp.fire())
+  io.busy := ld_req.valid || st_req.valid || (state === s_wait_r && !ld_resp.fire()) || (state === s_wait_w && !st_resp.fire())
 
   // raise an addr_unaligned exception
   //    half  -> offset = 111

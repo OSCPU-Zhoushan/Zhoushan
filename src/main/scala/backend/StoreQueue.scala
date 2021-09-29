@@ -18,7 +18,8 @@ class StoreQueue extends Module with ZhoushanConfig {
     // flush request from ROB
     val flush = Input(Bool())
     // from EX stage - LSU
-    val in = Flipped(new CacheBusIO)
+    val in_st = Flipped(new CacheBusIO)
+    val in_ld = Flipped(new CacheBusIO)
     // to data cache
     val out_st = new CacheBusIO   // id = ZhoushanConfig.SqStoreId
     val out_ld = new CacheBusIO   // id = ZhoushanConfig.SqLoadId
@@ -33,11 +34,20 @@ class StoreQueue extends Module with ZhoushanConfig {
   val empty = (enq_ptr.value === deq_ptr.value) && !maybe_full
   val full = (enq_ptr.value === deq_ptr.value) && maybe_full
 
+  /* ---------- State Machine -------- */
+
+  val deq_idle :: deq_wait :: Nil = Enum(2)
+  val deq_state = RegInit(deq_idle)
+
+  val enq_idle :: enq_wait :: Nil = Enum(2)
+  val enq_state = RegInit(enq_idle)
+
+  val flush_idle :: flush_wait :: Nil = Enum(2)
+  val flush_state = RegInit(flush_idle)
+
   /* ---------- Store Logic ---------- */
 
   // dequeue
-  val deq_idle :: deq_wait :: Nil = Enum(2)
-  val deq_state = RegInit(deq_idle)
 
   val deq_req_counter = RegInit(UInt((log2Up(entries) + 1).W), 0.U)
   val deq_req_empty = (deq_req_counter === 0.U)
@@ -77,18 +87,16 @@ class StoreQueue extends Module with ZhoushanConfig {
   }
 
   // enqueue (be careful that enqueue is done after dequeue)
-  val enq_idle :: enq_wait :: Nil = Enum(2)
-  val enq_state = RegInit(enq_idle)
 
-  val enq_valid = io.in.req.valid && io.in.req.bits.wen
-  val enq_ready = (!full || deq_fire) && (enq_state === enq_idle)
+  val enq_valid = io.in_st.req.valid
+  val enq_ready = (!full || deq_fire) && (enq_state === enq_idle) && (flush_state === flush_idle)
   val enq_fire = enq_valid && enq_ready
 
   when (enq_fire) {
     val enq = Wire(new StoreQueueEntry)
-    enq.addr := io.in.req.bits.addr
-    enq.wdata := io.in.req.bits.wdata
-    enq.wmask := io.in.req.bits.wmask
+    enq.addr := io.in_st.req.bits.addr
+    enq.wdata := io.in_st.req.bits.wdata
+    enq.wmask := io.in_st.req.bits.wmask
     enq.valid := true.B
     sq(enq_ptr.value) := enq
     enq_ptr.inc()
@@ -106,7 +114,7 @@ class StoreQueue extends Module with ZhoushanConfig {
       }
     }
     is (enq_wait) {
-      when (io.in.resp.fire()) {
+      when (io.in_st.resp.fire()) {
         enq_state := enq_idle
       }
     }
@@ -121,16 +129,13 @@ class StoreQueue extends Module with ZhoushanConfig {
   val load_addr_match = WireInit(VecInit(Seq.fill(entries)(false.B)))
 
   for (i <- 0 until entries) {
-    load_addr_match(i) := sq(i).valid && (sq(i).addr === io.in.req.bits.addr)
+    load_addr_match(i) := sq(i).valid && (sq(i).addr === io.in_ld.req.bits.addr)
   }
 
   val load_hit = Cat(load_addr_match.reverse).orR
   // todo: optimize the load logic
 
   /* ---------- Flush ---------------- */
-
-  val flush_idle :: flush_wait :: Nil = Enum(2)
-  val flush_state = RegInit(flush_idle)
 
   def flush_all() = {
     enq_ptr.reset()
@@ -172,26 +177,18 @@ class StoreQueue extends Module with ZhoushanConfig {
 
   /* ----- Cachebus Handshake -------- */
 
-  val is_store = io.in.req.valid && io.in.req.bits.wen
-  val reg_is_store = RegInit(false.B)
-  val is_store_real = Mux(io.in.req.valid, is_store, reg_is_store)
+  io.in_st.req.ready       := enq_ready
+  io.in_ld.req.ready       := io.out_ld.req.ready && !load_hit && (flush_state === flush_idle)
 
-  io.in.req.ready := false.B
-  when (io.in.req.valid) {
-    when (io.in.req.bits.wen) {
-      io.in.req.ready := enq_ready && (flush_state === flush_idle)
-      reg_is_store := true.B
-    }
-    when (io.in.req.bits.ren) {
-      io.in.req.ready := io.out_ld.req.ready && !load_hit && (flush_state === flush_idle)
-      reg_is_store := false.B
-    }
-  }
+  io.in_st.resp.valid      := (enq_state === enq_wait)
+  io.in_st.resp.bits.rdata := 0.U
+  io.in_st.resp.bits.user  := 0.U
+  io.in_st.resp.bits.id    := 0.U
 
-  io.in.resp.valid      := Mux(is_store_real, (enq_state === enq_wait), io.out_ld.resp.valid)
-  io.in.resp.bits.rdata := io.out_ld.resp.bits.rdata
-  io.in.resp.bits.user  := 0.U
-  io.in.resp.bits.id    := 0.U
+  io.in_ld.resp.valid      := io.out_ld.resp.valid
+  io.in_ld.resp.bits.rdata := io.out_ld.resp.bits.rdata
+  io.in_ld.resp.bits.user  := 0.U
+  io.in_ld.resp.bits.id    := 0.U
 
   io.out_st.req.valid      := deq_valid && (deq_state === deq_idle)
   io.out_st.req.bits.addr  := sq(deq_ptr.value).addr
@@ -204,8 +201,8 @@ class StoreQueue extends Module with ZhoushanConfig {
 
   io.out_st.resp.ready     := (deq_state === deq_wait)
 
-  io.out_ld.req.valid      := io.in.req.valid && io.in.req.bits.ren && !load_hit && (flush_state === flush_idle)
-  io.out_ld.req.bits.addr  := io.in.req.bits.addr
+  io.out_ld.req.valid      := io.in_ld.req.valid && io.in_ld.req.bits.ren && !load_hit && (flush_state === flush_idle)
+  io.out_ld.req.bits.addr  := io.in_ld.req.bits.addr
   io.out_ld.req.bits.wdata := 0.U
   io.out_ld.req.bits.wmask := 0.U
   io.out_ld.req.bits.ren   := true.B
@@ -213,7 +210,7 @@ class StoreQueue extends Module with ZhoushanConfig {
   io.out_ld.req.bits.user  := 0.U
   io.out_ld.req.bits.id    := SqLoadId.U
 
-  io.out_ld.resp.ready     := io.in.resp.ready
+  io.out_ld.resp.ready     := io.in_ld.resp.ready
 
   /* ---------- debug ---------------- */
 
