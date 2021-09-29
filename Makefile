@@ -20,7 +20,11 @@ emu-direct:
 help:
 	mill -i Zhoushan.runMain zhoushan.TopMain --help
 
-soc: sim-verilog
+soc-verilog:
+	mkdir -p $(BUILD_DIR)
+	mill -i Zhoushan.runMain zhoushan.TopMain -td $(BUILD_DIR) --soc
+
+soc: soc-verilog
 	/bin/bash ./test.sh -n
 	cd $(ZHOUSHAN_HOME)/difftest && $(MAKE) EMU_TRACE=1 SIM_SOC=1 emu -j
 

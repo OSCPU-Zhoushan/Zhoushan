@@ -34,10 +34,10 @@ class CoreBusIO extends Bundle {
   val resp = Flipped(Decoupled(new CoreBusResp))
 }
 
-class CoreBus2Axi extends Module with AxiParameters {
+class CoreBus2Axi[OT <: OscpuSocAxiIO](out_type: OT) extends Module with AxiParameters {
   val io = IO(new Bundle {
     val in = Flipped(new CoreBusIO)
-    val out = if (ZhoushanConfig.EnableOscpuSocAxi) new OscpuSocAxiIO else new AxiIO
+    val out = Flipped(Flipped(out_type))
   })
 
   val in = io.in
@@ -51,7 +51,7 @@ class CoreBus2Axi extends Module with AxiParameters {
   out.aw.bits.len   := in.req.bits.len
   out.aw.bits.size  := Cat("b01".U, in.req.bits.size)
   out.aw.bits.burst := "b01".U
-  if (!ZhoushanConfig.EnableOscpuSocAxi) {
+  if (out_type.getClass == classOf[AxiIO]) {
     val out = io.out.asInstanceOf[AxiIO]
     out.aw.bits.user  := 0.U
     out.aw.bits.prot  := "b001".U       // privileged access
@@ -71,7 +71,7 @@ class CoreBus2Axi extends Module with AxiParameters {
   out.ar.bits.len   := in.req.bits.len
   out.ar.bits.size  := Cat("b01".U, in.req.bits.size)
   out.ar.bits.burst := "b01".U
-  if (!ZhoushanConfig.EnableOscpuSocAxi) {
+  if (out_type.getClass == classOf[AxiIO]) {
     val out = io.out.asInstanceOf[AxiIO]
     out.ar.bits.user  := 0.U
     out.ar.bits.prot  := "b001".U       // privileged access
