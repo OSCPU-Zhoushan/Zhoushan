@@ -23,7 +23,7 @@ class Uncache(id: Int) extends Module with ZhoushanConfig {
   out.req.bits.wlast  := true.B
   out.req.bits.wen    := in.req.bits.wen
   out.req.bits.len    := 0.U
-  out.req.bits.size   := 1.U
+  out.req.bits.size   := Constant.MEM_DWORD
 
   val resp_id = HoldUnless(in.req.bits.id, in.req.fire())
 

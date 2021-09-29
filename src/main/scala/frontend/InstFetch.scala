@@ -85,6 +85,7 @@ class InstFetch extends Module with ZhoushanConfig {
   req.bits.wdata := 0.U
   req.bits.wmask := 0.U
   req.bits.wen   := false.B
+  req.bits.size  := Constant.MEM_DWORD
   req.bits.user  := Cat(pred_br, pc_valid, npc, pc_base)
   req.bits.id    := 0.U
   req.valid      := io.out.ready

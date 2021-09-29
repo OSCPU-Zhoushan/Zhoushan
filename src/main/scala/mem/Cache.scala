@@ -270,7 +270,7 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
   out.req.bits.wlast := (state === s_miss_req_w2)
   out.req.bits.wen := (state === s_miss_req_w1) || (state === s_miss_req_w2)
   out.req.bits.len := 1.U
-  out.req.bits.size := 1.U
+  out.req.bits.size := Constant.MEM_DWORD
   out.resp.ready := (state === s_miss_wait_r) || (state === s_miss_wait_w)
 
   if ((DebugICache && id == 1) || (DebugDCache && id == 2)) {

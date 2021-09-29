@@ -21,6 +21,7 @@ class CacheBusReq extends Bundle with CacheBusId with CacheBusUser {
   val wdata = Output(UInt(AxiDataWidth.W))
   val wmask = Output(UInt((AxiDataWidth / 8).W))
   val wen = Output(Bool())
+  val size = Output(UInt(2.W))
 }
 
 class CacheBusResp extends Bundle with CacheBusId with CacheBusUser {

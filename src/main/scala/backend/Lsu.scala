@@ -44,10 +44,7 @@ class Lsu extends Module {
   val addr_offset = addr(2, 0)
   val wdata = in2
 
-  val mmio = RegInit(false.B)
-  when (uop.valid) {
-    mmio := (addr(31) === 0.U)
-  }
+  val mmio = (addr(31) === 0.U)
 
   val mask = MuxLookup(addr_offset, 0.U, Array(
     "b000".U -> "b11111111".U(8.W),
@@ -71,6 +68,7 @@ class Lsu extends Module {
   st_req.bits.wdata := (wdata << (addr_offset << 3))(63, 0)
   st_req.bits.wmask := mask & ((wmask << addr_offset)(7, 0))
   st_req.bits.wen   := true.B
+  st_req.bits.size  := Constant.MEM_DWORD
   st_req.bits.user  := 0.U
   st_req.bits.id    := 0.U
   st_req.valid      := uop.valid && (state === s_idle) &&
@@ -83,6 +81,7 @@ class Lsu extends Module {
   ld_req.bits.wdata := 0.U
   ld_req.bits.wmask := 0.U
   ld_req.bits.wen   := false.B
+  ld_req.bits.size  := Constant.MEM_DWORD
   ld_req.bits.user  := 0.U
   ld_req.bits.id    := 0.U
   ld_req.valid      := uop.valid && (state === s_idle) &&
