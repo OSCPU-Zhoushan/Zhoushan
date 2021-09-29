@@ -143,6 +143,7 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
   val s1_wmask = in.req.bits.wmask
   val s1_user  = in.req.bits.user
   val s1_id    = in.req.bits.id
+  val s1_valid = in.req.valid
 
   // when pipeline fire, read the data in SRAM and meta data array
   // the data will be returned at the next clock cycle, and passed to stage 2
@@ -162,7 +163,7 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
   /* 9-state FSM in cache stage 2
    *
    * read  hit:  idle
-   * write hit:  idle -> hit_w -> complete
+   * write hit:  idle -> complete
    * read  miss: idle -> miss_req_r -> miss_wait_r -> miss_ok_r -> complete
    * write miss: idle -> miss_req_r -> miss_wait_r -> miss_ok_r -> ...
    *             (not dirty) ... -> complete
@@ -170,10 +171,10 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
    *                         -> complete
    */
 
-  val s_idle        :: s_hit_w       :: s_miss_req_r  :: s1  = Enum(9)
-  val s_miss_wait_r :: s_miss_ok_r   :: s_miss_req_w1 :: s2  = s1
-  val s_miss_req_w2 :: s_miss_wait_w :: s_complete    :: Nil = s2
-  val state = RegInit(s_idle)
+  val s_idle        :: s_miss_req_r  :: s_miss_wait_r :: s1  = Enum(9)
+  val s_miss_ok_r   :: s_miss_req_w1 :: s_miss_req_w2 :: s2  = s1
+  val s_miss_wait_w :: s_complete    :: s_invalid     :: Nil = s2
+  val state = RegInit(s_invalid)
 
   val s2_addr  = RegInit(0.U(32.W))
   val s2_offs  = s2_addr(3)
@@ -214,7 +215,7 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
     s2_wmask := s1_wmask
     s2_user  := s1_user
     s2_id    := s1_id
-    state := s_idle
+    state    := Mux(s1_valid, s_idle, s_invalid)
   } .elsewhen (!pipeline_fire && RegNext(pipeline_fire)) {
     // meanwhile, when the FSM is triggered in stage 2, we need to temporarily
     // store the data in registers
@@ -237,24 +238,20 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
 
   /* ----- Pipeline Ctrl Signals ----- */
 
-  val init = RegInit(true.B)
-  when (in.req.valid) {
-    init := false.B
-  }
-
   val s2_hit_real = Mux(RegNext(pipeline_fire), s2_hit, s2_reg_hit)
   val s2_dirty_real = Mux(RegNext(pipeline_fire), s2_dirty, s2_reg_dirty)
 
   val hit_ready = s2_hit_real &&
                   Mux(s2_wen, state === s_complete, state === s_idle)
   val miss_ready = (state === s_complete)
+  val invalid_ready = (state === s_invalid)
 
-  pipeline_valid := in.req.fire()
-  pipeline_ready := hit_ready || miss_ready || init
+  pipeline_valid := true.B
+  pipeline_ready := ((hit_ready || miss_ready) && in.resp.ready) || invalid_ready
 
   // handshake signals with IF unit
   in.req.ready := pipeline_ready
-  in.resp.valid := (s2_hit_real && !s2_wen) || (state === s_hit_w) || (state === s_miss_ok_r)
+  in.resp.valid := (s2_hit_real && !s2_wen) || (state === s_complete)
   in.resp.bits.rdata := 0.U
   in.resp.bits.user := s2_user
   in.resp.bits.id := s2_id
@@ -322,15 +319,10 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
               meta(i).io.dirty_w := true.B
             }
           }
-          state := s_hit_w
+          state := s_complete
         } .elsewhen (!s2_hit) {
           state := s_miss_req_r
         }
-      }
-    }
-    is (s_hit_w) {
-      when (in.resp.fire()) {
-        state := s_complete
       }
     }
     is (s_miss_req_r) {
@@ -349,34 +341,31 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
       }
     }
     is (s_miss_ok_r) {
-      in.resp.bits.rdata := Mux(s2_offs.asBool(), wdata2, wdata1)
-      when (in.resp.fire()) {
-        for (i <- 0 until 4) {
-          when (replace_way === i.U) {
-            sram(i).io.en := true.B
-            sram(i).io.wen := true.B
-            sram(i).io.addr := s2_idx
-            when (s2_wen) {
-              sram(i).io.wdata := Mux(s2_offs === 1.U,
-                                      Cat(MaskData(wdata2, s2_wdata, MaskExpand(s2_wmask)), wdata1),
-                                      Cat(wdata2, MaskData(wdata1, s2_wdata, MaskExpand(s2_wmask))))
-            } .otherwise {
-              sram(i).io.wdata := Cat(wdata2, wdata1)
-            }
-            // write allocate
-            meta(i).io.idx := s2_idx
-            meta(i).io.tag_wen := true.B
-            meta(i).io.tag_w := s2_tag
-            meta(i).io.dirty_wen := true.B
-            meta(i).io.dirty_w := s2_wen
+      for (i <- 0 until 4) {
+        when (replace_way === i.U) {
+          sram(i).io.en := true.B
+          sram(i).io.wen := true.B
+          sram(i).io.addr := s2_idx
+          when (s2_wen) {
+            sram(i).io.wdata := Mux(s2_offs === 1.U,
+                                    Cat(MaskData(wdata2, s2_wdata, MaskExpand(s2_wmask)), wdata1),
+                                    Cat(wdata2, MaskData(wdata1, s2_wdata, MaskExpand(s2_wmask))))
+          } .otherwise {
+            sram(i).io.wdata := Cat(wdata2, wdata1)
           }
+          // write allocate
+          meta(i).io.idx := s2_idx
+          meta(i).io.tag_wen := true.B
+          meta(i).io.tag_w := s2_tag
+          meta(i).io.dirty_wen := true.B
+          meta(i).io.dirty_w := s2_wen
         }
-        when (s2_reg_dirty) {
-          state := s_miss_req_w1
-        } .otherwise {
-          updatePlruTree(s2_idx, replace_way)
-          state := s_complete
-        }
+      }
+      when (s2_reg_dirty) {
+        state := s_miss_req_w1
+      } .otherwise {
+        updatePlruTree(s2_idx, replace_way)
+        state := s_complete
       }
     }
     is (s_miss_req_w1) {
@@ -395,6 +384,9 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
         updatePlruTree(s2_idx, replace_way)
         state := s_complete
       }
+    }
+    is (s_complete) {
+      in.resp.bits.rdata := RegNext(Mux(s2_offs.asBool(), wdata2, wdata1))
     }
   }
 }
