@@ -194,12 +194,16 @@ class Rob extends Module with ZhoushanConfig {
       }
     }
     is (s_intr_wait) {
-      when (cm(0).valid && csr_mip_mtip_intr && !csr_in_flight) {
-        intr_mstatus := Cat(csr_mstatus(63, 8), csr_mstatus(3), csr_mstatus(6, 4), 0.U, csr_mstatus(2, 0))
-        intr_mepc := cm(0).pc
-        intr_mcause := "h8000000000000007".U
-        intr := true.B
-        intr_jmp_pc := Cat(csr_mtvec_idx, Fill(2, 0.U))
+      when (intr_global_en && intr_clint_en) {
+        when (cm(0).valid && csr_mip_mtip_intr && !csr_in_flight) {
+          intr_mstatus := Cat(csr_mstatus(63, 8), csr_mstatus(3), csr_mstatus(6, 4), 0.U, csr_mstatus(2, 0))
+          intr_mepc := cm(0).pc
+          intr_mcause := "h8000000000000007".U
+          intr := true.B
+          intr_jmp_pc := Cat(csr_mtvec_idx, Fill(2, 0.U))
+          intr_state := s_intr_idle
+        }
+      } .otherwise {
         intr_state := s_intr_idle
       }
     }
