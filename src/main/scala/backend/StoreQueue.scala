@@ -8,6 +8,7 @@ class StoreQueueEntry extends Bundle with AxiParameters {
   val addr = UInt(AxiAddrWidth.W)
   val wdata = UInt(AxiDataWidth.W)
   val wmask = UInt((AxiDataWidth / 8).W)
+  val wsize = UInt(2.W)
   val valid = Bool()
 }
 
@@ -97,6 +98,7 @@ class StoreQueue extends Module with ZhoushanConfig {
     enq.addr := io.in_st.req.bits.addr
     enq.wdata := io.in_st.req.bits.wdata
     enq.wmask := io.in_st.req.bits.wmask
+    enq.wsize := io.in_st.req.bits.size
     enq.valid := true.B
     sq(enq_ptr.value) := enq
     enq_ptr.inc()
@@ -196,7 +198,7 @@ class StoreQueue extends Module with ZhoushanConfig {
   io.out_st.req.bits.wmask := sq(deq_ptr.value).wmask
   io.out_st.req.bits.ren   := false.B
   io.out_st.req.bits.wen   := true.B
-  io.out_st.req.bits.size  := Constant.MEM_DWORD
+  io.out_st.req.bits.size  := sq(deq_ptr.value).wsize
   io.out_st.req.bits.user  := 0.U
   io.out_st.req.bits.id    := SqStoreId.U
 
@@ -208,7 +210,7 @@ class StoreQueue extends Module with ZhoushanConfig {
   io.out_ld.req.bits.wmask := 0.U
   io.out_ld.req.bits.ren   := true.B
   io.out_ld.req.bits.wen   := false.B
-  io.out_ld.req.bits.size  := Constant.MEM_DWORD
+  io.out_ld.req.bits.size  := io.in_ld.req.bits.size
   io.out_ld.req.bits.user  := 0.U
   io.out_ld.req.bits.id    := SqLoadId.U
 
