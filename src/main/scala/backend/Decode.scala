@@ -36,7 +36,7 @@ class Decode extends Module with ZhoushanConfig {
   // handshake signals
   io.in.ready := io.out.ready
 
-  when (io.out.ready && RegNext(!io.out.ready)) {
+  when (io.out.ready && RegNext(!io.out.ready) && !io.in.valid) {
     io.out.valid := reg_in_valid
     reg_in_valid := false.B
   } .otherwise {
