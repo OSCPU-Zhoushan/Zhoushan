@@ -1,26 +1,17 @@
 package zhoushan
 
-object TopMain extends App with ZhoushanConfig {
+object TopMain extends App {
 
-  TargetOscpuSoc = false
-  for (i <- 0 until args.length) {
-    if (args(i) == "--soc") {
-      args(i) = ""
-      TargetOscpuSoc = true
-    }
-  }
-  updateSettings()
-
-  if (EnableDifftest) {
+  if (ZhoushanConfig.EnableDifftest) {
     (new chisel3.stage.ChiselStage).execute(args, Seq(
       chisel3.stage.ChiselGeneratorAnnotation(() => new SimTop())
     ))
   } else {
-    if (TargetOscpuSoc) {
+    if (ZhoushanConfig.TargetOscpuSoc) {
       (new chisel3.stage.ChiselStage).execute(args, Seq(
         chisel3.stage.ChiselGeneratorAnnotation(() => new RealTop()),
         firrtl.stage.RunFirrtlTransformAnnotation(new AddModulePrefix()),
-        ModulePrefixAnnotation(s"ysyx_${OscpuId}_")
+        ModulePrefixAnnotation(s"ysyx_${ZhoushanConfig.OscpuId}_")
       ))
     } else {
       (new chisel3.stage.ChiselStage).execute(args, Seq(
