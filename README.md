@@ -1,6 +1,10 @@
 # Zhoushan Core
 
-Open Source Chip Project by University (OSCPU) - Team Zhoushan
+Open Source Chip Project by University (OSCPU)
+
+Zhoushan is a 2-way superscalar out-of-order core, compatible with RV64I ISA.
+
+Main developer: Li Shi (SJTU/CMU ECE)
 
 ## Dependency
 
@@ -36,17 +40,24 @@ make emu
 ./build/emu -i path/to/risc-v/binary.bin
 ```
 
+To run functional tests:
+
+```
+./test.sh -c
+./test.sh -r
+```
+
 ## Development Notes
 
-### Cache & Memory Convention
+### Bus ID Convention
 
-1. `IF` stage AXI ID is 1
+1. Bus ID is set in `ZhoushanConfig`.
 
-1. `MEM` stage AXI ID is 2
+1. Bus ID must start from 1, and should not skip any index. Bus ID must match the order of `CrossbarNto1`.
 
 ### Git Convention
 
-1. Branch for dev: `dev/XxxYyy`. Example: `dev/ScalarPipeline`.
+1. Branch for dev: `dev/XxxYyy`. Example: `dev/ScalarPipeline`, `dev/Superscalar`.
 
 1. Only merge stable version (passing all tests) to `develop` branch after being permitted by Li Shi.
 
@@ -54,7 +65,7 @@ make emu
 
 ### Naming Convention
 
-Filename & class/object/trait name & constant: CamelCase (even though it contains abbreviation, e.g., we write `FpgaTop` rather than `FPGATop`). Example:
+Filename & class/object/trait name & constant: CamelCase (even though it contains abbreviation, e.g., we write `BhtWidth` rather than `BHTWidth`). Example:
 
 ```scala
 // SimTop.scala
@@ -66,7 +77,7 @@ class SimTop extends Module {
 // ZhoushanConfig.scala
 
 trait ZhoushanConfig {
-  // MMIO
+  // MMIO Address Map
   val ClintAddrBase = 0x02000000
   ...
 }
@@ -75,17 +86,12 @@ trait ZhoushanConfig {
 Function name: camelCase. Example:
 
 ```scala
-def signExt32_64(x: UInt) : UInt = Cat(Fill(32, x(31)), x)
+def getFlag(x: UInt): Bool = x(addr_width - 1).asBool()
 ```
 
 Wire, register, instance, io name: some_name. Example:
 
 ```scala
-// Core.scala
-
-...
-val ex_rs1_from_cm = ...
-...
-val dt_ic = Module(new DifftestInstrCommit)
-...
+val this_wire = ...
+val this_module = Module(new ThisModule)
 ```
