@@ -73,7 +73,7 @@ class Lsu extends Module {
   req.valid := uop.valid && (state === s_idle) &&
                (is_load || is_store) && (lsu_update || !completed)
 
-  resp.ready := true.B  // must be always true due to potential flush signal
+  resp.ready := resp.valid  // must be always true due to potential flush signal
 
   val load_data = WireInit(UInt(64.W), 0.U)
   val store_valid = RegInit(false.B)

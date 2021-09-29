@@ -193,7 +193,7 @@ class StoreQueue extends Module with ZhoushanConfig {
   io.in.resp.bits.user  := 0.U
   io.in.resp.bits.id    := 0.U
 
-  io.out_st.req.valid      := deq_valid
+  io.out_st.req.valid      := deq_valid && (deq_state === deq_idle)
   io.out_st.req.bits.addr  := sq(deq_ptr.value).addr
   io.out_st.req.bits.wdata := sq(deq_ptr.value).wdata
   io.out_st.req.bits.wmask := sq(deq_ptr.value).wmask
