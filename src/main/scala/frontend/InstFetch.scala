@@ -36,7 +36,7 @@ class InstFetch extends Module with ZhoushanConfig {
 
   // branch predictor
   val bp = Module(new BranchPredictor)
-  val bp_update = RegNext(req.fire())
+  val bp_update = req.fire()
 
   // program counter
   val pc_init = ResetPc.U(32.W)
@@ -48,8 +48,8 @@ class InstFetch extends Module with ZhoushanConfig {
   val npc_s = pc_base + (4 * FetchWidth).U
 
   // next pc predicted
-  val npc_p = HoldUnless(bp.io.pred_bpc, bp_update)
-  val pred_br = HoldUnlessWithFlush(Cat(bp.io.pred_br.reverse) & Fill(2, bp.io.pred_valid && !mis).asUInt(), bp_update, mis)
+  val npc_p = HoldUnless(bp.io.pred_bpc, RegNext(bp_update))
+  val pred_br = HoldUnlessWithFlush(Cat(bp.io.pred_br.reverse) & Fill(2, bp.io.pred_valid && !mis).asUInt(), RegNext(bp_update), mis)
 
   // update pc by npc
   // priority: redirection > branch prediction = sequential pc
