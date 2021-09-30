@@ -4,6 +4,3 @@
 [submodule "DRAMsim3"]
 	path = DRAMsim3
 	url = https://github.com/OpenXiangShan/DRAMsim3.git
-[submodule "ysyxSoC"]
-	path = ysyxSoC
-	url = https://github.com/OSCPU/ysyxSoC.git
