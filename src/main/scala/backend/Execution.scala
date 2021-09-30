@@ -156,7 +156,7 @@ class ExPipe0 extends Module {
   csr.io.uop := io.uop
   csr.io.in1 := io.in1
 
-  io.ecp := Mux(io.uop.fu_code === FU_CSR, csr.io.ecp, alu.io.ecp)
+  io.ecp := Mux(io.uop.fu_code === FU_SYS, csr.io.ecp, alu.io.ecp)
 }
 
 // Execution Pipe 1

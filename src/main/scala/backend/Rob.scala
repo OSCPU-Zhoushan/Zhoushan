@@ -230,7 +230,7 @@ class Rob extends Module with ZhoushanConfig {
     deq_addr_async(i) := getIdx(deq_vec(i))
     deq_ecp(i) := ecp(deq_addr_async(i))
     if (i == 0) {
-      when (deq_uop(i).fu_code === FU_CSR && !csr_in_flight && !rob_empty) {
+      when (deq_uop(i).fu_code === FU_SYS && !csr_in_flight && !rob_empty) {
         io.csr_ready := true.B
         csr_in_flight := true.B
       }

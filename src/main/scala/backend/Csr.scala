@@ -54,8 +54,8 @@ class Csr extends Module {
   val uop = io.uop
 
   val in1 = io.in1
-  val csr_code = uop.csr_code
-  val csr_rw = (csr_code === CSR_RW) || (csr_code === CSR_RS) || (csr_code === CSR_RC)
+  val sys_code = uop.sys_code
+  val csr_rw = (sys_code === SYS_CSRRW) || (sys_code === SYS_CSRRS) || (sys_code === SYS_CSRRC)
   val csr_jmp = WireInit(Bool(), false.B)
   val csr_jmp_pc = WireInit(UInt(32.W), 0.U)
 
@@ -92,7 +92,7 @@ class Csr extends Module {
   }
 
   // ECALL
-  when (csr_code === CSR_ECALL) {
+  when (sys_code === SYS_ECALL) {
     mepc := uop.pc
     mcause := 11.U  // env call from M-mode
     mstatus := Cat(mstatus(63, 8), mstatus(3), mstatus(6, 4), 0.U, mstatus(2, 0))
@@ -101,7 +101,7 @@ class Csr extends Module {
   }
 
   // MRET
-  when (csr_code === CSR_MRET) {
+  when (sys_code === SYS_MRET) {
     mstatus := Cat(mstatus(63, 8), 1.U, mstatus(6, 4), mstatus(7), mstatus(2, 0))
     csr_jmp := true.B
     csr_jmp_pc := mepc
@@ -148,10 +148,10 @@ class Csr extends Module {
   val wmask = "hffffffffffffffff".U
   val wen = csr_rw // && (in1 =/= 0.U)
 
-  wdata := MuxLookup(uop.csr_code, 0.U, Array(
-    CSR_RW -> in1,
-    CSR_RS -> (rdata | in1),
-    CSR_RC -> (rdata & ~in1)
+  wdata := MuxLookup(uop.sys_code, 0.U, Array(
+    SYS_CSRRW -> in1,
+    SYS_CSRRS -> (rdata | in1),
+    SYS_CSRRC -> (rdata & ~in1)
   ))
 
   RegMap.access(csr_map, addr, rdata, ren, wdata, wmask, wen)

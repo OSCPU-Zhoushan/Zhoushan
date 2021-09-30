@@ -116,7 +116,7 @@ class IntIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_width: Int)
 
   val is_csr = Wire(Vec(entries, Bool()))
   for (i <- 0 until entries) {
-    is_csr(i) := (buf(i).fu_code === Constant.FU_CSR)
+    is_csr(i) := (buf(i).fu_code === Constant.FU_SYS)
   }
   val has_csr = Cat(is_csr).orR
 
