@@ -32,8 +32,8 @@ class Rob extends Module with ZhoushanConfig {
     val sq_deq_req = Output(Bool())
     // flush input
     val flush = Input(Bool())
-    // csr instruction ready to issue signal
-    val csr_ready = Output(Bool())
+    // sys instruction ready to issue signal
+    val sys_ready = Output(Bool())
   })
 
   val cm = Wire(Vec(deq_width, new MicroOp))
@@ -147,9 +147,9 @@ class Rob extends Module with ZhoushanConfig {
 
   sq_deq_req := false.B
 
-  // CSR instruction ready to issue signal
-  io.csr_ready := false.B
-  val csr_in_flight = RegInit(false.B)
+  // SYS instruction ready to issue signal
+  io.sys_ready := false.B
+  val sys_in_flight = RegInit(false.B)
 
   // dep uop (async) & ecp (sync)
   val deq_addr_sync = Wire(Vec(deq_width, UInt(addr_width.W)))
@@ -195,7 +195,7 @@ class Rob extends Module with ZhoushanConfig {
     }
     is (s_intr_wait) {
       when (intr_global_en && intr_clint_en) {
-        when (cm(0).valid && csr_mip_mtip_intr && !csr_in_flight) {
+        when (cm(0).valid && csr_mip_mtip_intr && !sys_in_flight) {
           intr_mstatus := Cat(csr_mstatus(63, 8), csr_mstatus(3), csr_mstatus(6, 4), 0.U, csr_mstatus(2, 0))
           intr_mepc := cm(0).pc
           intr_mcause := "h8000000000000007".U
@@ -230,9 +230,9 @@ class Rob extends Module with ZhoushanConfig {
     deq_addr_async(i) := getIdx(deq_vec(i))
     deq_ecp(i) := ecp(deq_addr_async(i))
     if (i == 0) {
-      when (deq_uop(i).fu_code === FU_SYS && !csr_in_flight && !rob_empty) {
-        io.csr_ready := true.B
-        csr_in_flight := true.B
+      when (deq_uop(i).fu_code === FU_SYS && !sys_in_flight && !rob_empty) {
+        io.sys_ready := true.B
+        sys_in_flight := true.B
       }
     }
     cm(i) := deq_uop(i)
@@ -261,9 +261,9 @@ class Rob extends Module with ZhoushanConfig {
                         Mux(cm(0).valid && cm(0).rd_en && cm(1).rd_en, cm(0).rd_addr =/= cm(1).rd_addr, true.B)
     }
 
-    // update csr_in_flight status register
-    when (cm(i).valid && csr_in_flight) {
-      csr_in_flight := false.B
+    // update sys_in_flight status register
+    when (cm(i).valid && sys_in_flight) {
+      sys_in_flight := false.B
     }
 
     // update sq_deq_req

@@ -61,12 +61,13 @@ trait Constant {
   val MEM_WORD  = 2.asUInt(2.W)
   val MEM_DWORD = 3.asUInt(2.W)
 
-  val SYS_X     = 0.asUInt(3.W)
-  val SYS_CSRRW = 1.asUInt(3.W)
-  val SYS_CSRRS = 2.asUInt(3.W)
-  val SYS_CSRRC = 3.asUInt(3.W)
-  val SYS_ECALL = 4.asUInt(3.W)
-  val SYS_MRET  = 5.asUInt(3.W)
+  val SYS_X      = 0.asUInt(3.W)
+  val SYS_CSRRW  = 1.asUInt(3.W)
+  val SYS_CSRRS  = 2.asUInt(3.W)
+  val SYS_CSRRC  = 3.asUInt(3.W)
+  val SYS_ECALL  = 4.asUInt(3.W)
+  val SYS_MRET   = 5.asUInt(3.W)
+  val SYS_FENCEI = 6.asUInt(3.W)
 }
 
 object Constant extends Constant { }
