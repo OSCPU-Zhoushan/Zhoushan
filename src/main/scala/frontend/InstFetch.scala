@@ -36,7 +36,7 @@ class InstFetch extends Module with ZhoushanConfig {
 
   // branch predictor
   val bp = Module(new BranchPredictor)
-  val bp_update = req.fire()
+  val bp_update = RegNext(req.fire())
 
   // program counter
   val pc_init = ResetPc.U(32.W)
