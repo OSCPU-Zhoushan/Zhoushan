@@ -88,8 +88,14 @@ class CacheBusCrossbar1to2 extends Module {
   for (i <- 0 until 2) {
     when (io.out(i).req.fire() && !io.out(i).resp.fire()) {
       in_flight_req(i) := in_flight_req(i) + 1.U
+      if (ZhoushanConfig.DebugCrossbar1to2) {
+        printf("%d: [CB1-2] in_flight_req(%d)=%d -> %d\n", DebugTimer(), i.U, in_flight_req(i), in_flight_req(i) + 1.U)
+      }
     } .elsewhen (io.out(i).resp.fire() && !io.out(i).req.fire()) {
       in_flight_req(i) := in_flight_req(i) - 1.U
+      if (ZhoushanConfig.DebugCrossbar1to2) {
+        printf("%d: [CB1-2] in_flight_req(%d)=%d -> %d\n", DebugTimer(), i.U, in_flight_req(i), in_flight_req(i) - 1.U)
+      }
     }
   }
 
@@ -121,6 +127,29 @@ class CacheBusCrossbar1to2 extends Module {
     when (channel === i.U) {
       io.in.resp.bits := io.out(i).resp.bits
       io.in.resp.valid := io.out(i).resp.valid
+    }
+  }
+
+  if (ZhoushanConfig.DebugCrossbar1to2) {
+    val in = io.in
+    when (in.req.fire()) {
+      printf("%d: [CB1-2] [IN ] [REQ ] addr=%x size=%x id=%x wen=%x wdata=%x wmask=%x\n", DebugTimer(),
+             in.req.bits.addr, in.req.bits.size, in.req.bits.id, in.req.bits.wen, in.req.bits.wdata, in.req.bits.wmask)
+    }
+    when (in.resp.fire()) {
+      printf("%d: [CB1-2] [IN ] [RESP] rdata=%x id=%x\n", DebugTimer(),
+             in.resp.bits.rdata, in.resp.bits.id)
+    }
+    for (i <- 0 until 2) {
+      val out = io.out(i)
+      when (out.req.fire()) {
+        printf("%d: [CB1-2] [O-%d] [REQ ] addr=%x size=%x id=%x wen=%x wdata=%x wmask=%x\n", DebugTimer(), i.U,
+               out.req.bits.addr, out.req.bits.size, out.req.bits.id, out.req.bits.wen, out.req.bits.wdata, out.req.bits.wmask)
+      }
+      when (out.resp.fire()) {
+        printf("%d: [CB1-2] [O-%d] [RESP] rdata=%x id=%x\n", DebugTimer(), i.U,
+                  out.resp.bits.rdata, out.resp.bits.id)
+      }
     }
   }
 

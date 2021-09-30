@@ -138,4 +138,14 @@ class InstBuffer extends Module with ZhoushanConfig {
     BoringUtils.addSource(queue_ib_count, "profile_queue_ib_count")
   }
 
+  if (DebugInstBuffer) {
+    when (io.in.valid) {
+      for (i <- 0 until FetchWidth) {
+        val in = io.in.bits.vec(i)
+        printf("%d: [IB  %d] pc=%x inst=%x v=%x\n", DebugTimer(), i.U,
+               in.pc, in.inst, in.valid)
+      }
+    }
+  }
+
 }

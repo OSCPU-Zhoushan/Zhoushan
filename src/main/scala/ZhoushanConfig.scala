@@ -31,6 +31,7 @@ trait ZhoushanConfig {
   val ResetPc = if (TargetOscpuSoc) "h30000000" else "h80000000"
   val OscpuId = "000000"
   // Debug Info
+  val DebugInstBuffer = false
   val DebugRename = false
   val DebugRenameVerbose = false
   val DebugIntIssueQueue = false
@@ -42,10 +43,12 @@ trait ZhoushanConfig {
   val DebugStoreQueue = false
   val DebugICache = false
   val DebugDCache = false
+  val DebugUncache = false
   val DebugBranchPredictorRas = false
   val DebugBranchPredictorBtb = false
   val DebugArchEvent = false
   val DebugClint = false
+  val DebugCrossbar1to2 = false
 }
 
 object ZhoushanConfig extends ZhoushanConfig { }

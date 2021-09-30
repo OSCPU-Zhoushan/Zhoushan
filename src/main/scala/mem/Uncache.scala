@@ -44,6 +44,10 @@ class Uncache(id: Int) extends Module with ZhoushanConfig {
         size  := in.req.bits.size
         in_id := in.req.bits.id
         state := s_req_1
+        if (DebugUncache) {
+          printf("%d: [UN $ ] [REQ ] addr=%x size=%x id=%x\n", DebugTimer(),
+                 in.req.bits.addr, in.req.bits.size, in.req.bits.id)
+        }
       }
     }
     is (s_req_1) {
@@ -77,6 +81,10 @@ class Uncache(id: Int) extends Module with ZhoushanConfig {
     is (s_complete) {
       when (in.resp.fire()) {
         state := s_idle
+        if (DebugUncache) {
+          printf("%d: [UN $ ] [RESP] addr=%x rdata=%x id=%x\n", DebugTimer(),
+                 addr, Cat(rdata_2, rdata_1), in_id)
+        }
       }
     }
   }
