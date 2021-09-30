@@ -17,6 +17,9 @@ emu: sim-verilog
 emu-direct:
 	cd $(ZHOUSHAN_HOME)/difftest && $(MAKE) WITH_DRAMSIM3=1 EMU_TRACE=1 emu -j
 
+soc: sim-verilog
+	/bin/bash ./test.sh -n
+
 help:
 	mill -i Zhoushan.runMain zhoushan.TopMain --help
 
