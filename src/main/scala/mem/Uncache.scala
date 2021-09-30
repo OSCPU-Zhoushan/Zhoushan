@@ -24,6 +24,7 @@ class Uncache(id: Int) extends Module with ZhoushanConfig {
   val wen   = RegInit(false.B)
   val size  = RegInit(0.U(2.W))
   val in_id = RegInit(0.U(AxiParameters.AxiIdWidth.W))
+  val in_user = RegInit(0.U(CacheBusParameters.CacheBusUserWidth.W))
 
   // registers for resp
   val rdata_1 = RegInit(0.U(32.W))
@@ -43,6 +44,7 @@ class Uncache(id: Int) extends Module with ZhoushanConfig {
         wen   := in.req.bits.wen
         size  := in.req.bits.size
         in_id := in.req.bits.id
+        in_user := in.req.bits.user
         state := s_req_1
         if (DebugUncache) {
           printf("%d: [UN $ ] [REQ ] addr=%x size=%x id=%x\n", DebugTimer(),
@@ -101,7 +103,7 @@ class Uncache(id: Int) extends Module with ZhoushanConfig {
   out.resp.ready       := (state === s_wait_1 || state === s_wait_2)
   in.resp.valid        := (state === s_complete)
   in.resp.bits.id      := in_id
-  in.resp.bits.user    := 0.U
+  in.resp.bits.user    := in_user
 
   if (TargetOscpuSoc) {
     out.req.bits.addr  := Mux(state === s_req_1, addr, addr + 4.U)
