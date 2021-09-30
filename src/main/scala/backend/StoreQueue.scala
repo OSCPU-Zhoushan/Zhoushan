@@ -35,6 +35,8 @@ class StoreQueue extends Module with ZhoushanConfig {
   val empty = (enq_ptr.value === deq_ptr.value) && !maybe_full
   val full = (enq_ptr.value === deq_ptr.value) && maybe_full
 
+  BoringUtils.addSource(empty, "sq_empty")
+
   /* ---------- State Machine -------- */
 
   val deq_idle :: deq_wait :: Nil = Enum(2)
