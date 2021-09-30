@@ -56,8 +56,8 @@ class Lsu extends Module {
 
   st_req.bits.addr  := Mux(mmio, addr, Cat(addr(31, 3), Fill(3, 0.U)))
   st_req.bits.ren   := false.B
-  st_req.bits.wdata := Mux(mmio, wdata, (wdata << (addr_offset << 3))(63, 0))
-  st_req.bits.wmask := Mux(mmio, wmask, mask & ((wmask << addr_offset)(7, 0)))
+  st_req.bits.wdata := (wdata << (addr_offset << 3))(63, 0)
+  st_req.bits.wmask := mask & ((wmask << addr_offset)(7, 0))
   st_req.bits.wen   := true.B
   st_req.bits.size  := Mux(mmio, uop.mem_size, Constant.MEM_DWORD)
   st_req.bits.user  := 0.U

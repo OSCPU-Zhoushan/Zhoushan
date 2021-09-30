@@ -32,7 +32,7 @@ class Uncache(id: Int) extends Module with ZhoushanConfig {
 
   // if target is SoC, split 64-bit request into 2 32-bit requests
   val req_split = WireInit(false.B)
-  req_split := (size === "b11".U)
+  req_split := (size === "b11".U) && (addr(2, 0) === 0.U)
 
   switch (state) {
     is (s_idle) {
@@ -45,7 +45,11 @@ class Uncache(id: Int) extends Module with ZhoushanConfig {
         size  := in.req.bits.size
         in_id := in.req.bits.id
         in_user := in.req.bits.user
-        state := s_req_1
+
+        rdata_1 := 0.U
+        rdata_2 := 0.U
+        state := Mux(addr(2) === 0.U, s_req_1, s_req_2)
+
         if (DebugUncache) {
           printf("%d: [UN $ ] [REQ ] addr=%x size=%x id=%x\n", DebugTimer(),
                  in.req.bits.addr, in.req.bits.size, in.req.bits.id)
@@ -60,13 +64,7 @@ class Uncache(id: Int) extends Module with ZhoushanConfig {
     is (s_wait_1) {
       when (out.resp.fire()) {
         rdata_1 := out.resp.bits.rdata(31, 0)
-        if (TargetOscpuSoc) {
-          rdata_2 := 0.U
-          state := Mux(req_split, s_req_2, s_complete)
-        } else {
-          rdata_2 := out.resp.bits.rdata(63, 32)
-          state := s_complete
-        }
+        state := Mux(req_split, s_req_2, s_complete)
       }
     }
     is (s_req_2) {
@@ -76,7 +74,7 @@ class Uncache(id: Int) extends Module with ZhoushanConfig {
     }
     is (s_wait_2) {
       when (out.resp.fire()) {
-        rdata_2 := out.resp.bits.rdata(31, 0)
+        rdata_2 := out.resp.bits.rdata(63, 32)
         state := s_complete
       }
     }
@@ -102,25 +100,20 @@ class Uncache(id: Int) extends Module with ZhoushanConfig {
 
   out.resp.ready       := (state === s_wait_1 || state === s_wait_2)
   in.resp.valid        := (state === s_complete)
+  in.resp.bits.rdata   := Cat(rdata_2, rdata_1)
   in.resp.bits.id      := in_id
   in.resp.bits.user    := in_user
 
   if (TargetOscpuSoc) {
-    out.req.bits.addr  := Mux(state === s_req_1, addr, addr + 4.U)
-    out.req.bits.wdata := Mux(state === s_req_1, wdata(31, 0), wdata(63, 32))
-    out.req.bits.wmask := Mux(state === s_req_1, wmask(3, 0), wmask(7, 4))
-    out.req.bits.size    := Mux(req_split, "b10".U, size)
-
-    in.resp.bits.rdata := Cat(rdata_2, rdata_1)
+    out.req.bits.addr  := Mux(req_split && (state === s_req_2), addr + 4.U, addr)
+    out.req.bits.wdata := wdata
+    out.req.bits.wmask := wmask
+    out.req.bits.size  := Mux(req_split, "b10".U, size)
   } else {
-    val addr_offset = addr(2, 0)
-    val mask = ("b11111111".U << addr_offset)(7, 0)
     out.req.bits.addr  := Cat(addr(31, 3), Fill(3, 0.U))
-    out.req.bits.wdata := (wdata << (addr_offset << 3))(63, 0)
-    out.req.bits.wmask := mask & ((wmask << addr_offset)(7, 0))
+    out.req.bits.wdata := wdata
+    out.req.bits.wmask := wmask
     out.req.bits.size  := "b11".U
-
-    in.resp.bits.rdata := Cat(rdata_2, rdata_1) >> (addr_offset << 3)
   }
 
 }
