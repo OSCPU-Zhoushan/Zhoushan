@@ -44,21 +44,9 @@ class Lsu extends Module {
   val addr_offset = addr(2, 0)
   val wdata = in2
 
-  val mmio = RegInit(false.B)
-  when (uop.valid) {
-    mmio := (addr(31) === 0.U)
-  }
+  val mmio = (addr(31) === 0.U)
 
-  val mask = MuxLookup(addr_offset, 0.U, Array(
-    "b000".U -> "b11111111".U(8.W),
-    "b001".U -> "b11111110".U(8.W),
-    "b010".U -> "b11111100".U(8.W),
-    "b011".U -> "b11111000".U(8.W),
-    "b100".U -> "b11110000".U(8.W),
-    "b101".U -> "b11100000".U(8.W),
-    "b110".U -> "b11000000".U(8.W),
-    "b111".U -> "b10000000".U(8.W)
-  ))
+  val mask = ("b11111111".U << addr_offset)(7, 0)
   val wmask = MuxLookup(uop.mem_size, 0.U, Array(
     MEM_BYTE  -> "b00000001".U(8.W),
     MEM_HALF  -> "b00000011".U(8.W),
@@ -66,11 +54,12 @@ class Lsu extends Module {
     MEM_DWORD -> "b11111111".U(8.W)
   ))
 
-  st_req.bits.addr  := Cat(addr(31, 3), Fill(3, 0.U))
+  st_req.bits.addr  := Mux(mmio, addr, Cat(addr(31, 3), Fill(3, 0.U)))
   st_req.bits.ren   := false.B
   st_req.bits.wdata := (wdata << (addr_offset << 3))(63, 0)
   st_req.bits.wmask := mask & ((wmask << addr_offset)(7, 0))
   st_req.bits.wen   := true.B
+  st_req.bits.size  := Mux(mmio, uop.mem_size, Constant.MEM_DWORD)
   st_req.bits.user  := 0.U
   st_req.bits.id    := 0.U
   st_req.valid      := uop.valid && (state === s_idle) &&
@@ -78,11 +67,12 @@ class Lsu extends Module {
 
   st_resp.ready     := st_resp.valid
 
-  ld_req.bits.addr  := Cat(addr(31, 3), Fill(3, 0.U))
+  ld_req.bits.addr  := Mux(mmio, addr, Cat(addr(31, 3), Fill(3, 0.U)))
   ld_req.bits.ren   := true.B
   ld_req.bits.wdata := 0.U
   ld_req.bits.wmask := 0.U
   ld_req.bits.wen   := false.B
+  ld_req.bits.size  := Mux(mmio, uop.mem_size, Constant.MEM_DWORD)
   ld_req.bits.user  := 0.U
   ld_req.bits.id    := 0.U
   ld_req.valid      := uop.valid && (state === s_idle) &&

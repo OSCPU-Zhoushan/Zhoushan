@@ -7,6 +7,8 @@ trait CacheBusParameters {
   val CacheBusUserWidth = 64 + ZhoushanConfig.FetchWidth * 2
 }
 
+object CacheBusParameters extends CacheBusParameters { }
+
 trait CacheBusId extends Bundle with AxiParameters {
   val id = Output(UInt(AxiIdWidth.W))
 }
@@ -21,6 +23,7 @@ class CacheBusReq extends Bundle with CacheBusId with CacheBusUser {
   val wdata = Output(UInt(AxiDataWidth.W))
   val wmask = Output(UInt((AxiDataWidth / 8).W))
   val wen = Output(Bool())
+  val size = Output(UInt(2.W))
 }
 
 class CacheBusResp extends Bundle with CacheBusId with CacheBusUser {

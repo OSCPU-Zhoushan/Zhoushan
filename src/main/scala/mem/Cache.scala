@@ -2,6 +2,7 @@ package zhoushan
 
 import chisel3._
 import chisel3.util._
+import chisel3.util.experimental._
 
 /* Cache configuration
  * 1xxx xxxx xxxx xxxx xxxx xxxx xxxx xxxx
@@ -270,7 +271,7 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
   out.req.bits.wlast := (state === s_miss_req_w2)
   out.req.bits.wen := (state === s_miss_req_w1) || (state === s_miss_req_w2)
   out.req.bits.len := 1.U
-  out.req.bits.size := 1.U
+  out.req.bits.size := Constant.MEM_DWORD
   out.resp.ready := (state === s_miss_wait_r) || (state === s_miss_wait_w)
 
   if ((DebugICache && id == 1) || (DebugDCache && id == 2)) {
@@ -291,7 +292,7 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
     }
   }
 
-  // state machine
+  /* ----- State Machine ------------- */
 
   switch (state) {
     is (s_idle) {
@@ -395,5 +396,14 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
   when (pipeline_fire) {
     state := Mux(s1_valid, s_idle, s_invalid)
   }
+
+  /* ----- Fence.I ------------------- */
+
+  val fence_i = WireInit(false.B)
+  BoringUtils.addSink(fence_i, "fence_i")
+
+  val sq_empty = WireInit(false.B)
+  BoringUtils.addSink(sq_empty, "sq_empty")
+
 
 }

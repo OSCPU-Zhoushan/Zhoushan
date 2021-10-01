@@ -136,7 +136,7 @@ class Execution extends Module with ZhoushanConfig {
 }
 
 // Execution Pipe 0
-//   1 ALU + 1 CSR
+//   1 ALU + 1 CSR + 1 FENCEI
 class ExPipe0 extends Module {
   val io = IO(new Bundle {
     // input
@@ -156,7 +156,15 @@ class ExPipe0 extends Module {
   csr.io.uop := io.uop
   csr.io.in1 := io.in1
 
-  io.ecp := Mux(io.uop.fu_code === FU_CSR, csr.io.ecp, alu.io.ecp)
+  val fence = Module(new Fence)
+  fence.io.uop := io.uop
+
+  io.ecp := 0.U.asTypeOf(new ExCommitPacket)
+  when (io.uop.fu_code === FU_ALU || io.uop.fu_code === FU_JMP) {
+    io.ecp := alu.io.ecp
+  } .elsewhen (io.uop.fu_code === FU_SYS && io.uop.sys_code =/= SYS_FENCE && io.uop.sys_code =/= SYS_FENCEI) {
+    io.ecp := csr.io.ecp
+  }
 }
 
 // Execution Pipe 1

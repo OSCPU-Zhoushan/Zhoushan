@@ -22,7 +22,7 @@ class IssueUnit extends Module with ZhoushanConfig {
     // from ex stage
     val lsu_ready = Input(Bool())
     // from rob
-    val csr_ready = Input(Bool())
+    val sys_ready = Input(Bool())
   })
 
   val int_iq = Module(new IntIssueQueueOutOfOrder(entries = IntIssueQueueSize, enq_width = DecodeWidth, deq_width = IssueWidth - 1))
@@ -59,10 +59,10 @@ class IssueUnit extends Module with ZhoushanConfig {
 
   int_iq.io.in.bits.vec := uop_int
   int_iq.io.in.valid := io.in.valid && Cat(uop_int.map(_.valid)).orR && mem_iq.io.in.ready
-  int_iq.io.csr_ready := io.csr_ready
+  int_iq.io.sys_ready := io.sys_ready
   mem_iq.io.in.bits.vec := uop_mem
   mem_iq.io.in.valid := io.in.valid && Cat(uop_mem.map(_.valid)).orR && int_iq.io.in.ready
-  mem_iq.io.csr_ready := false.B
+  mem_iq.io.sys_ready := false.B
 
   for (i <- 0 until IssueWidth - 1) {
     io.out(i) := int_iq.io.out(i)
@@ -86,7 +86,7 @@ abstract class AbstractIssueQueue(entries: Int, enq_width: Int, deq_width: Int)
     // from ex stage
     val fu_ready = Input(Bool())
     // from rob
-    val csr_ready = Input(Bool())
+    val sys_ready = Input(Bool())
   })
 
 }
@@ -114,11 +114,11 @@ abstract class AbstractIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_wi
 class IntIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_width: Int)
     extends AbstractIssueQueueOutOfOrder(entries, enq_width, deq_width) {
 
-  val is_csr = Wire(Vec(entries, Bool()))
+  val is_sys = Wire(Vec(entries, Bool()))
   for (i <- 0 until entries) {
-    is_csr(i) := (buf(i).fu_code === Constant.FU_CSR)
+    is_sys(i) := (buf(i).fu_code === Constant.FU_SYS)
   }
-  val has_csr = Cat(is_csr).orR
+  val has_sys = Cat(is_sys).orR
 
   /* ---------- deq ------------ */
 
@@ -132,9 +132,9 @@ class IntIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_width: Int)
     val rs2_avail = io.avail_list(buf(i).rs2_paddr)
     val fu_ready = io.fu_ready
     if (i == 0) {
-      ready_list(i) := rs1_avail && rs2_avail && fu_ready && (!is_csr(i) || (is_csr(i) && io.csr_ready))
+      ready_list(i) := rs1_avail && rs2_avail && fu_ready && (!is_sys(i) || (is_sys(i) && io.sys_ready))
     } else {
-      ready_list(i) := rs1_avail && rs2_avail && fu_ready && !is_csr(i)
+      ready_list(i) := rs1_avail && rs2_avail && fu_ready && !is_sys(i)
     }
   }
 
@@ -209,7 +209,7 @@ class IntIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_width: Int)
     enq_vec := next_enq_vec
   }
 
-  io.in.ready := enq_ready && !has_csr
+  io.in.ready := enq_ready && !has_sys
 
   /* ---------- flush ---------- */
 
@@ -222,7 +222,7 @@ class IntIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_width: Int)
 
   if (DebugIntIssueQueue) {
     for (i <- 0 until entries / 8) {
-      printf("%d: [IQ - I] ", DebugTimer());
+      printf("%d: [IQ - I] ", DebugTimer())
       for (j <- 0 until 8) {
         val idx = i * 8 + j
         printf("%d-%x(%x)\t", idx.U, buf(idx).pc, buf(idx).valid)
@@ -340,7 +340,7 @@ class MemIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_width: Int)
 
   if (DebugMemIssueQueue) {
     for (i <- 0 until entries / 8) {
-      printf("%d: [IQ - I] ", DebugTimer());
+      printf("%d: [IQ - I] ", DebugTimer())
       for (j <- 0 until 8) {
         val idx = i * 8 + j
         printf("%d-%x(%x)\t", idx.U, buf(idx).pc, buf(idx).valid)

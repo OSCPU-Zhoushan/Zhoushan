@@ -26,7 +26,7 @@ trait Constant {
   val FU_X      = 0.asUInt(3.W)
   val FU_ALU    = 1.asUInt(3.W)
   val FU_JMP    = 2.asUInt(3.W)
-  val FU_CSR    = 3.asUInt(3.W)
+  val FU_SYS    = 3.asUInt(3.W)
   val FU_MEM    = 4.asUInt(3.W)
 
   val ALU_X     = 0.asUInt(4.W)
@@ -61,12 +61,14 @@ trait Constant {
   val MEM_WORD  = 2.asUInt(2.W)
   val MEM_DWORD = 3.asUInt(2.W)
 
-  val CSR_X     = 0.asUInt(3.W)
-  val CSR_RW    = 1.asUInt(3.W)
-  val CSR_RS    = 2.asUInt(3.W)
-  val CSR_RC    = 3.asUInt(3.W)
-  val CSR_ECALL = 4.asUInt(3.W)
-  val CSR_MRET  = 5.asUInt(3.W)
+  val SYS_X      = 0.asUInt(3.W)
+  val SYS_CSRRW  = 1.asUInt(3.W)
+  val SYS_CSRRS  = 2.asUInt(3.W)
+  val SYS_CSRRC  = 3.asUInt(3.W)
+  val SYS_ECALL  = 4.asUInt(3.W)
+  val SYS_MRET   = 5.asUInt(3.W)
+  val SYS_FENCE  = 6.asUInt(3.W)
+  val SYS_FENCEI = 7.asUInt(3.W)
 }
 
 object Constant extends Constant { }
@@ -83,7 +85,7 @@ class MicroOp extends Bundle {
   val jmp_code  = UInt(4.W)
   val mem_code  = UInt(2.W)
   val mem_size  = UInt(2.W)
-  val csr_code  = UInt(3.W)
+  val sys_code  = UInt(3.W)
   val w_type    = Bool()
 
   val rs1_src   = UInt(3.W)

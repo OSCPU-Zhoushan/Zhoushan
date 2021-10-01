@@ -61,7 +61,7 @@ class Core extends Module with ZhoushanConfig {
   isu.io.rob_addr := rob.io.rob_addr
   isu.io.flush := flush
   isu.io.avail_list := rename.io.avail_list
-  isu.io.csr_ready := rob.io.csr_ready
+  isu.io.sys_ready := rob.io.sys_ready
 
   stall_reg.io.out.ready := rob.io.in.ready && isu.io.in.ready
 
@@ -144,7 +144,7 @@ class Core extends Module with ZhoushanConfig {
 
     for (i <- 0 until CommitWidth) {
       val skip = (cm(i).inst === Instructions.PUTCH) ||
-                 (cm(i).fu_code === Constant.FU_CSR && cm(i).inst(31, 20) === Csrs.mcycle) ||
+                 (cm(i).fu_code === Constant.FU_SYS && cm(i).inst(31, 20) === Csrs.mcycle) ||
                  cm_mmio(i)
 
       val dt_ic = Module(new DifftestInstrCommit)

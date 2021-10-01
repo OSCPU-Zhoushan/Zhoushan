@@ -1,7 +1,5 @@
 package zhoushan
 
-import chisel3.util._
-
 trait ZhoushanConfig {
   // MMIO Address Map
   val ClintAddrBase = 0x02000000
@@ -28,12 +26,12 @@ trait ZhoushanConfig {
   // Settings
   val TargetOscpuSoc = false
   val EnableDifftest = !TargetOscpuSoc
-  val EnableMisRateCounter = EnableDifftest
+  val EnableMisRateCounter = false
   val EnableQueueAnalyzer = false
-  val EnableOscpuSocAxi = TargetOscpuSoc
   val ResetPc = if (TargetOscpuSoc) "h30000000" else "h80000000"
   val OscpuId = "000000"
   // Debug Info
+  val DebugInstBuffer = false
   val DebugRename = false
   val DebugRenameVerbose = false
   val DebugIntIssueQueue = false
@@ -45,10 +43,12 @@ trait ZhoushanConfig {
   val DebugStoreQueue = false
   val DebugICache = false
   val DebugDCache = false
+  val DebugUncache = false
   val DebugBranchPredictorRas = false
   val DebugBranchPredictorBtb = false
   val DebugArchEvent = false
   val DebugClint = false
+  val DebugCrossbar1to2 = false
 }
 
 object ZhoushanConfig extends ZhoushanConfig { }

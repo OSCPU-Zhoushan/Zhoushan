@@ -17,12 +17,11 @@ emu: sim-verilog
 emu-direct:
 	cd $(ZHOUSHAN_HOME)/difftest && $(MAKE) WITH_DRAMSIM3=1 EMU_TRACE=1 emu -j
 
-help:
-	mill -i Zhoushan.runMain zhoushan.TopMain --help
-
 soc: sim-verilog
 	/bin/bash ./test.sh -n
-	cd $(ZHOUSHAN_HOME)/difftest && $(MAKE) EMU_TRACE=1 SIM_SOC=1 emu -j
+
+help:
+	mill -i Zhoushan.runMain zhoushan.TopMain --help
 
 clean:
 	-rm -rf $(BUILD_DIR)

@@ -156,7 +156,7 @@ class RenameTable extends Module with ZhoushanConfig {
 
   if (DebugRenameVerbose) {
     for (i <- 0 until 32 / 8) {
-      printf("%d: [RR RT] ", DebugTimer());
+      printf("%d: [RR RT] ", DebugTimer())
       for (j <- 0 until 8) {
         val idx = i * 8 + j
         printf("%d-%d(%d)\t", idx.U, spec_table(idx), arch_table(idx))
@@ -235,7 +235,7 @@ class PrfStateTable extends Module with PrfStateConstant with ZhoushanConfig {
 
   if (DebugRenameVerbose) {
     for (i <- 0 until PrfSize / 16) {
-      printf("%d: [RRPST] ", DebugTimer());
+      printf("%d: [RRPST] ", DebugTimer())
       for (j <- 0 until 16) {
         val idx = i * 16 + j
         printf("%d-%d\t", idx.U, table(idx))
