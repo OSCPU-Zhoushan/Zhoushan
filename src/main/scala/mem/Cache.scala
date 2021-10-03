@@ -150,6 +150,19 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
   val pipeline_ready = WireInit(false.B)
   val pipeline_fire  = pipeline_valid && pipeline_ready
 
+  /* ----- Fence Ctrl Signals -------- */
+
+  val fence_i = WireInit(false.B)
+  BoringUtils.addSink(fence_i, "fence_i")
+
+  val sq_empty = WireInit(false.B)
+  BoringUtils.addSink(sq_empty, "sq_empty")
+
+  val fi_finish = WireInit(false.B)
+  val fi_valid = BoolStopWatch(fence_i, fi_finish)
+  val fi_ready = pipeline_ready && sq_empty
+  val fi_fire = fi_valid && fi_ready
+
   /* ----- Cache Stage 1 ------------- */
 
   val s1_addr  = in.req.bits.addr
@@ -256,8 +269,6 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
   /* ----- Pipeline Ctrl Signals ----- */
 
   val s2_hit_real = Mux(RegNext(pipeline_fire), s2_hit, s2_reg_hit)
-  val s2_dirty_real = Mux(RegNext(pipeline_fire), s2_dirty, s2_reg_dirty)
-
   val hit_ready = s2_hit_real &&
                   Mux(s2_wen, state === s_complete, state === s_idle)
   val miss_ready = (state === s_complete)
@@ -269,8 +280,8 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
   /* ----- Handshake Signals --------- */
 
   // handshake signals with IF unit
-  in.req.ready := pipeline_ready
-  in.resp.valid := (s2_hit_real && !s2_wen && (state =/= s_invalid)) || (state === s_complete)
+  in.req.ready := pipeline_ready && !fi_valid
+  in.resp.valid := ((s2_hit_real && !s2_wen && (state =/= s_invalid)) || (state === s_complete))
   in.resp.bits.rdata := 0.U
   in.resp.bits.user := s2_user
   in.resp.bits.id := s2_id
@@ -402,12 +413,6 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
 
   /* ----- Fence.I ------------------- */
 
-  val fence_i = WireInit(false.B)
-  BoringUtils.addSink(fence_i, "fence_i")
-
-  val sq_empty = WireInit(false.B)
-  BoringUtils.addSink(sq_empty, "sq_empty")
-
   /* Fence.I timing sequence example
    *  # fence_i sq_empty fi_valid fi_ready fi_finish
    *  1       1        0        0        0         0
@@ -416,11 +421,6 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
    *  4       0        1        1        1         1
    *  5       0        1        0        1         0
    */
-
-  val fi_finish = WireInit(false.B)
-  val fi_valid = BoolStopWatch(fence_i, fi_finish)
-  val fi_ready = pipeline_ready && sq_empty
-  val fi_fire = fi_valid && fi_ready
 
   // D$ Fence.I state machine
   val fi_idle   :: fi_dirty_check :: fi_req_w1   :: fi1 = Enum(6)
@@ -433,9 +433,14 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
   val fi_line_idx = fi_counter(5, 0)
 
   // D$ clear wdata & tag
-  val fi_wdata = sram_out(fi_sram_idx)
-  val fi_tag = tag_out(fi_sram_idx)
+  val fi_update = (fi_state === fi_req_w1) && (RegNext(fi_state === fi_dirty_check))
+  val fi_wdata = HoldUnless(sram_out(fi_sram_idx), fi_update)
+  val fi_tag = HoldUnless(tag_out(fi_sram_idx), fi_update)
   val fi_wb_addr = Cat(1.U, fi_tag, fi_line_idx, Fill(4, 0.U))
+
+  when (fi_fire) {
+    state := s_invalid
+  }
 
   if (id == InstCacheId) {
     // I$ is ready to accept req only when D$ completes Fence.I
