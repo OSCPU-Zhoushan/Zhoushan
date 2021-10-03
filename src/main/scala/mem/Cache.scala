@@ -435,6 +435,7 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
   // D$ clear wdata & tag
   val fi_wdata = sram_out(fi_sram_idx)
   val fi_tag = tag_out(fi_sram_idx)
+  val fi_wb_addr = Cat(1.U, fi_tag, fi_line_idx, Fill(4, 0.U))
 
   if (id == InstCacheId) {
     // I$ is ready to accept req only when D$ completes Fence.I
@@ -525,21 +526,50 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
   /* ----- Handshake Signals --------- */
 
   // handshake signals with memory
-  out.req.valid := (state === s_miss_req_r) || (state === s_miss_req_w1) || (state === s_miss_req_w2)
+  out.req.valid := (state === s_miss_req_r) ||
+                   (state === s_miss_req_w1) ||
+                   (state === s_miss_req_w2) ||
+                   (fi_state === fi_req_w1) ||
+                   (fi_state === fi_req_w2)
   out.req.bits.id := id.U
-  out.req.bits.addr := Mux(state === s_miss_req_r,
-                           Cat(s2_addr(31, 4), Fill(4, 0.U)),
-                           Cat(wb_addr(31, 4), Fill(4, 0.U)))
-  out.req.bits.aen := (state === s_miss_req_r) || (state === s_miss_req_w1)
+  out.req.bits.addr := 0.U
+  when (state === s_miss_req_r) {
+    out.req.bits.addr := Cat(s2_addr(31, 4), Fill(4, 0.U))
+  }
+  when (state === s_miss_req_w1) {
+    out.req.bits.addr := Cat(wb_addr(31, 4), Fill(4, 0.U))
+  }
+  when (fi_state === fi_req_w1) {
+    out.req.bits.addr := Cat(fi_wb_addr(31, 4), Fill(4, 0.U))
+  }
+  out.req.bits.aen := (state === s_miss_req_r) ||
+                      (state === s_miss_req_w1) ||
+                      (fi_state === fi_req_w1)
   out.req.bits.ren := (state === s_miss_req_r)
-  out.req.bits.wdata := Mux(state === s_miss_req_w1,
-                            s2_reg_dat_w(63, 0),
-                            s2_reg_dat_w(127, 64))
+  out.req.bits.wdata := 0.U
+  when (state === s_miss_req_w1) {
+    out.req.bits.wdata := s2_reg_dat_w(63, 0)
+  }
+  when (state === s_miss_req_w2) {
+    out.req.bits.wdata := s2_reg_dat_w(127, 64)
+  }
+  when (fi_state === fi_req_w1) {
+    out.req.bits.wdata := fi_wdata(63, 0)
+  }
+  when (fi_state === fi_req_w2) {
+    out.req.bits.wdata := fi_wdata(127, 64)
+  }
   out.req.bits.wmask := "hff".U(8.W)
-  out.req.bits.wlast := (state === s_miss_req_w2)
-  out.req.bits.wen := (state === s_miss_req_w1) || (state === s_miss_req_w2)
+  out.req.bits.wlast := (state === s_miss_req_w2) ||
+                        (fi_state === fi_req_w2)
+  out.req.bits.wen := (state === s_miss_req_w1) ||
+                      (state === s_miss_req_w2) ||
+                      (fi_state === fi_req_w1) ||
+                      (fi_state === fi_req_w2)
   out.req.bits.len := 1.U
   out.req.bits.size := Constant.MEM_DWORD
-  out.resp.ready := (state === s_miss_wait_r) || (state === s_miss_wait_w)
+  out.resp.ready := (state === s_miss_wait_r) ||
+                    (state === s_miss_wait_w) ||
+                    (fi_state === fi_wait_w)
 
 }
