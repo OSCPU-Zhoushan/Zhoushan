@@ -58,8 +58,8 @@ class BranchPredictor extends Module with BpParameters with ZhoushanConfig {
 
   val jmp_packet = WireInit(0.U.asTypeOf(new JmpPacket))
   jmp_packet := io.jmp_packet
-  // for interrupt, don't update branch predictor
-  jmp_packet.valid := io.jmp_packet.valid && !io.jmp_packet.intr
+  // for system jump (e.g. interrupt, fence.i), don't update branch predictor
+  jmp_packet.valid := io.jmp_packet.valid && !io.jmp_packet.sys
 
   val pred_br = WireInit(VecInit(Seq.fill(FetchWidth)(false.B)))
   val pred_bpc = WireInit(VecInit(Seq.fill(FetchWidth)(0.U(32.W))))

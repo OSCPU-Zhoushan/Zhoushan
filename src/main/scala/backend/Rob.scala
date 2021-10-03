@@ -279,7 +279,7 @@ class Rob extends Module with ZhoushanConfig {
       io.jmp_packet.jmp     := deq_ecp(i).jmp
       io.jmp_packet.jmp_pc  := deq_ecp(i).jmp_pc
       io.jmp_packet.mis     := deq_ecp(i).mis
-      io.jmp_packet.intr    := false.B
+      io.jmp_packet.sys     := (deq_uop(i).fu_code === FU_SYS) && (deq_uop(i).sys_code === SYS_FENCEI)
 
       // debug info
       io.jmp_packet.pred_br := deq_uop(i).pred_br
@@ -313,16 +313,16 @@ class Rob extends Module with ZhoushanConfig {
     io.jmp_packet.jmp     := true.B
     io.jmp_packet.jmp_pc  := intr_jmp_pc
     io.jmp_packet.mis     := true.B
-    io.jmp_packet.intr    := true.B
+    io.jmp_packet.sys     := true.B
     io.jmp_packet.pred_br := false.B
     io.jmp_packet.pred_bpc := 0.U
   }
 
   if (DebugJmpPacket) {
     when (io.jmp_packet.valid) {
-      printf("%d: [ JMP ] pc=%x pred=%x->%x real=%x->%x mis=%x intr=%x\n", DebugTimer(),
+      printf("%d: [ JMP ] pc=%x pred=%x->%x real=%x->%x mis=%x sys=%x\n", DebugTimer(),
              io.jmp_packet.inst_pc, io.jmp_packet.pred_br, io.jmp_packet.pred_bpc,
-             io.jmp_packet.jmp, io.jmp_packet.jmp_pc, io.jmp_packet.mis, io.jmp_packet.intr)
+             io.jmp_packet.jmp, io.jmp_packet.jmp_pc, io.jmp_packet.mis, io.jmp_packet.sys)
     }
   }
 
