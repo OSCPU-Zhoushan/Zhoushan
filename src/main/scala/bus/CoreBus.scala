@@ -119,4 +119,17 @@ class CoreBus2Axi[OT <: OscpuSocAxiIO](out_type: OT) extends Module with AxiPara
     in.resp.bits.rlast := false.B
   }
 
+  if (ZhoushanConfig.DebugCoreBus) {
+    when (in.req.fire()) {
+      val r = in.req.bits
+      printf("%d: [CoreB] [REQ ] addr=%x aen=%x ren=%x wdata=%x wmask=%x wlast=%x wen=%x len=%x size=%x id=%x\n", DebugTimer(),
+             r.addr, r.aen, r.ren, r.wdata, r.wmask, r.wlast, r.wen, r.len, r.size, r.id)
+    }
+    when (in.resp.fire()) {
+      val r = in.resp.bits
+      printf("%d: [CoreB] [RESP] rdata=%x wresp=%x rlast=%x id=%x\n", DebugTimer(),
+             r.rdata, r.wresp, r.rlast, r.id)
+    }
+  }
+
 }

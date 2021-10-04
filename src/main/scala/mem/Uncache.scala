@@ -48,7 +48,7 @@ class Uncache(id: Int) extends Module with ZhoushanConfig {
 
         rdata_1 := 0.U
         rdata_2 := 0.U
-        state := Mux(addr(2) === 0.U, s_req_1, s_req_2)
+        state := Mux(in.req.bits.addr(2) === 0.U, s_req_1, s_req_2)
 
         if (DebugUncache) {
           printf("%d: [UN $ ] [REQ ] addr=%x size=%x id=%x\n", DebugTimer(),
@@ -74,7 +74,11 @@ class Uncache(id: Int) extends Module with ZhoushanConfig {
     }
     is (s_wait_2) {
       when (out.resp.fire()) {
-        rdata_2 := out.resp.bits.rdata(63, 32)
+        if (TargetOscpuSoc) {
+          rdata_2 := out.resp.bits.rdata(31, 0)
+        } else {
+          rdata_2 := out.resp.bits.rdata(63, 32)
+        }
         state := s_complete
       }
     }

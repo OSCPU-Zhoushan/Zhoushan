@@ -26,7 +26,7 @@ class InstFetch extends Module with ZhoushanConfig {
   val mis_pc = Mux(io.jmp_packet.jmp, io.jmp_packet.jmp_pc, io.jmp_packet.inst_pc + 4.U)
 
   val reg_mis = RegInit(false.B)                  // store branch mis-predict status
-  when (mis && !empty) {
+  when (mis && (!empty || req.fire())) {
     reg_mis := true.B
   } .elsewhen (resp.fire() && !mis) {
     reg_mis := false.B

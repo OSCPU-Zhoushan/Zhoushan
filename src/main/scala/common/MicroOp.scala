@@ -111,26 +111,3 @@ class MicroOp extends Bundle {
   // re-order buffer related
   val rob_addr  = UInt(log2Up(ZhoushanConfig.RobSize).W)
 }
-
-object RasConstant {
-  val RAS_X             = 0.asUInt(2.W)
-  val RAS_PUSH          = 1.asUInt(2.W)
-  val RAS_POP           = 2.asUInt(2.W)
-  val RAS_POP_THEN_PUSH = 3.asUInt(2.W)
-
-  def isRasPush(x: UInt): Bool = x(0) === 1.U
-  def isRasPop(x: UInt): Bool = x(1) === 1.U
-}
-
-class JmpPacket extends Bundle {
-  val valid = Bool()
-  val inst_pc = UInt(32.W)
-  val jmp = Bool()
-  val jmp_pc = UInt(32.W)
-  val mis = Bool()
-  val intr = Bool()
-  val ras_type = UInt(2.W)
-  // debug info
-  val pred_br = Bool()
-  val pred_bpc = UInt(32.W)
-}

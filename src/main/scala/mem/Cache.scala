@@ -22,6 +22,11 @@ class Meta extends Module {
     val dirty_w = Input(Bool())
     val dirty_wen = Input(Bool())
     val valid_r = Output(Bool())
+    // I$/D$ fence.I cache invalidate input
+    val invalidate = Input(Bool())
+    // D$ dirty check output
+    val dirty_r_async = Output(Bool())
+    val valid_r_async = Output(Bool())
   })
 
   // tag = addr(30, 10)
@@ -54,6 +59,17 @@ class Meta extends Module {
 
   val valid_r = RegNext(valid(idx))
   io.valid_r := valid_r
+
+  when (io.invalidate) {
+    for (i <- 0 until 64) {
+      dirty(i) := false.B
+      valid(i) := false.B
+    }
+  }
+
+  // async read
+  io.dirty_r_async := dirty(idx)
+  io.valid_r_async := valid(idx)
 
 }
 
@@ -99,6 +115,7 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
     m.io.tag_wen := false.B
     m.io.dirty_w := false.B
     m.io.dirty_wen := false.B
+    m.io.invalidate := false.B
   }}
 
   (sram_out  zip sram).map { case (o, s) => { o := s.io.rdata }}
@@ -132,6 +149,19 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
   val pipeline_valid = WireInit(false.B)
   val pipeline_ready = WireInit(false.B)
   val pipeline_fire  = pipeline_valid && pipeline_ready
+
+  /* ----- Fence Ctrl Signals -------- */
+
+  val fence_i = WireInit(false.B)
+  BoringUtils.addSink(fence_i, "fence_i")
+
+  val sq_empty = WireInit(false.B)
+  BoringUtils.addSink(sq_empty, "sq_empty")
+
+  val fi_finish = WireInit(false.B)
+  val fi_valid = BoolStopWatch(fence_i, fi_finish)
+  val fi_ready = pipeline_ready && sq_empty
+  val fi_fire = fi_valid && fi_ready
 
   /* ----- Cache Stage 1 ------------- */
 
@@ -230,17 +260,12 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
   replace_way := Cat(plru0(s2_idx),
                      Mux(plru0(s2_idx) === 0.U, plru1(s2_idx), plru2(s2_idx)))
 
-  // generate the write-back address by concatenating the tag stored in meta
-  // data array and s2_idx
-  val wb_addr = Cat(1.U, s2_reg_tag_r, s2_idx, Fill(4, 0.U))
   val wdata1 = RegInit(UInt(64.W), 0.U)           // cacheline(63, 0)
   val wdata2 = RegInit(UInt(64.W), 0.U)           // cacheline(127, 64)
 
   /* ----- Pipeline Ctrl Signals ----- */
 
   val s2_hit_real = Mux(RegNext(pipeline_fire), s2_hit, s2_reg_hit)
-  val s2_dirty_real = Mux(RegNext(pipeline_fire), s2_dirty, s2_reg_dirty)
-
   val hit_ready = s2_hit_real &&
                   Mux(s2_wen, state === s_complete, state === s_idle)
   val miss_ready = (state === s_complete)
@@ -249,30 +274,16 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
   pipeline_valid := true.B
   pipeline_ready := ((hit_ready || miss_ready) && in.resp.ready) || invalid_ready
 
+  /* ----- Handshake Signals --------- */
+
   // handshake signals with IF unit
-  in.req.ready := pipeline_ready
-  in.resp.valid := (s2_hit_real && !s2_wen && (state =/= s_invalid)) || (state === s_complete)
+  in.req.ready := pipeline_ready && !fi_valid
+  in.resp.valid := ((s2_hit_real && !s2_wen && (state =/= s_invalid)) || (state === s_complete))
   in.resp.bits.rdata := 0.U
   in.resp.bits.user := s2_user
   in.resp.bits.id := s2_id
 
-  // handshake signals with memory
-  out.req.valid := (state === s_miss_req_r) || (state === s_miss_req_w1) || (state === s_miss_req_w2)
-  out.req.bits.id := id.U
-  out.req.bits.addr := Mux(state === s_miss_req_r,
-                           Cat(s2_addr(31, 4), Fill(4, 0.U)),
-                           Cat(wb_addr(31, 4), Fill(4, 0.U)))
-  out.req.bits.aen := (state === s_miss_req_r) || (state === s_miss_req_w1)
-  out.req.bits.ren := (state === s_miss_req_r)
-  out.req.bits.wdata := Mux(state === s_miss_req_w1,
-                            s2_reg_dat_w(63, 0),
-                            s2_reg_dat_w(127, 64))
-  out.req.bits.wmask := "hff".U(8.W)
-  out.req.bits.wlast := (state === s_miss_req_w2)
-  out.req.bits.wen := (state === s_miss_req_w1) || (state === s_miss_req_w2)
-  out.req.bits.len := 1.U
-  out.req.bits.size := Constant.MEM_DWORD
-  out.resp.ready := (state === s_miss_wait_r) || (state === s_miss_wait_w)
+  /* ----- Debug Info ---------------- */
 
   if ((DebugICache && id == 1) || (DebugDCache && id == 2)) {
     when (in.req.fire()) {
@@ -399,11 +410,169 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
 
   /* ----- Fence.I ------------------- */
 
-  val fence_i = WireInit(false.B)
-  BoringUtils.addSink(fence_i, "fence_i")
+  /* Fence.I timing sequence example
+   *  # fence_i sq_empty fi_valid fi_ready fi_finish
+   *  1       1        0        0        0         0
+   *  2       0        0        1        0         0
+   *  3       0        1        1        1         0
+   *  4       0        1        1        1         1
+   *  5       0        1        0        1         0
+   */
 
-  val sq_empty = WireInit(false.B)
-  BoringUtils.addSink(sq_empty, "sq_empty")
+  // D$ Fence.I state machine
+  val fi_idle   :: fi_dirty_check :: fi_req_w1   :: fi1 = Enum(6)
+  val fi_req_w2 :: fi_wait_w      :: fi_complete :: Nil = fi1
+  val fi_state = RegInit(fi_idle)
 
+  // D$ clear counter
+  val fi_counter = RegInit(0.U(8.W))
+  val fi_sram_idx = fi_counter(7, 6)
+  val fi_line_idx = fi_counter(5, 0)
+
+  // D$ clear wdata & tag
+  val fi_update = (fi_state === fi_req_w1) && (RegNext(fi_state === fi_dirty_check))
+  val fi_wdata = HoldUnless(sram_out(fi_sram_idx), fi_update)
+  val fi_tag = HoldUnless(tag_out(fi_sram_idx), fi_update)
+
+  when (fi_fire) {
+    state := s_invalid
+  }
+
+  if (id == InstCacheId) {
+    // I$ is ready to accept req only when D$ completes Fence.I
+    val dcache_fi_complete = WireInit(false.B)
+    BoringUtils.addSink(dcache_fi_complete, "dcache_fi_complete")
+
+    // I$ may complete Fence.I request much faster than D$
+    // Thus, whether I$ is ready depends on D$ status
+    fi_finish := dcache_fi_complete
+
+    when (fi_fire) {
+      for (i <- 0 until 4) {
+        meta(i).io.invalidate := true.B
+      }
+    }
+  } else if (id == DataCacheId) {
+    val dcache_fi_complete = WireInit(false.B)
+    BoringUtils.addSource(dcache_fi_complete, "dcache_fi_complete")
+
+    fi_finish := dcache_fi_complete
+
+    val fi_counter_next = fi_counter + 1.U
+
+    when (fi_state === fi_dirty_check) {
+      sram.map { case s => {
+        s.io.en := true.B
+        s.io.addr := fi_line_idx
+      }}
+      meta.map { case m => {
+        m.io.idx := fi_line_idx
+      }}
+    }
+
+    switch (fi_state) {
+      is (fi_idle) {
+        when (fi_fire) {
+          fi_counter := 0.U
+          fi_state := fi_dirty_check
+        }
+      }
+      is (fi_dirty_check) {
+        val is_dirty = WireInit(false.B)
+        for (i <- 0 until 4) {
+          when (fi_sram_idx === i.U) {
+            meta(i).io.idx := fi_line_idx
+            is_dirty := meta(i).io.valid_r_async && meta(i).io.dirty_r_async
+          }
+        }
+        when (is_dirty) {
+          fi_state := fi_req_w1
+        } .otherwise {
+          fi_counter := fi_counter_next
+          when (fi_counter_next === 0.U) {
+            fi_state := fi_complete
+          }
+        }
+      }
+      is (fi_req_w1) {
+        when (out.req.fire()) {
+          fi_state := fi_req_w2
+        }
+      }
+      is (fi_req_w2) {
+        when (out.req.fire()) {
+          fi_state := fi_wait_w
+        }
+      }
+      is (fi_wait_w) {
+        when (out.resp.fire()) {
+          fi_counter := fi_counter_next
+          when (fi_counter_next === 0.U) {
+            fi_state := fi_complete
+          } .otherwise {
+            fi_state := fi_dirty_check
+          }
+        }
+      }
+      is (fi_complete) {
+        dcache_fi_complete := true.B
+        fi_state := fi_idle
+        for (i <- 0 until 4) {
+          meta(i).io.invalidate := true.B
+        }
+      }
+    }
+  }
+
+  /* ----- Handshake Signals --------- */
+
+  // handshake signals with memory
+  out.req.valid := (state === s_miss_req_r) ||
+                   (state === s_miss_req_w1) ||
+                   (state === s_miss_req_w2) ||
+                   (fi_state === fi_req_w1) ||
+                   (fi_state === fi_req_w2)
+  out.req.bits.id := id.U
+  out.req.bits.addr := 0.U
+  when (state === s_miss_req_r) {
+    out.req.bits.addr := Cat(s2_addr(31, 4), Fill(4, 0.U))
+  }
+  when (state === s_miss_req_w1) {
+    // generate the write-back address by concatenating the tag stored in meta
+    // data array and s2_idx
+    out.req.bits.addr := Cat(1.U, s2_reg_tag_r, s2_idx, Fill(4, 0.U))
+  }
+  when (fi_state === fi_req_w1) {
+    out.req.bits.addr := Cat(1.U, fi_tag, fi_line_idx, Fill(4, 0.U))
+  }
+  out.req.bits.aen := (state === s_miss_req_r) ||
+                      (state === s_miss_req_w1) ||
+                      (fi_state === fi_req_w1)
+  out.req.bits.ren := (state === s_miss_req_r)
+  out.req.bits.wdata := 0.U
+  when (state === s_miss_req_w1) {
+    out.req.bits.wdata := s2_reg_dat_w(63, 0)
+  }
+  when (state === s_miss_req_w2) {
+    out.req.bits.wdata := s2_reg_dat_w(127, 64)
+  }
+  when (fi_state === fi_req_w1) {
+    out.req.bits.wdata := fi_wdata(63, 0)
+  }
+  when (fi_state === fi_req_w2) {
+    out.req.bits.wdata := fi_wdata(127, 64)
+  }
+  out.req.bits.wmask := "hff".U(8.W)
+  out.req.bits.wlast := (state === s_miss_req_w2) ||
+                        (fi_state === fi_req_w2)
+  out.req.bits.wen := (state === s_miss_req_w1) ||
+                      (state === s_miss_req_w2) ||
+                      (fi_state === fi_req_w1) ||
+                      (fi_state === fi_req_w2)
+  out.req.bits.len := 1.U
+  out.req.bits.size := Constant.MEM_DWORD
+  out.resp.ready := (state === s_miss_wait_r) ||
+                    (state === s_miss_wait_w) ||
+                    (fi_state === fi_wait_w)
 
 }

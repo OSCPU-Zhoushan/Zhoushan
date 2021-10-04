@@ -37,6 +37,7 @@ trait ZhoushanConfig {
   val DebugIntIssueQueue = false
   val DebugMemIssueQueue = false
   val DebugCommit = false
+  val DebugCommitSimple = false
   val DebugJmpPacket = false
   val DebugSram = false
   val DebugLsu = false
@@ -49,6 +50,7 @@ trait ZhoushanConfig {
   val DebugArchEvent = false
   val DebugClint = false
   val DebugCrossbar1to2 = false
+  val DebugCoreBus = false
 }
 
 object ZhoushanConfig extends ZhoushanConfig { }
