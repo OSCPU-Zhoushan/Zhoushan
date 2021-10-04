@@ -54,6 +54,19 @@ class Lsu extends Module {
     MEM_DWORD -> "b11111111".U(8.W)
   ))
 
+  // memory address unaligned
+  //    half  -> offset = 111
+  //    word  -> offset = 101/110/111
+  //    dword -> offset != 000
+  val addr_unaligned = Mux(uop.fu_code === FU_MEM,
+    MuxLookup(uop.mem_size, false.B, Array(
+      MEM_HALF  -> (addr_offset === "b111".U),
+      MEM_WORD  -> (addr_offset.asUInt() > "b100".U),
+      MEM_DWORD -> (addr_offset =/= "b000".U)
+    )), false.B)
+  // currently we just skip the memory access with unaligned address
+  // todo: add this exception in CSR unit in the future
+
   st_req.bits.addr  := Mux(mmio, addr, Cat(addr(31, 3), Fill(3, 0.U)))
   st_req.bits.ren   := false.B
   st_req.bits.wdata := (wdata << (addr_offset << 3))(63, 0)
@@ -62,7 +75,7 @@ class Lsu extends Module {
   st_req.bits.size  := Mux(mmio, uop.mem_size, Constant.MEM_DWORD)
   st_req.bits.user  := 0.U
   st_req.bits.id    := 0.U
-  st_req.valid      := uop.valid && (state === s_idle) &&
+  st_req.valid      := uop.valid && (state === s_idle) && !addr_unaligned &&
                        is_store && (lsu_update || !completed)
 
   st_resp.ready     := st_resp.valid
@@ -75,7 +88,7 @@ class Lsu extends Module {
   ld_req.bits.size  := Mux(mmio, uop.mem_size, Constant.MEM_DWORD)
   ld_req.bits.user  := 0.U
   ld_req.bits.id    := 0.U
-  ld_req.valid      := uop.valid && (state === s_idle) &&
+  ld_req.valid      := uop.valid && (state === s_idle) && !addr_unaligned &&
                        is_load && (lsu_update || !completed)
 
   ld_resp.ready     := ld_resp.valid
@@ -91,6 +104,9 @@ class Lsu extends Module {
       } .elsewhen (st_req.fire()) {
         state := s_wait_w
         store_valid := true.B
+      }
+      when (addr_unaligned) {
+        completed := true.B
       }
     }
     is (s_wait_r) {
@@ -150,18 +166,5 @@ class Lsu extends Module {
   io.ecp.mmio := mmio
   io.ecp.rd_data := load_out
   io.busy := ld_req.valid || st_req.valid || (state === s_wait_r && !ld_resp.fire()) || (state === s_wait_w && !st_resp.fire())
-
-  // raise an addr_unaligned exception
-  //    half  -> offset = 111
-  //    word  -> offset = 101/110/111
-  //    dword -> offset != 000
-  val addr_unaligned = RegInit(false.B)
-  addr_unaligned := Mux(uop.fu_code === FU_MEM,
-    MuxLookup(uop.mem_size, false.B, Array(
-      MEM_HALF  -> (addr_offset === "b111".U),
-      MEM_WORD  -> (addr_offset.asUInt() > "b100".U),
-      MEM_DWORD -> (addr_offset =/= "b000".U)
-    )), false.B)
-  // todo: add this exception in CSR unit
 
 }
