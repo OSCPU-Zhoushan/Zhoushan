@@ -9,9 +9,7 @@ class Alu extends Module {
     val uop = Input(new MicroOp)
     val in1 = Input(UInt(64.W))
     val in2 = Input(UInt(64.W))
-    val out = Output(UInt(64.W))
-    val jmp = Output(Bool())
-    val jmp_pc = Output(UInt(32.W))
+    val ecp = Output(new ExCommitPacket)
   })
 
   val uop = io.uop
@@ -59,7 +57,13 @@ class Alu extends Module {
     JMP_JALR -> ZeroExt32_64(uop.npc)
   ))
 
-  io.out := alu_out | npc_to_rd
-  io.jmp := jmp
-  io.jmp_pc := jmp_pc
+  io.ecp.store_valid := false.B
+  io.ecp.mmio := false.B
+  io.ecp.jmp_valid := (uop.fu_code === FU_JMP)
+  io.ecp.jmp := jmp
+  io.ecp.jmp_pc := jmp_pc
+  io.ecp.mis := Mux(jmp,
+                    (uop.pred_br && (jmp_pc =/= uop.pred_bpc)) || !uop.pred_br,
+                    uop.pred_br)
+  io.ecp.rd_data := alu_out | npc_to_rd
 }

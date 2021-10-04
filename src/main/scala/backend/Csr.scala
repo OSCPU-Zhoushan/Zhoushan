@@ -28,7 +28,7 @@ abstract class CsrSpecial extends Bundle {
              wmask: UInt, wen: Bool): Unit
 }
 
-class CsrMip extends Bundle {
+class CsrMip extends CsrSpecial {
   val addr = Csrs.mip
   val romask = "h080".U(64.W)
   val mtip = WireInit(UInt(1.W), 0.U)
@@ -38,11 +38,9 @@ class CsrMip extends Bundle {
   def access(a: UInt, rdata: UInt, ren: Bool, wdata: UInt,
              wmask: UInt, wen: Bool): Unit = {
     when (addr === a && ren) {
-      rdata := apply()
+      rdata := 0.U // apply()
     }
-    when (addr === a && wen) {
-      
-    }
+    when (addr === a && wen) { }
   }
 }
 
@@ -50,18 +48,14 @@ class Csr extends Module {
   val io = IO(new Bundle {
     val uop = Input(new MicroOp())
     val in1 = Input(UInt(64.W))
-    val out = Output(UInt(64.W))
-    val jmp = Output(Bool())
-    val jmp_pc = Output(UInt(32.W))
-    val intr = Output(Bool())
-    val intr_pc = Output(UInt(32.W))
+    val ecp = Output(new ExCommitPacket)
   })
 
   val uop = io.uop
 
   val in1 = io.in1
-  val csr_code = uop.csr_code
-  val csr_rw = (csr_code === CSR_RW) || (csr_code === CSR_RS) || (csr_code === CSR_RC)
+  val sys_code = uop.sys_code
+  val csr_rw = (sys_code === SYS_CSRRW) || (sys_code === SYS_CSRRS) || (sys_code === SYS_CSRRC)
   val csr_jmp = WireInit(Bool(), false.B)
   val csr_jmp_pc = WireInit(UInt(32.W), 0.U)
 
@@ -76,115 +70,112 @@ class Csr extends Module {
   val mcause    = RegInit(UInt(64.W), 0.U)
   val mip       = new CsrMip
 
+  BoringUtils.addSource(mstatus, "csr_mstatus")
+  BoringUtils.addSource(mie(7).asBool(), "csr_mie_mtie")
+  BoringUtils.addSource(mtvec(31, 2), "csr_mtvec_idx")
+  BoringUtils.addSource(mip(7).asBool(), "csr_mip_mtip_intr")
+
   val mcycle    = WireInit(UInt(64.W), 0.U)
-  BoringUtils.addSink(mcycle, "csr_mcycle")
   val minstret  = WireInit(UInt(64.W), 0.U)
+
+  BoringUtils.addSink(mcycle, "csr_mcycle")
   BoringUtils.addSink(minstret, "csr_minstret")
 
+  // CSR write function with side effect
+
+  def mstatusWriteFunction(mstatus: UInt): UInt = {
+    def get_mstatus_xs(mstatus: UInt): UInt = mstatus(16, 15)
+    def get_mstatus_fs(mstatus: UInt): UInt = mstatus(14, 13)
+    val mstatus_sd = ((get_mstatus_xs(mstatus) === "b11".U) || (get_mstatus_fs(mstatus) === "b11".U)).asUInt()
+    val mstatus_new = Cat(mstatus_sd, mstatus(62, 0))
+    mstatus_new
+  }
+
   // ECALL
-  when (csr_code === CSR_ECALL) {
+  when (sys_code === SYS_ECALL) {
     mepc := uop.pc
-    mcause := 11.U  // Env call from M-mode
+    mcause := 11.U  // env call from M-mode
     mstatus := Cat(mstatus(63, 8), mstatus(3), mstatus(6, 4), 0.U, mstatus(2, 0))
     csr_jmp := true.B
     csr_jmp_pc := Cat(mtvec(31, 2), Fill(2, 0.U))
   }
 
   // MRET
-  when (csr_code === CSR_MRET) {
+  when (sys_code === SYS_MRET) {
     mstatus := Cat(mstatus(63, 8), 1.U, mstatus(6, 4), mstatus(7), mstatus(2, 0))
     csr_jmp := true.B
-    csr_jmp_pc := mepc
+    csr_jmp_pc := mepc(31, 0)
   }
 
-  // Interrupt
-  val s_idle :: s_wait :: Nil = Enum(2)
-  val intr_state = RegInit(s_idle)
+  // interrupt
+  val intr         = WireInit(Bool(), false.B)
+  val intr_mstatus = WireInit(UInt(64.W), "h00001800".U)
+  val intr_mepc    = WireInit(UInt(64.W), 0.U)
+  val intr_mcause  = WireInit(UInt(64.W), 0.U)
 
-  val intr = WireInit(Bool(), false.B)
-  val intr_pc = WireInit(UInt(32.W), 0.U)
-  val intr_reg = RegInit(Bool(), false.B)
-  val intr_no = RegInit(UInt(64.W), 0.U)
+  BoringUtils.addSink(intr, "intr")
+  BoringUtils.addSink(intr_mstatus, "intr_mstatus")
+  BoringUtils.addSink(intr_mepc, "intr_mepc")
+  BoringUtils.addSink(intr_mcause, "intr_mcause")
 
-  val intr_global_en = (mstatus(3) === 1.U)
-  val intr_clint_en = (mie(7) === 1.U)
-
-  intr_reg := false.B
-  switch (intr_state) {
-    is (s_idle) {
-      when (intr_global_en && intr_clint_en) {
-        intr_state := s_wait
-      }
-    }
-    is (s_wait) {
-      when (uop.valid && mip(7) === 1.U) {
-        mepc := uop.pc
-        mcause := "h8000000000000007".U
-        mstatus := Cat(mstatus(63, 8), mstatus(3), mstatus(6, 4), 0.U, mstatus(2, 0))
-        intr := true.B
-        intr_pc := Cat(mtvec(31, 2), Fill(2, 0.U))
-        intr_reg := true.B
-        intr_no := 7.U
-        intr_state := s_idle
-      }
-    }
+  when (intr) {
+    mstatus := intr_mstatus
+    mepc := intr_mepc
+    mcause := intr_mcause
   }
 
   // CSR register map
 
   val csr_map = Map(
-    RegMap(Csrs.mhartid,  mhartid ),
-    RegMap(Csrs.mstatus,  mstatus ),
-    RegMap(Csrs.mie,      mie     ),
-    RegMap(Csrs.mtvec,    mtvec   ),
+    RegMap(Csrs.mhartid , mhartid ),
+    RegMap(Csrs.mstatus , mstatus , mstatusWriteFunction),
+    RegMap(Csrs.mie     , mie     ),
+    RegMap(Csrs.mtvec   , mtvec   ),
     RegMap(Csrs.mscratch, mscratch),
-    RegMap(Csrs.mepc,     mepc    ),
-    RegMap(Csrs.mcause,   mcause  ),
-    // RegMap(Csrs.mip,      mip     ),
-    RegMap(Csrs.mcycle,   mcycle  ),
+    RegMap(Csrs.mepc    , mepc    ),
+    RegMap(Csrs.mcause  , mcause  ),
+    // skip mip
+    RegMap(Csrs.mcycle  , mcycle  ),
     RegMap(Csrs.minstret, minstret)
   )
 
   // CSR register read/write
-  
+
   val addr = uop.inst(31, 20)
   val rdata = WireInit(UInt(64.W), 0.U)
   val ren = csr_rw
   val wdata = Wire(UInt(64.W))
-  val wmask = "hffffffff".U
-  val wen = csr_rw && (in1 =/= 0.U)
+  val wmask = "hffffffffffffffff".U
+  val wen = csr_rw // && (in1 =/= 0.U)
 
-  wdata := MuxLookup(uop.csr_code, 0.U, Array(
-    CSR_RW -> in1,
-    CSR_RS -> (rdata | in1),
-    CSR_RC -> (rdata & ~in1)
+  wdata := MuxLookup(uop.sys_code, 0.U, Array(
+    SYS_CSRRW -> in1,
+    SYS_CSRRS -> (rdata | in1),
+    SYS_CSRRC -> (rdata & ~in1)
   ))
 
   RegMap.access(csr_map, addr, rdata, ren, wdata, wmask, wen)
   mip.access(addr, rdata, ren, wdata, wmask, wen)
 
-  io.out := rdata
-  io.jmp := csr_jmp
-  io.jmp_pc := csr_jmp_pc
-  io.intr := intr
-  io.intr_pc := intr_pc
+  io.ecp.store_valid := false.B
+  io.ecp.mmio := false.B
+  io.ecp.jmp_valid := csr_jmp
+  io.ecp.jmp := csr_jmp
+  io.ecp.jmp_pc := csr_jmp_pc
+  io.ecp.mis := Mux(csr_jmp,
+                    (uop.pred_br && (csr_jmp_pc =/= uop.pred_bpc)) || !uop.pred_br,
+                    uop.pred_br)
+  io.ecp.rd_data := rdata
 
-  // difftest for arch event & CSR state
+  // difftest for CSR state
 
-  if (Settings.Difftest) {
-    val dt_ae = Module(new DifftestArchEvent)
-    dt_ae.io.clock        := clock
-    dt_ae.io.coreid       := 0.U
-    dt_ae.io.intrNO       := Mux(intr_reg, intr_no, 0.U)
-    dt_ae.io.cause        := 0.U
-    dt_ae.io.exceptionPC  := Mux(intr_reg, mepc, 0.U)
-
+  if (ZhoushanConfig.EnableDifftest) {
     val dt_cs = Module(new DifftestCSRState)
     dt_cs.io.clock          := clock
     dt_cs.io.coreid         := 0.U
-    dt_cs.io.priviledgeMode := 3.U  // Machine mode
+    dt_cs.io.priviledgeMode := 3.U        // machine mode
     dt_cs.io.mstatus        := mstatus
-    dt_cs.io.sstatus        := 0.U
+    dt_cs.io.sstatus        := mstatus & "h80000003000de122".U
     dt_cs.io.mepc           := mepc
     dt_cs.io.sepc           := 0.U
     dt_cs.io.mtval          := 0.U
@@ -194,7 +185,7 @@ class Csr extends Module {
     dt_cs.io.mcause         := mcause
     dt_cs.io.scause         := 0.U
     dt_cs.io.satp           := 0.U
-    dt_cs.io.mip            := mip()
+    dt_cs.io.mip            := 0.U // mip()
     dt_cs.io.mie            := mie
     dt_cs.io.mscratch       := mscratch
     dt_cs.io.sscratch       := 0.U

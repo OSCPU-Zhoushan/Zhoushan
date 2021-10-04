@@ -3,20 +3,22 @@ package zhoushan
 import chisel3._
 import chisel3.util._
 
-class CoreBusCrossbar2to1 extends Module {
+class CoreBusCrossbarNto1(n: Int) extends Module {
   val io = IO(new Bundle {
-    val in = Flipped(Vec(2, new CoreBusIO))
+    val in = Flipped(Vec(n, new CoreBusIO))
     val out = new CoreBusIO
   })
 
-  val arbiter = Module(new RRArbiter(new CoreBusReq, 2))
-  val chosen = RegInit(UInt(1.W), 0.U)
-  arbiter.io.in(0) <> io.in(0).req
-  arbiter.io.in(1) <> io.in(1).req
+  val arbiter = Module(new RRArbiter(new CoreBusReq, n))
+  val chosen = RegInit(UInt(log2Up(n).W), 0.U)
+  for (i <- 0 until n) {
+    arbiter.io.in(i) <> io.in(i).req
+  }
 
   // req logic
-  io.in(0).req.ready := (arbiter.io.chosen === 0.U)
-  io.in(1).req.ready := (arbiter.io.chosen === 1.U)
+  for (i <- 0 until n) {
+    io.in(i).req.ready := (arbiter.io.chosen === i.U) && io.out.req.ready
+  }
   (io.out.req, arbiter.io.out) match { case (l, r) => {
     l.bits := r.bits
     l.valid := r.valid
@@ -24,20 +26,53 @@ class CoreBusCrossbar2to1 extends Module {
   }}
 
   // resp logic - send to corresponding master device
-  io.in(0).resp.bits := io.out.resp.bits
-  io.in(1).resp.bits := io.out.resp.bits
-  when (io.out.resp.bits.id === 1.U) {          // to InstFetch
-    io.out.resp.ready := io.in(0).resp.ready
-    io.in(0).resp.valid := io.out.resp.valid
-    io.in(1).resp.valid := false.B
-  } .elsewhen (io.out.resp.bits.id === 2.U) {   // to LSU
-    io.out.resp.ready := io.in(1).resp.ready
-    io.in(0).resp.valid := false.B
-    io.in(1).resp.valid := io.out.resp.valid
-  } .otherwise {
+  for (i <- 0 until n) {
+    io.in(i).resp.bits := io.out.resp.bits
+    io.in(i).resp.valid := false.B
     io.out.resp.ready := false.B
-    io.in(0).resp.valid := false.B
-    io.in(1).resp.valid := false.B
+  }
+  for (i <- 0 until n) {
+    when (io.out.resp.bits.id === (i + 1).U) {
+      io.out.resp.ready := io.in(i).resp.ready
+      io.in(i).resp.valid := io.out.resp.valid
+    }
+  }
+
+}
+
+class CacheBusCrossbarNto1(n: Int) extends Module {
+  val io = IO(new Bundle {
+    val in = Flipped(Vec(n, new CacheBusIO))
+    val out = new CacheBusIO
+  })
+
+  val arbiter = Module(new RRArbiter(new CacheBusReq, n))
+  val chosen = RegInit(UInt(log2Up(n).W), 0.U)
+  for (i <- 0 until n) {
+    arbiter.io.in(i) <> io.in(i).req
+  }
+
+  // req logic
+  for (i <- 0 until n) {
+    io.in(i).req.ready := (arbiter.io.chosen === i.U) && io.out.req.ready
+  }
+  (io.out.req, arbiter.io.out) match { case (l, r) => {
+    l.bits := r.bits
+    l.valid := r.valid
+    r.ready := l.ready
+  }}
+
+  // resp logic - send to corresponding master device
+  for (i <- 0 until n) {
+    io.in(i).resp.bits := io.out.resp.bits
+    io.in(i).resp.valid := false.B
+    io.out.resp.ready := false.B
+  }
+  for (i <- 0 until n) {
+    when (io.out.resp.bits.id === (i + 1).U) {
+      io.out.resp.ready := io.in(i).resp.ready
+      io.in(i).resp.valid := io.out.resp.valid
+    }
   }
 
 }
@@ -46,35 +81,76 @@ class CacheBusCrossbar1to2 extends Module {
   val io = IO(new Bundle {
     val in = Flipped(new CacheBusIO)
     val out = Vec(2, new CacheBusIO)
+    val to_1 = Input(Bool())
   })
 
-  // 0 -> dmem
-  // 1 -> CLINT
+  val in_flight_req = RegInit(VecInit(Seq.fill(2)(0.U(8.W))))
+  for (i <- 0 until 2) {
+    when (io.out(i).req.fire() && !io.out(i).resp.fire()) {
+      in_flight_req(i) := in_flight_req(i) + 1.U
+      if (ZhoushanConfig.DebugCrossbar1to2) {
+        printf("%d: [CB1-2] in_flight_req(%d)=%d -> %d\n", DebugTimer(), i.U, in_flight_req(i), in_flight_req(i) + 1.U)
+      }
+    } .elsewhen (io.out(i).resp.fire() && !io.out(i).req.fire()) {
+      in_flight_req(i) := in_flight_req(i) - 1.U
+      if (ZhoushanConfig.DebugCrossbar1to2) {
+        printf("%d: [CB1-2] in_flight_req(%d)=%d -> %d\n", DebugTimer(), i.U, in_flight_req(i), in_flight_req(i) - 1.U)
+      }
+    }
+  }
 
-  val ClintAddrBase = Settings.ClintAddrBase.U
-  val ClintAddrSize = Settings.ClintAddrSize.U
+  val req_0_ready = (in_flight_req(1) === 0.U)
+  val req_1_ready = (in_flight_req(0) === 0.U)
 
-  val addr = io.in.req.bits.addr
-  val to_clint = (addr >= ClintAddrBase && addr < ClintAddrBase + ClintAddrSize)
+  val channel = RegInit(0.U(1.W))
+  for (i <- 0 until 2) {
+    when (io.out(i).req.fire()) {
+      channel := i.U
+    }
+  }
 
   // req logic
-  io.out(0).req.bits := io.in.req.bits
-  io.out(1).req.bits := io.in.req.bits
-  io.out(0).req.valid := io.in.req.valid && !to_clint
-  io.out(1).req.valid := io.in.req.valid && to_clint
-  io.in.req.ready := Mux(to_clint, io.out(1).req.ready, io.out(0).req.ready)
-
-  val arbiter = Module(new RRArbiter(new CacheBusResp, 2))
-  arbiter.io.in(0) <> io.out(0).resp
-  arbiter.io.in(1) <> io.out(1).resp
+  io.out(0).req.bits  := io.in.req.bits
+  io.out(1).req.bits  := io.in.req.bits
+  io.out(0).req.valid := io.in.req.valid && !io.to_1 && req_0_ready
+  io.out(1).req.valid := io.in.req.valid && io.to_1 && req_1_ready
+  io.in.req.ready     := Mux(io.to_1, io.out(1).req.ready && req_1_ready, io.out(0).req.ready && req_0_ready)
 
   // resp logic
-  io.out(0).resp.ready := (arbiter.io.chosen === 0.U)
-  io.out(1).resp.ready := (arbiter.io.chosen === 1.U)
-  (io.in.resp, arbiter.io.out) match { case (l, r) => {
-    l.bits := r.bits
-    l.valid := r.valid
-    r.ready := l.ready
-  }}
+  io.out(0).resp.ready  := io.in.resp.ready && (channel === 0.U)
+  io.out(1).resp.ready  := io.in.resp.ready && (channel === 1.U)
+  io.in.resp.bits.id    := 0.U
+  io.in.resp.bits.user  := 0.U
+  io.in.resp.bits.rdata := 0.U
+  io.in.resp.valid      := false.B
+  for (i <- 0 until 2) {
+    when (channel === i.U) {
+      io.in.resp.bits := io.out(i).resp.bits
+      io.in.resp.valid := io.out(i).resp.valid
+    }
+  }
+
+  if (ZhoushanConfig.DebugCrossbar1to2) {
+    val in = io.in
+    when (in.req.fire()) {
+      printf("%d: [CB1-2] [IN ] [REQ ] addr=%x size=%x id=%x wen=%x wdata=%x wmask=%x\n", DebugTimer(),
+             in.req.bits.addr, in.req.bits.size, in.req.bits.id, in.req.bits.wen, in.req.bits.wdata, in.req.bits.wmask)
+    }
+    when (in.resp.fire()) {
+      printf("%d: [CB1-2] [IN ] [RESP] rdata=%x id=%x\n", DebugTimer(),
+             in.resp.bits.rdata, in.resp.bits.id)
+    }
+    for (i <- 0 until 2) {
+      val out = io.out(i)
+      when (out.req.fire()) {
+        printf("%d: [CB1-2] [O-%d] [REQ ] addr=%x size=%x id=%x wen=%x wdata=%x wmask=%x\n", DebugTimer(), i.U,
+               out.req.bits.addr, out.req.bits.size, out.req.bits.id, out.req.bits.wen, out.req.bits.wdata, out.req.bits.wmask)
+      }
+      when (out.resp.fire()) {
+        printf("%d: [CB1-2] [O-%d] [RESP] rdata=%x id=%x\n", DebugTimer(), i.U,
+                  out.resp.bits.rdata, out.resp.bits.id)
+      }
+    }
+  }
 
 }

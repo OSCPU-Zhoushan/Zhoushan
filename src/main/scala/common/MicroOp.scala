@@ -1,6 +1,7 @@
 package zhoushan
 
 import chisel3._
+import chisel3.util._
 
 trait Constant {
   val Y = true.B
@@ -25,8 +26,8 @@ trait Constant {
   val FU_X      = 0.asUInt(3.W)
   val FU_ALU    = 1.asUInt(3.W)
   val FU_JMP    = 2.asUInt(3.W)
-  val FU_MEM    = 3.asUInt(3.W)
-  val FU_CSR    = 4.asUInt(3.W)
+  val FU_SYS    = 3.asUInt(3.W)
+  val FU_MEM    = 4.asUInt(3.W)
 
   val ALU_X     = 0.asUInt(4.W)
   val ALU_ADD   = 1.asUInt(4.W)
@@ -60,12 +61,14 @@ trait Constant {
   val MEM_WORD  = 2.asUInt(2.W)
   val MEM_DWORD = 3.asUInt(2.W)
 
-  val CSR_X     = 0.asUInt(3.W)
-  val CSR_RW    = 1.asUInt(3.W)
-  val CSR_RS    = 2.asUInt(3.W)
-  val CSR_RC    = 3.asUInt(3.W)
-  val CSR_ECALL = 4.asUInt(3.W)
-  val CSR_MRET  = 5.asUInt(3.W)
+  val SYS_X      = 0.asUInt(3.W)
+  val SYS_CSRRW  = 1.asUInt(3.W)
+  val SYS_CSRRS  = 2.asUInt(3.W)
+  val SYS_CSRRC  = 3.asUInt(3.W)
+  val SYS_ECALL  = 4.asUInt(3.W)
+  val SYS_MRET   = 5.asUInt(3.W)
+  val SYS_FENCE  = 6.asUInt(3.W)
+  val SYS_FENCEI = 7.asUInt(3.W)
 }
 
 object Constant extends Constant { }
@@ -82,7 +85,7 @@ class MicroOp extends Bundle {
   val jmp_code  = UInt(4.W)
   val mem_code  = UInt(2.W)
   val mem_size  = UInt(2.W)
-  val csr_code  = UInt(3.W)
+  val sys_code  = UInt(3.W)
   val w_type    = Bool()
 
   val rs1_src   = UInt(3.W)
@@ -98,34 +101,13 @@ class MicroOp extends Bundle {
   // branch prediction related
   val pred_br   = Bool()
   val pred_bpc  = UInt(32.W)
-  val real_br   = Bool()
-  val real_bpc  = UInt(32.W)
 
   // register renaming related
-  val rs1_paddr = UInt(6.W)
-  val rs2_paddr = UInt(6.W)
-  val rd_paddr  = UInt(6.W)
+  val rs1_paddr = UInt(log2Up(ZhoushanConfig.PrfSize).W)   // rs1 prf addr
+  val rs2_paddr = UInt(log2Up(ZhoushanConfig.PrfSize).W)   // rs2 prf addr
+  val rd_paddr  = UInt(log2Up(ZhoushanConfig.PrfSize).W)   // rd prf addr
+  val rd_ppaddr = UInt(log2Up(ZhoushanConfig.PrfSize).W)   // rd prev prf addr
 
   // re-order buffer related
-  val rob_addr  = UInt(4.W)
-}
-
-object RasConstant {
-  val RAS_X             = 0.asUInt(2.W)
-  val RAS_PUSH          = 1.asUInt(2.W)
-  val RAS_POP           = 2.asUInt(2.W)
-  val RAS_POP_THEN_PUSH = 3.asUInt(2.W)
-
-  def isRasPush(x: UInt): Bool = x(0) === 1.U
-  def isRasPop(x: UInt): Bool = x(1) === 1.U
-}
-
-class JmpPacket extends Bundle {
-  val valid = Bool()
-  val inst_pc = UInt(32.W)
-  val jmp = Bool()
-  val jmp_pc = UInt(32.W)
-  val mis = Bool()
-  val intr = Bool()
-  val ras_type = UInt(2.W)
+  val rob_addr  = UInt(log2Up(ZhoushanConfig.RobSize).W)
 }

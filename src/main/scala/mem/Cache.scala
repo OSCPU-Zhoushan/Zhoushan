@@ -2,6 +2,7 @@ package zhoushan
 
 import chisel3._
 import chisel3.util._
+import chisel3.util.experimental._
 
 /* Cache configuration
  * 1xxx xxxx xxxx xxxx xxxx xxxx xxxx xxxx
@@ -21,6 +22,11 @@ class Meta extends Module {
     val dirty_w = Input(Bool())
     val dirty_wen = Input(Bool())
     val valid_r = Output(Bool())
+    // I$/D$ fence.I cache invalidate input
+    val invalidate = Input(Bool())
+    // D$ dirty check output
+    val dirty_r_async = Output(Bool())
+    val valid_r_async = Output(Bool())
   })
 
   // tag = addr(30, 10)
@@ -54,10 +60,21 @@ class Meta extends Module {
   val valid_r = RegNext(valid(idx))
   io.valid_r := valid_r
 
+  when (io.invalidate) {
+    for (i <- 0 until 64) {
+      dirty(i) := false.B
+      valid(i) := false.B
+    }
+  }
+
+  // async read
+  io.dirty_r_async := dirty(idx)
+  io.valid_r_async := valid(idx)
+
 }
 
 // 2-stage pipeline 4KB cache
-class Cache(id: Int) extends Module with SramParameters {
+class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
   val io = IO(new Bundle {
     val in = Flipped(new CacheBusIO)
     val out = new CoreBusIO
@@ -98,6 +115,7 @@ class Cache(id: Int) extends Module with SramParameters {
     m.io.tag_wen := false.B
     m.io.dirty_w := false.B
     m.io.dirty_wen := false.B
+    m.io.invalidate := false.B
   }}
 
   (sram_out  zip sram).map { case (o, s) => { o := s.io.rdata }}
@@ -132,6 +150,19 @@ class Cache(id: Int) extends Module with SramParameters {
   val pipeline_ready = WireInit(false.B)
   val pipeline_fire  = pipeline_valid && pipeline_ready
 
+  /* ----- Fence Ctrl Signals -------- */
+
+  val fence_i = WireInit(false.B)
+  BoringUtils.addSink(fence_i, "fence_i")
+
+  val sq_empty = WireInit(false.B)
+  BoringUtils.addSink(sq_empty, "sq_empty")
+
+  val fi_finish = WireInit(false.B)
+  val fi_valid = BoolStopWatch(fence_i, fi_finish)
+  val fi_ready = pipeline_ready && sq_empty
+  val fi_fire = fi_valid && fi_ready
+
   /* ----- Cache Stage 1 ------------- */
 
   val s1_addr  = in.req.bits.addr
@@ -142,6 +173,8 @@ class Cache(id: Int) extends Module with SramParameters {
   val s1_wdata = in.req.bits.wdata
   val s1_wmask = in.req.bits.wmask
   val s1_user  = in.req.bits.user
+  val s1_id    = in.req.bits.id
+  val s1_valid = in.req.valid
 
   // when pipeline fire, read the data in SRAM and meta data array
   // the data will be returned at the next clock cycle, and passed to stage 2
@@ -161,7 +194,7 @@ class Cache(id: Int) extends Module with SramParameters {
   /* 9-state FSM in cache stage 2
    *
    * read  hit:  idle
-   * write hit:  idle -> hit_w -> complete
+   * write hit:  idle -> complete
    * read  miss: idle -> miss_req_r -> miss_wait_r -> miss_ok_r -> complete
    * write miss: idle -> miss_req_r -> miss_wait_r -> miss_ok_r -> ...
    *             (not dirty) ... -> complete
@@ -169,10 +202,10 @@ class Cache(id: Int) extends Module with SramParameters {
    *                         -> complete
    */
 
-  val s_idle        :: s_hit_w       :: s_miss_req_r  :: s1  = Enum(9)
-  val s_miss_wait_r :: s_miss_ok_r   :: s_miss_req_w1 :: s2  = s1
-  val s_miss_req_w2 :: s_miss_wait_w :: s_complete    :: Nil = s2
-  val state = RegInit(s_idle)
+  val s_idle        :: s_miss_req_r  :: s_miss_wait_r :: s1  = Enum(9)
+  val s_miss_ok_r   :: s_miss_req_w1 :: s_miss_req_w2 :: s2  = s1
+  val s_miss_wait_w :: s_complete    :: s_invalid     :: Nil = s2
+  val state = RegInit(s_invalid)
 
   val s2_addr  = RegInit(0.U(32.W))
   val s2_offs  = s2_addr(3)
@@ -182,6 +215,7 @@ class Cache(id: Int) extends Module with SramParameters {
   val s2_wdata = RegInit(0.U(64.W))
   val s2_wmask = RegInit(0.U(8.W))
   val s2_user  = RegInit(0.U(s1_user.getWidth.W))
+  val s2_id    = RegInit(0.U(s1_id.getWidth.W))
 
   // 4-bit hit check vector, with one-hot encoding
   // Example 1: hit on line 0, hit = (0, 0, 0, 1)
@@ -211,7 +245,7 @@ class Cache(id: Int) extends Module with SramParameters {
     s2_wdata := s1_wdata
     s2_wmask := s1_wmask
     s2_user  := s1_user
-    state := s_idle
+    s2_id    := s1_id
   } .elsewhen (!pipeline_fire && RegNext(pipeline_fire)) {
     // meanwhile, when the FSM is triggered in stage 2, we need to temporarily
     // store the data in registers
@@ -223,56 +257,35 @@ class Cache(id: Int) extends Module with SramParameters {
     s2_reg_dat_w := s2_dat_w
   }
 
-  replace_way := Cat(plru0(s2_idx), 
+  replace_way := Cat(plru0(s2_idx),
                      Mux(plru0(s2_idx) === 0.U, plru1(s2_idx), plru2(s2_idx)))
 
-  // generate the write-back address by concatenating the tag stored in meta
-  // data array and s2_idx
-  val wb_addr = Cat(1.U, s2_reg_tag_r, s2_idx, Fill(4, 0.U))
   val wdata1 = RegInit(UInt(64.W), 0.U)           // cacheline(63, 0)
   val wdata2 = RegInit(UInt(64.W), 0.U)           // cacheline(127, 64)
 
   /* ----- Pipeline Ctrl Signals ----- */
 
-  val init = RegInit(true.B)
-  when (in.req.valid) {
-    init := false.B
-  }
-
   val s2_hit_real = Mux(RegNext(pipeline_fire), s2_hit, s2_reg_hit)
-  val s2_dirty_real = Mux(RegNext(pipeline_fire), s2_dirty, s2_reg_dirty)
-
-  val hit_ready = s2_hit_real && 
+  val hit_ready = s2_hit_real &&
                   Mux(s2_wen, state === s_complete, state === s_idle)
   val miss_ready = (state === s_complete)
+  val invalid_ready = (state === s_invalid)
 
-  pipeline_valid := in.req.fire()
-  pipeline_ready := hit_ready || miss_ready || init
+  pipeline_valid := true.B
+  pipeline_ready := ((hit_ready || miss_ready) && in.resp.ready) || invalid_ready
+
+  /* ----- Handshake Signals --------- */
 
   // handshake signals with IF unit
-  in.req.ready := pipeline_ready
-  in.resp.valid := s2_hit_real || (state === s_miss_ok_r)
+  in.req.ready := pipeline_ready && !fi_valid
+  in.resp.valid := ((s2_hit_real && !s2_wen && (state =/= s_invalid)) || (state === s_complete))
   in.resp.bits.rdata := 0.U
   in.resp.bits.user := s2_user
+  in.resp.bits.id := s2_id
 
-  // handshake signals with memory
-  out.req.valid := (state === s_miss_req_r) || (state === s_miss_req_w1) || (state === s_miss_req_w2)
-  out.req.bits.id := id.U
-  out.req.bits.addr := Mux(state === s_miss_req_r, 
-                           Cat(s2_addr(31, 4), Fill(4, 0.U)), 
-                           Cat(wb_addr(31, 4), Fill(4, 0.U)))
-  out.req.bits.aen := (state === s_miss_req_r) || (state === s_miss_req_w1)
-  out.req.bits.ren := (state === s_miss_req_r)
-  out.req.bits.wdata := Mux(state === s_miss_req_w1, 
-                            s2_reg_dat_w(63, 0), 
-                            s2_reg_dat_w(127, 64))
-  out.req.bits.wmask := "hff".U(8.W)
-  out.req.bits.wlast := (state === s_miss_req_w2)
-  out.req.bits.wen := (state === s_miss_req_w1) || (state === s_miss_req_w2)
-  out.req.bits.len := 1.U
-  out.resp.ready := (state === s_miss_wait_r) || (state === s_miss_wait_w)
+  /* ----- Debug Info ---------------- */
 
-  if ((Settings.DebugMsgICache && id == 1) || (Settings.DebugMsgDCache && id == 2)) {
+  if ((DebugICache && id == 1) || (DebugDCache && id == 2)) {
     when (in.req.fire()) {
       printf("%d: [$ %d] [IN -REQ ] addr=%x wen=%x wdata=%x\n", DebugTimer(), id.U, in.req.bits.addr, in.req.bits.wen, in.req.bits.wdata)
     }
@@ -290,7 +303,7 @@ class Cache(id: Int) extends Module with SramParameters {
     }
   }
 
-  // state machine
+  /* ----- State Machine ------------- */
 
   switch (state) {
     is (s_idle) {
@@ -309,7 +322,7 @@ class Cache(id: Int) extends Module with SramParameters {
               sram(i).io.en := true.B
               sram(i).io.wen := true.B
               sram(i).io.addr := s2_idx
-              sram(i).io.wdata := Mux(s2_offs === 1.U, 
+              sram(i).io.wdata := Mux(s2_offs === 1.U,
                                       Cat(MaskData(s2_rdata(127, 64), s2_wdata, MaskExpand(s2_wmask)), s2_rdata(63, 0)),
                                       Cat(s2_rdata(127, 64), MaskData(s2_rdata(63, 0), s2_wdata, MaskExpand(s2_wmask))))
               meta(i).io.idx := s2_idx
@@ -317,15 +330,10 @@ class Cache(id: Int) extends Module with SramParameters {
               meta(i).io.dirty_w := true.B
             }
           }
-          state := s_hit_w
+          state := s_complete
         } .elsewhen (!s2_hit) {
           state := s_miss_req_r
         }
-      }
-    }
-    is (s_hit_w) {
-      when (in.resp.fire()) {
-        state := s_complete
       }
     }
     is (s_miss_req_r) {
@@ -344,34 +352,31 @@ class Cache(id: Int) extends Module with SramParameters {
       }
     }
     is (s_miss_ok_r) {
-      in.resp.bits.rdata := Mux(s2_offs.asBool(), wdata2, wdata1)
-      when (in.resp.fire()) {
-        for (i <- 0 until 4) {
-          when (replace_way === i.U) {
-            sram(i).io.en := true.B
-            sram(i).io.wen := true.B
-            sram(i).io.addr := s2_idx
-            when (s2_wen) {
-              sram(i).io.wdata := Mux(s2_offs === 1.U, 
-                                      Cat(MaskData(wdata2, s2_wdata, MaskExpand(s2_wmask)), wdata1),
-                                      Cat(wdata2, MaskData(wdata1, s2_wdata, MaskExpand(s2_wmask))))
-            } .otherwise {
-              sram(i).io.wdata := Cat(wdata2, wdata1)
-            }
-            // write allocate
-            meta(i).io.idx := s2_idx
-            meta(i).io.tag_wen := true.B
-            meta(i).io.tag_w := s2_tag
-            meta(i).io.dirty_wen := true.B
-            meta(i).io.dirty_w := s2_wen
+      for (i <- 0 until 4) {
+        when (replace_way === i.U) {
+          sram(i).io.en := true.B
+          sram(i).io.wen := true.B
+          sram(i).io.addr := s2_idx
+          when (s2_wen) {
+            sram(i).io.wdata := Mux(s2_offs === 1.U,
+                                    Cat(MaskData(wdata2, s2_wdata, MaskExpand(s2_wmask)), wdata1),
+                                    Cat(wdata2, MaskData(wdata1, s2_wdata, MaskExpand(s2_wmask))))
+          } .otherwise {
+            sram(i).io.wdata := Cat(wdata2, wdata1)
           }
+          // write allocate
+          meta(i).io.idx := s2_idx
+          meta(i).io.tag_wen := true.B
+          meta(i).io.tag_w := s2_tag
+          meta(i).io.dirty_wen := true.B
+          meta(i).io.dirty_w := s2_wen
         }
-        when (s2_reg_dirty) {
-          state := s_miss_req_w1
-        } .otherwise {
-          updatePlruTree(s2_idx, replace_way)
-          state := s_complete
-        }
+      }
+      when (s2_reg_dirty) {
+        state := s_miss_req_w1
+      } .otherwise {
+        updatePlruTree(s2_idx, replace_way)
+        state := s_complete
       }
     }
     is (s_miss_req_w1) {
@@ -391,5 +396,183 @@ class Cache(id: Int) extends Module with SramParameters {
         state := s_complete
       }
     }
+    is (s_complete) {
+      in.resp.bits.rdata := RegNext(Mux(s2_offs.asBool(), wdata2, wdata1))
+      when (in.resp.fire()) {
+        state := s_invalid
+      }
+    }
   }
+
+  when (pipeline_fire) {
+    state := Mux(s1_valid, s_idle, s_invalid)
+  }
+
+  /* ----- Fence.I ------------------- */
+
+  /* Fence.I timing sequence example
+   *  # fence_i sq_empty fi_valid fi_ready fi_finish
+   *  1       1        0        0        0         0
+   *  2       0        0        1        0         0
+   *  3       0        1        1        1         0
+   *  4       0        1        1        1         1
+   *  5       0        1        0        1         0
+   */
+
+  // D$ Fence.I state machine
+  val fi_idle   :: fi_dirty_check :: fi_req_w1   :: fi1 = Enum(6)
+  val fi_req_w2 :: fi_wait_w      :: fi_complete :: Nil = fi1
+  val fi_state = RegInit(fi_idle)
+
+  // D$ clear counter
+  val fi_counter = RegInit(0.U(8.W))
+  val fi_sram_idx = fi_counter(7, 6)
+  val fi_line_idx = fi_counter(5, 0)
+
+  // D$ clear wdata & tag
+  val fi_update = (fi_state === fi_req_w1) && (RegNext(fi_state === fi_dirty_check))
+  val fi_wdata = HoldUnless(sram_out(fi_sram_idx), fi_update)
+  val fi_tag = HoldUnless(tag_out(fi_sram_idx), fi_update)
+
+  when (fi_fire) {
+    state := s_invalid
+  }
+
+  if (id == InstCacheId) {
+    // I$ is ready to accept req only when D$ completes Fence.I
+    val dcache_fi_complete = WireInit(false.B)
+    BoringUtils.addSink(dcache_fi_complete, "dcache_fi_complete")
+
+    // I$ may complete Fence.I request much faster than D$
+    // Thus, whether I$ is ready depends on D$ status
+    fi_finish := dcache_fi_complete
+
+    when (fi_fire) {
+      for (i <- 0 until 4) {
+        meta(i).io.invalidate := true.B
+      }
+    }
+  } else if (id == DataCacheId) {
+    val dcache_fi_complete = WireInit(false.B)
+    BoringUtils.addSource(dcache_fi_complete, "dcache_fi_complete")
+
+    fi_finish := dcache_fi_complete
+
+    val fi_counter_next = fi_counter + 1.U
+
+    when (fi_state === fi_dirty_check) {
+      sram.map { case s => {
+        s.io.en := true.B
+        s.io.addr := fi_line_idx
+      }}
+      meta.map { case m => {
+        m.io.idx := fi_line_idx
+      }}
+    }
+
+    switch (fi_state) {
+      is (fi_idle) {
+        when (fi_fire) {
+          fi_counter := 0.U
+          fi_state := fi_dirty_check
+        }
+      }
+      is (fi_dirty_check) {
+        val is_dirty = WireInit(false.B)
+        for (i <- 0 until 4) {
+          when (fi_sram_idx === i.U) {
+            meta(i).io.idx := fi_line_idx
+            is_dirty := meta(i).io.valid_r_async && meta(i).io.dirty_r_async
+          }
+        }
+        when (is_dirty) {
+          fi_state := fi_req_w1
+        } .otherwise {
+          fi_counter := fi_counter_next
+          when (fi_counter_next === 0.U) {
+            fi_state := fi_complete
+          }
+        }
+      }
+      is (fi_req_w1) {
+        when (out.req.fire()) {
+          fi_state := fi_req_w2
+        }
+      }
+      is (fi_req_w2) {
+        when (out.req.fire()) {
+          fi_state := fi_wait_w
+        }
+      }
+      is (fi_wait_w) {
+        when (out.resp.fire()) {
+          fi_counter := fi_counter_next
+          when (fi_counter_next === 0.U) {
+            fi_state := fi_complete
+          } .otherwise {
+            fi_state := fi_dirty_check
+          }
+        }
+      }
+      is (fi_complete) {
+        dcache_fi_complete := true.B
+        fi_state := fi_idle
+        for (i <- 0 until 4) {
+          meta(i).io.invalidate := true.B
+        }
+      }
+    }
+  }
+
+  /* ----- Handshake Signals --------- */
+
+  // handshake signals with memory
+  out.req.valid := (state === s_miss_req_r) ||
+                   (state === s_miss_req_w1) ||
+                   (state === s_miss_req_w2) ||
+                   (fi_state === fi_req_w1) ||
+                   (fi_state === fi_req_w2)
+  out.req.bits.id := id.U
+  out.req.bits.addr := 0.U
+  when (state === s_miss_req_r) {
+    out.req.bits.addr := Cat(s2_addr(31, 4), Fill(4, 0.U))
+  }
+  when (state === s_miss_req_w1) {
+    // generate the write-back address by concatenating the tag stored in meta
+    // data array and s2_idx
+    out.req.bits.addr := Cat(1.U, s2_reg_tag_r, s2_idx, Fill(4, 0.U))
+  }
+  when (fi_state === fi_req_w1) {
+    out.req.bits.addr := Cat(1.U, fi_tag, fi_line_idx, Fill(4, 0.U))
+  }
+  out.req.bits.aen := (state === s_miss_req_r) ||
+                      (state === s_miss_req_w1) ||
+                      (fi_state === fi_req_w1)
+  out.req.bits.ren := (state === s_miss_req_r)
+  out.req.bits.wdata := 0.U
+  when (state === s_miss_req_w1) {
+    out.req.bits.wdata := s2_reg_dat_w(63, 0)
+  }
+  when (state === s_miss_req_w2) {
+    out.req.bits.wdata := s2_reg_dat_w(127, 64)
+  }
+  when (fi_state === fi_req_w1) {
+    out.req.bits.wdata := fi_wdata(63, 0)
+  }
+  when (fi_state === fi_req_w2) {
+    out.req.bits.wdata := fi_wdata(127, 64)
+  }
+  out.req.bits.wmask := "hff".U(8.W)
+  out.req.bits.wlast := (state === s_miss_req_w2) ||
+                        (fi_state === fi_req_w2)
+  out.req.bits.wen := (state === s_miss_req_w1) ||
+                      (state === s_miss_req_w2) ||
+                      (fi_state === fi_req_w1) ||
+                      (fi_state === fi_req_w2)
+  out.req.bits.len := 1.U
+  out.req.bits.size := Constant.MEM_DWORD
+  out.resp.ready := (state === s_miss_wait_r) ||
+                    (state === s_miss_wait_w) ||
+                    (fi_state === fi_wait_w)
+
 }
