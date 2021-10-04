@@ -86,13 +86,13 @@ class Rob extends Module with ZhoushanConfig {
     val enq = Wire(new MicroOp)
     enq := io.in.bits.vec(i)
 
-    val enq_addr = getIdx(enq_vec(offset(i)))
+    val enq_idx = getIdx(enq_vec(offset(i)))
 
     when (io.in.bits.vec(i).valid && io.in.fire() && !io.flush) {
-      rob.write(enq_addr, enq)          // write to rob
-      complete(enq_addr) := false.B     // mark as not completed
-      ecp(enq_addr) := 0.U.asTypeOf(new ExCommitPacket)
-      io.rob_addr(i) := enq_addr
+      rob.write(enq_idx, enq)          // write to rob
+      complete(enq_idx) := false.B     // mark as not completed
+      ecp(enq_idx) := 0.U.asTypeOf(new ExCommitPacket)
+      io.rob_addr(i) := enq_idx
     } .otherwise {
       io.rob_addr(i) := 0.U
     }
@@ -152,9 +152,9 @@ class Rob extends Module with ZhoushanConfig {
   val sys_in_flight = RegInit(false.B)
 
   // dep uop (async) & ecp (sync)
-  val deq_addr_sync = Wire(Vec(deq_width, UInt(addr_width.W)))
+  val deq_idx_sync = Wire(Vec(deq_width, UInt(idx_width.W)))
   val deq_uop = Wire(Vec(deq_width, new MicroOp))
-  val deq_addr_async = Wire(Vec(deq_width, UInt(addr_width.W)))
+  val deq_idx_async = Wire(Vec(deq_width, UInt(idx_width.W)))
   val deq_ecp = Wire(Vec(deq_width, new ExCommitPacket))
 
   // CSR registers from/to CSR unit
@@ -225,10 +225,10 @@ class Rob extends Module with ZhoushanConfig {
   }
 
   for (i <- 0 until deq_width) {
-    deq_addr_sync(i) := getIdx(next_deq_vec(i))
-    deq_uop(i) := rob.read(deq_addr_sync(i))
-    deq_addr_async(i) := getIdx(deq_vec(i))
-    deq_ecp(i) := ecp(deq_addr_async(i))
+    deq_idx_sync(i) := getIdx(next_deq_vec(i))
+    deq_uop(i) := rob.read(deq_idx_sync(i))
+    deq_idx_async(i) := getIdx(deq_vec(i))
+    deq_ecp(i) := ecp(deq_idx_async(i))
     if (i == 0) {
       when (deq_uop(i).fu_code === FU_SYS && !sys_in_flight && !rob_empty) {
         io.sys_ready := true.B
@@ -309,7 +309,7 @@ class Rob extends Module with ZhoushanConfig {
   // update jmp_packet for interrupt
   when (intr) {
     io.jmp_packet.valid   := true.B
-    io.jmp_packet.inst_pc := intr_mepc
+    io.jmp_packet.inst_pc := intr_mepc(31, 0)
     io.jmp_packet.jmp     := true.B
     io.jmp_packet.jmp_pc  := intr_jmp_pc
     io.jmp_packet.mis     := true.B

@@ -104,7 +104,7 @@ class Csr extends Module {
   when (sys_code === SYS_MRET) {
     mstatus := Cat(mstatus(63, 8), 1.U, mstatus(6, 4), mstatus(7), mstatus(2, 0))
     csr_jmp := true.B
-    csr_jmp_pc := mepc
+    csr_jmp_pc := mepc(31, 0)
   }
 
   // interrupt

@@ -260,9 +260,6 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
   replace_way := Cat(plru0(s2_idx),
                      Mux(plru0(s2_idx) === 0.U, plru1(s2_idx), plru2(s2_idx)))
 
-  // generate the write-back address by concatenating the tag stored in meta
-  // data array and s2_idx
-  val wb_addr = Cat(1.U, s2_reg_tag_r, s2_idx, Fill(4, 0.U))
   val wdata1 = RegInit(UInt(64.W), 0.U)           // cacheline(63, 0)
   val wdata2 = RegInit(UInt(64.W), 0.U)           // cacheline(127, 64)
 
@@ -436,7 +433,6 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
   val fi_update = (fi_state === fi_req_w1) && (RegNext(fi_state === fi_dirty_check))
   val fi_wdata = HoldUnless(sram_out(fi_sram_idx), fi_update)
   val fi_tag = HoldUnless(tag_out(fi_sram_idx), fi_update)
-  val fi_wb_addr = Cat(1.U, fi_tag, fi_line_idx, Fill(4, 0.U))
 
   when (fi_fire) {
     state := s_invalid
@@ -542,10 +538,12 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
     out.req.bits.addr := Cat(s2_addr(31, 4), Fill(4, 0.U))
   }
   when (state === s_miss_req_w1) {
-    out.req.bits.addr := Cat(wb_addr(31, 4), Fill(4, 0.U))
+    // generate the write-back address by concatenating the tag stored in meta
+    // data array and s2_idx
+    out.req.bits.addr := Cat(1.U, s2_reg_tag_r, s2_idx, Fill(4, 0.U))
   }
   when (fi_state === fi_req_w1) {
-    out.req.bits.addr := Cat(fi_wb_addr(31, 4), Fill(4, 0.U))
+    out.req.bits.addr := Cat(1.U, fi_tag, fi_line_idx, Fill(4, 0.U))
   }
   out.req.bits.aen := (state === s_miss_req_r) ||
                       (state === s_miss_req_w1) ||
