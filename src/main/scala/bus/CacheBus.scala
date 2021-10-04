@@ -19,7 +19,6 @@ trait CacheBusUser extends Bundle with CacheBusParameters {
 
 class CacheBusReq extends Bundle with CacheBusId with CacheBusUser {
   val addr = Output(UInt(AxiAddrWidth.W))
-  val ren = Output(Bool())
   val wdata = Output(UInt(AxiDataWidth.W))
   val wmask = Output(UInt((AxiDataWidth / 8).W))
   val wen = Output(Bool())

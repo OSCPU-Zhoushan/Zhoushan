@@ -34,7 +34,7 @@ class Clint extends Module {
 
   val addr = io.in.req.bits.addr(15, 0)
   val rdata = WireInit(UInt(64.W), 0.U)
-  val ren = io.in.req.bits.ren & io.in.req.fire()
+  val ren = !io.in.req.bits.wen & io.in.req.fire()
   val wdata = io.in.req.bits.wdata
   val wmask = MaskExpand(io.in.req.bits.wmask)
   val wen = io.in.req.bits.wen & io.in.req.fire()

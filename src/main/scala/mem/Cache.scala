@@ -548,7 +548,6 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
   out.req.bits.aen := (state === s_miss_req_r) ||
                       (state === s_miss_req_w1) ||
                       (fi_state === fi_req_w1)
-  out.req.bits.ren := (state === s_miss_req_r)
   out.req.bits.wdata := 0.U
   when (state === s_miss_req_w1) {
     out.req.bits.wdata := s2_reg_dat_w(63, 0)

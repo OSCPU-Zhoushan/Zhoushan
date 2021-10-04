@@ -81,7 +81,6 @@ class InstFetch extends Module with ZhoushanConfig {
   // store pc_base, npc, pc_valid, pred_br info in user field
   // restore the info when resp, and send to instruction buffer
   req.bits.addr  := pc_base
-  req.bits.ren   := true.B
   req.bits.wdata := 0.U
   req.bits.wmask := 0.U
   req.bits.wen   := false.B

@@ -68,7 +68,6 @@ class Lsu extends Module {
   // todo: add this exception in CSR unit in the future
 
   st_req.bits.addr  := Mux(mmio, addr, Cat(addr(31, 3), Fill(3, 0.U)))
-  st_req.bits.ren   := false.B
   st_req.bits.wdata := (wdata << (addr_offset << 3))(63, 0)
   st_req.bits.wmask := mask & ((wmask << addr_offset)(7, 0))
   st_req.bits.wen   := true.B
@@ -81,7 +80,6 @@ class Lsu extends Module {
   st_resp.ready     := st_resp.valid
 
   ld_req.bits.addr  := Mux(mmio, addr, Cat(addr(31, 3), Fill(3, 0.U)))
-  ld_req.bits.ren   := true.B
   ld_req.bits.wdata := 0.U
   ld_req.bits.wmask := 0.U
   ld_req.bits.wen   := false.B
