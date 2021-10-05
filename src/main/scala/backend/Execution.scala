@@ -4,39 +4,6 @@ import chisel3._
 import chisel3.util._
 import zhoushan.Constant._
 
-object RasConstant {
-  val RAS_X             = 0.asUInt(2.W)
-  val RAS_PUSH          = 1.asUInt(2.W)
-  val RAS_POP           = 2.asUInt(2.W)
-  val RAS_POP_THEN_PUSH = 3.asUInt(2.W)
-
-  def isRasPush(x: UInt): Bool = x(0) === 1.U
-  def isRasPop(x: UInt): Bool = x(1) === 1.U
-}
-
-class JmpPacket extends Bundle {
-  val valid = Bool()
-  val inst_pc = UInt(32.W)
-  val jmp = Bool()
-  val jmp_pc = UInt(32.W)
-  val mis = Bool()
-  val sys = Bool()
-  val ras_type = UInt(2.W)
-  // debug info
-  val pred_br = Bool()
-  val pred_bpc = UInt(32.W)
-}
-
-class ExCommitPacket extends Bundle {
-  val store_valid = Bool()
-  val mmio = Bool()
-  val jmp_valid = Bool()
-  val jmp = Bool()
-  val jmp_pc = UInt(32.W)
-  val mis = Bool()
-  val rd_data = UInt(64.W)
-}
-
 class Execution extends Module with ZhoushanConfig {
   val io = IO(new Bundle {
     // input

@@ -5,11 +5,6 @@ import chisel3.util._
 import chisel3.util.experimental._
 import zhoushan.Constant._
 
-class MicroOpVec(vec_width: Int) extends Bundle {
-  val vec = Vec(vec_width, Output(new MicroOp))
-  override def cloneType = (new MicroOpVec(vec_width)).asInstanceOf[this.type]
-}
-
 class IssueUnit extends Module with ZhoushanConfig {
   val io = IO(new Bundle {
     val flush = Input(Bool())
