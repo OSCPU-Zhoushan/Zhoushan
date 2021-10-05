@@ -14,6 +14,7 @@ class InstPacket extends Bundle {
 
 class InstPacketVec(vec_width: Int) extends Bundle with ZhoushanConfig {
   val vec = Vec(vec_width, Output(new InstPacket))
+  override def cloneType = (new InstPacketVec(vec_width)).asInstanceOf[this.type]
 }
 
 class InstBuffer extends Module with ZhoushanConfig {

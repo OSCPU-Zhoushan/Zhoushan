@@ -7,6 +7,7 @@ import zhoushan.Constant._
 
 class MicroOpVec(vec_width: Int) extends Bundle {
   val vec = Vec(vec_width, Output(new MicroOp))
+  override def cloneType = (new MicroOpVec(vec_width)).asInstanceOf[this.type]
 }
 
 class IssueUnit extends Module with ZhoushanConfig {
