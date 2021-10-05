@@ -19,31 +19,6 @@ object Csrs {
   val minstret = "hb02".U
 }
 
-abstract class CsrSpecial extends Bundle {
-  val addr: UInt
-  val romask: UInt
-  def apply(): UInt
-  def apply(x: Int): UInt
-  def access(addr: UInt, rdata: UInt, ren: Bool, wdata: UInt,
-             wmask: UInt, wen: Bool): Unit
-}
-
-class CsrMip extends CsrSpecial {
-  val addr = Csrs.mip
-  val romask = "h080".U(64.W)
-  val mtip = WireInit(UInt(1.W), 0.U)
-  BoringUtils.addSink(mtip, "csr_mip_mtip")
-  def apply(): UInt = Cat(Fill(56, 0.U), mtip, Fill(7, 0.U))(63, 0)
-  def apply(x: Int): UInt = if (x == 7) mtip else 0.U
-  def access(a: UInt, rdata: UInt, ren: Bool, wdata: UInt,
-             wmask: UInt, wen: Bool): Unit = {
-    when (addr === a && ren) {
-      rdata := 0.U // apply()
-    }
-    when (addr === a && wen) { }
-  }
-}
-
 class Csr extends Module {
   val io = IO(new Bundle {
     val uop = Input(new MicroOp())
@@ -68,12 +43,15 @@ class Csr extends Module {
   val mscratch  = RegInit(UInt(64.W), 0.U)
   val mepc      = RegInit(UInt(64.W), 0.U)
   val mcause    = RegInit(UInt(64.W), 0.U)
-  val mip       = new CsrMip
 
   BoringUtils.addSource(mstatus, "csr_mstatus")
   BoringUtils.addSource(mie(7).asBool(), "csr_mie_mtie")
   BoringUtils.addSource(mtvec(31, 2), "csr_mtvec_idx")
-  BoringUtils.addSource(mip(7).asBool(), "csr_mip_mtip_intr")
+
+  // interrupt for mip
+  val mtip      = WireInit(UInt(1.W), 0.U)
+  BoringUtils.addSink(mtip, "csr_mip_mtip")
+  BoringUtils.addSource(mtip, "csr_mip_mtip_intr")
 
   val mcycle    = WireInit(UInt(64.W), 0.U)
   val minstret  = WireInit(UInt(64.W), 0.U)
@@ -155,7 +133,11 @@ class Csr extends Module {
   ))
 
   RegMap.access(csr_map, addr, rdata, ren, wdata, wmask, wen)
-  mip.access(addr, rdata, ren, wdata, wmask, wen)
+
+  // mip access
+  when (Csrs.mip === addr && ren) {
+    rdata := 0.U
+  }
 
   io.ecp.store_valid := false.B
   io.ecp.mmio := false.B
@@ -185,7 +167,7 @@ class Csr extends Module {
     dt_cs.io.mcause         := mcause
     dt_cs.io.scause         := 0.U
     dt_cs.io.satp           := 0.U
-    dt_cs.io.mip            := 0.U // mip()
+    dt_cs.io.mip            := 0.U
     dt_cs.io.mie            := mie
     dt_cs.io.mscratch       := mscratch
     dt_cs.io.sscratch       := 0.U
