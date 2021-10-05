@@ -25,41 +25,41 @@ class Alu extends Module {
   val npc_to_rd = Wire(UInt(64.W))
 
   alu_out_0 := MuxLookup(uop.alu_code, 0.U, Array(
-    ALU_ADD  -> (in1 + in2).asUInt(),
-    ALU_SUB  -> (in1 - in2).asUInt(),
-    ALU_SLT  -> (in1.asSInt() < in2.asSInt()).asUInt(),
-    ALU_SLTU -> (in1 < in2).asUInt(),
-    ALU_XOR  -> (in1 ^ in2).asUInt(),
-    ALU_OR   -> (in1 | in2).asUInt(),
-    ALU_AND  -> (in1 & in2).asUInt(),
-    ALU_SLL  -> ((in1 << shamt)(63, 0)).asUInt(),
-    ALU_SRL  -> (in1.asUInt() >> shamt).asUInt(),
-    ALU_SRA  -> (in1.asSInt() >> shamt).asUInt()
+    s"b$ALU_ADD".U  -> (in1 + in2).asUInt(),
+    s"b$ALU_SUB".U  -> (in1 - in2).asUInt(),
+    s"b$ALU_SLT".U  -> (in1.asSInt() < in2.asSInt()).asUInt(),
+    s"b$ALU_SLTU".U -> (in1 < in2).asUInt(),
+    s"b$ALU_XOR".U  -> (in1 ^ in2).asUInt(),
+    s"b$ALU_OR".U   -> (in1 | in2).asUInt(),
+    s"b$ALU_AND".U  -> (in1 & in2).asUInt(),
+    s"b$ALU_SLL".U  -> ((in1 << shamt)(63, 0)).asUInt(),
+    s"b$ALU_SRL".U  -> (in1.asUInt() >> shamt).asUInt(),
+    s"b$ALU_SRA".U  -> (in1.asSInt() >> shamt).asUInt()
   ))
 
   alu_out := Mux(uop.w_type, SignExt32_64(alu_out_0(31, 0)), alu_out_0)
 
   jmp := MuxLookup(uop.jmp_code, false.B, Array(
-    JMP_JAL  -> true.B,
-    JMP_JALR -> true.B,
-    JMP_BEQ  -> (in1 === in2),
-    JMP_BNE  -> (in1 =/= in2),
-    JMP_BLT  -> (in1.asSInt() < in2.asSInt()),
-    JMP_BGE  -> (in1.asSInt() >= in2.asSInt()),
-    JMP_BLTU -> (in1.asUInt() < in2.asUInt()),
-    JMP_BGEU -> (in1.asUInt() >= in2.asUInt())
+    s"b$JMP_JAL".U  -> true.B,
+    s"b$JMP_JALR".U -> true.B,
+    s"b$JMP_BEQ".U  -> (in1 === in2),
+    s"b$JMP_BNE".U  -> (in1 =/= in2),
+    s"b$JMP_BLT".U  -> (in1.asSInt() < in2.asSInt()),
+    s"b$JMP_BGE".U  -> (in1.asSInt() >= in2.asSInt()),
+    s"b$JMP_BLTU".U -> (in1.asUInt() < in2.asUInt()),
+    s"b$JMP_BGEU".U -> (in1.asUInt() >= in2.asUInt())
   ))
 
-  jmp_pc := Mux(uop.jmp_code === JMP_JALR, in1(31, 0), uop.pc) + uop.imm
+  jmp_pc := Mux(uop.jmp_code === s"b$JMP_JALR".U, in1(31, 0), uop.pc) + uop.imm
 
   npc_to_rd := MuxLookup(uop.jmp_code, 0.U, Array(
-    JMP_JAL  -> ZeroExt32_64(uop.npc),
-    JMP_JALR -> ZeroExt32_64(uop.npc)
+    s"b$JMP_JAL".U  -> ZeroExt32_64(uop.npc),
+    s"b$JMP_JALR".U -> ZeroExt32_64(uop.npc)
   ))
 
   io.ecp.store_valid := false.B
   io.ecp.mmio := false.B
-  io.ecp.jmp_valid := (uop.fu_code === FU_JMP)
+  io.ecp.jmp_valid := (uop.fu_code === s"b$FU_JMP".U)
   io.ecp.jmp := jmp
   io.ecp.jmp_pc := jmp_pc
   io.ecp.mis := Mux(jmp,

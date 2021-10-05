@@ -230,7 +230,7 @@ class Rob extends Module with ZhoushanConfig {
     deq_idx_async(i) := getIdx(deq_vec(i))
     deq_ecp(i) := ecp(deq_idx_async(i))
     if (i == 0) {
-      when (deq_uop(i).fu_code === FU_SYS && !sys_in_flight && !rob_empty) {
+      when (deq_uop(i).fu_code === s"b$FU_SYS".U && !sys_in_flight && !rob_empty) {
         io.sys_ready := true.B
         sys_in_flight := true.B
       }
@@ -279,7 +279,8 @@ class Rob extends Module with ZhoushanConfig {
       io.jmp_packet.jmp     := deq_ecp(i).jmp
       io.jmp_packet.jmp_pc  := deq_ecp(i).jmp_pc
       io.jmp_packet.mis     := deq_ecp(i).mis
-      io.jmp_packet.sys     := (deq_uop(i).fu_code === FU_SYS) && (deq_uop(i).sys_code === SYS_FENCEI)
+      io.jmp_packet.sys     := (deq_uop(i).fu_code === s"b$FU_SYS".U) &&
+                               (deq_uop(i).sys_code === s"b$SYS_FENCEI".U)
 
       // debug info
       io.jmp_packet.pred_br := deq_uop(i).pred_br
@@ -289,12 +290,12 @@ class Rob extends Module with ZhoushanConfig {
       val rd_link = (deq_uop(i).rd_addr === 1.U || deq_uop(i).rd_addr === 5.U)
       val rs1_link = (deq_uop(i).rs1_addr === 1.U || deq_uop(i).rs1_addr === 5.U)
       val ras_type = WireInit(RAS_X)
-      when (deq_uop(i).jmp_code === JMP_JAL) {
+      when (deq_uop(i).jmp_code === s"b$JMP_JAL".U) {
         when (rd_link) {
           ras_type := RAS_PUSH
         }
       }
-      when (deq_uop(i).jmp_code === JMP_JALR) {
+      when (deq_uop(i).jmp_code === s"b$JMP_JALR".U) {
         ras_type := MuxLookup(Cat(rd_link.asUInt(), rs1_link.asUInt()), RAS_X, Array(
           "b00".U -> RAS_X,
           "b01".U -> RAS_POP,

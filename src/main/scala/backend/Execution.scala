@@ -41,20 +41,22 @@ class Execution extends Module with ZhoushanConfig {
 
   for (i <- 0 until IssueWidth) {
     in1_0(i) := MuxLookup(uop(i).rs1_src, 0.U, Array(
-      RS_FROM_RF  -> io.rs1_data(i),
-      RS_FROM_IMM -> SignExt32_64(uop(i).imm),
-      RS_FROM_PC  -> ZeroExt32_64(uop(i).pc),
-      RS_FROM_NPC -> ZeroExt32_64(uop(i).npc)
+      s"b$RS_FROM_RF".U  -> io.rs1_data(i),
+      s"b$RS_FROM_IMM".U -> SignExt32_64(uop(i).imm),
+      s"b$RS_FROM_PC".U  -> ZeroExt32_64(uop(i).pc)
     ))(63, 0)
 
     in2_0(i) := MuxLookup(uop(i).rs2_src, 0.U, Array(
-      RS_FROM_RF  -> io.rs2_data(i),
-      RS_FROM_IMM -> SignExt32_64(uop(i).imm),
-      RS_FROM_PC  -> ZeroExt32_64(uop(i).pc),
-      RS_FROM_NPC -> ZeroExt32_64(uop(i).npc)
+      s"b$RS_FROM_RF".U  -> io.rs2_data(i),
+      s"b$RS_FROM_IMM".U -> SignExt32_64(uop(i).imm),
+      s"b$RS_FROM_PC".U  -> ZeroExt32_64(uop(i).pc)
     ))(63, 0)
 
-    in1(i) := Mux(uop(i).w_type, Mux(uop(i).alu_code === ALU_SRL, ZeroExt32_64(in1_0(i)(31, 0)), SignExt32_64(in1_0(i)(31, 0))), in1_0(i))
+    in1(i) := Mux(uop(i).w_type,
+                  Mux(uop(i).alu_code === s"b$ALU_SRL".U,
+                      ZeroExt32_64(in1_0(i)(31, 0)),
+                      SignExt32_64(in1_0(i)(31, 0))),
+                  in1_0(i))
     in2(i) := Mux(uop(i).w_type, SignExt32_64(in2_0(i)(31, 0)), in2_0(i))
   }
 
@@ -150,9 +152,9 @@ class ExPipe0 extends Module {
   fence.io.uop := io.uop
 
   io.ecp := 0.U.asTypeOf(new ExCommitPacket)
-  when (io.uop.fu_code === FU_ALU || io.uop.fu_code === FU_JMP) {
+  when (io.uop.fu_code === s"b$FU_ALU".U || io.uop.fu_code === s"b$FU_JMP".U) {
     io.ecp := alu.io.ecp
-  } .elsewhen (io.uop.fu_code === FU_SYS && io.uop.sys_code =/= SYS_FENCE && io.uop.sys_code =/= SYS_FENCEI) {
+  } .elsewhen (io.uop.fu_code === s"b$FU_SYS".U && io.uop.sys_code =/= s"b$SYS_FENCE".U && io.uop.sys_code =/= s"b$SYS_FENCEI".U) {
     io.ecp := csr.io.ecp
   } .otherwise {
     io.ecp := fence.io.ecp

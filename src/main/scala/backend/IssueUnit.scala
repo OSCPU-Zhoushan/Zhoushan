@@ -45,10 +45,10 @@ class IssueUnit extends Module with ZhoushanConfig {
   uop_mem := io.in.bits.vec
 
   for (i <- 0 until DecodeWidth) {
-    when (uop_int(i).fu_code === FU_MEM) {
+    when (uop_int(i).fu_code === s"b$FU_MEM".U) {
       uop_int(i).valid := false.B
     }
-    when (uop_mem(i).fu_code =/= FU_MEM) {
+    when (uop_mem(i).fu_code =/= s"b$FU_MEM".U) {
       uop_mem(i).valid := false.B
     }
   }
@@ -112,7 +112,7 @@ class IntIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_width: Int)
 
   val is_sys = Wire(Vec(entries, Bool()))
   for (i <- 0 until entries) {
-    is_sys(i) := (buf(i).fu_code === Constant.FU_SYS)
+    is_sys(i) := (buf(i).fu_code === s"b$FU_SYS".U)
   }
   val has_sys = Cat(is_sys).orR
 
@@ -240,7 +240,7 @@ class MemIssueQueueOutOfOrder(entries: Int, enq_width: Int, deq_width: Int)
 
   val is_store = Wire(Vec(entries, Bool()))
   for (i <- 0 until entries) {
-    is_store(i) := (buf(i).mem_code === Constant.MEM_ST)
+    is_store(i) := (buf(i).mem_code === s"b$MEM_ST".U)
   }
 
   val store_mask = Wire(Vec(entries, Bool()))
