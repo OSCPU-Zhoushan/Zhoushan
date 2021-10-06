@@ -18,7 +18,6 @@ class Uncache(id: Int) extends Module with ZhoushanConfig {
 
   // registers for req
   val addr  = RegInit(0.U(32.W))
-  val ren   = RegInit(false.B)
   val wdata = RegInit(0.U(64.W))
   val wmask = RegInit(0.U(8.W))
   val wen   = RegInit(false.B)
@@ -38,7 +37,6 @@ class Uncache(id: Int) extends Module with ZhoushanConfig {
     is (s_idle) {
       when (in.req.fire()) {
         addr  := in.req.bits.addr
-        ren   := in.req.bits.ren
         wdata := in.req.bits.wdata
         wmask := in.req.bits.wmask
         wen   := in.req.bits.wen
@@ -97,7 +95,6 @@ class Uncache(id: Int) extends Module with ZhoushanConfig {
   out.req.valid        := (state === s_req_1 || state === s_req_2)
   out.req.bits.id      := id.U
   out.req.bits.aen     := true.B
-  out.req.bits.ren     := ren
   out.req.bits.wlast   := true.B
   out.req.bits.wen     := wen
   out.req.bits.len     := 0.U

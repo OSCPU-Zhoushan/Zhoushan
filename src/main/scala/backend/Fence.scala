@@ -13,7 +13,7 @@ class Fence extends Module {
 
   val uop = io.uop
 
-  val fence_i = uop.valid && (uop.fu_code === FU_SYS) && (uop.sys_code === SYS_FENCEI)
+  val fence_i = uop.valid && (uop.fu_code === s"b$FU_SYS".U) && (uop.sys_code === s"b$SYS_FENCEI".U)
   BoringUtils.addSource(fence_i, "fence_i")
 
   /* when fence.i is commited

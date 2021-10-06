@@ -81,11 +81,10 @@ class InstFetch extends Module with ZhoushanConfig {
   // store pc_base, npc, pc_valid, pred_br info in user field
   // restore the info when resp, and send to instruction buffer
   req.bits.addr  := pc_base
-  req.bits.ren   := true.B
   req.bits.wdata := 0.U
   req.bits.wmask := 0.U
   req.bits.wen   := false.B
-  req.bits.size  := Constant.MEM_DWORD
+  req.bits.size  := s"b${Constant.MEM_DWORD}".U
   req.bits.user  := Cat(pred_br, pc_valid, npc, pc_base)
   req.bits.id    := 0.U
   req.valid      := io.out.ready

@@ -18,15 +18,12 @@ class Meta extends Module {
     val tag_r = Output(UInt(21.W))
     val tag_w = Input(UInt(21.W))
     val tag_wen = Input(Bool())
-    val dirty_r = Output(Bool())
+    val dirty_r_async = Output(Bool())
     val dirty_w = Input(Bool())
     val dirty_wen = Input(Bool())
-    val valid_r = Output(Bool())
+    val valid_r_async = Output(Bool())
     // I$/D$ fence.I cache invalidate input
     val invalidate = Input(Bool())
-    // D$ dirty check output
-    val dirty_r_async = Output(Bool())
-    val valid_r_async = Output(Bool())
   })
 
   // tag = addr(30, 10)
@@ -43,33 +40,29 @@ class Meta extends Module {
 
   val idx = io.idx
 
+  // sync write & read
   when (io.tag_wen) {
     tags.write(idx, io.tag_w)
     valid(idx) := true.B
   }
   io.tag_r := tags.read(idx)
 
-  // sync read
-  val dirty_r = RegNext(dirty(idx))
-  io.dirty_r := dirty_r
+  // async read
+  io.dirty_r_async := dirty(idx)
+  io.valid_r_async := valid(idx)
 
+  // sync write
   when (io.dirty_wen) {
     dirty(idx) := io.dirty_w
   }
 
-  val valid_r = RegNext(valid(idx))
-  io.valid_r := valid_r
-
+  // invalidate for fence.i
   when (io.invalidate) {
     for (i <- 0 until 64) {
       dirty(i) := false.B
       valid(i) := false.B
     }
   }
-
-  // async read
-  io.dirty_r_async := dirty(idx)
-  io.valid_r_async := valid(idx)
 
 }
 
@@ -120,8 +113,8 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
 
   (sram_out  zip sram).map { case (o, s) => { o := s.io.rdata }}
   (tag_out   zip meta).map { case (t, m) => { t := m.io.tag_r }}
-  (valid_out zip meta).map { case (v, m) => { v := m.io.valid_r }}
-  (dirty_out zip meta).map { case (d, m) => { d := m.io.dirty_r }}
+  (valid_out zip meta).map { case (v, m) => { v := RegNext(m.io.valid_r_async) }}
+  (dirty_out zip meta).map { case (d, m) => { d := RegNext(m.io.dirty_r_async) }}
 
   /* ----- PLRU replacement ---------- */
 
@@ -548,7 +541,6 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
   out.req.bits.aen := (state === s_miss_req_r) ||
                       (state === s_miss_req_w1) ||
                       (fi_state === fi_req_w1)
-  out.req.bits.ren := (state === s_miss_req_r)
   out.req.bits.wdata := 0.U
   when (state === s_miss_req_w1) {
     out.req.bits.wdata := s2_reg_dat_w(63, 0)
@@ -570,7 +562,7 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
                       (fi_state === fi_req_w1) ||
                       (fi_state === fi_req_w2)
   out.req.bits.len := 1.U
-  out.req.bits.size := Constant.MEM_DWORD
+  out.req.bits.size := s"b${Constant.MEM_DWORD}".U
   out.resp.ready := (state === s_miss_wait_r) ||
                     (state === s_miss_wait_w) ||
                     (fi_state === fi_wait_w)

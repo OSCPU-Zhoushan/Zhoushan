@@ -144,7 +144,7 @@ class Core extends Module with ZhoushanConfig {
 
     for (i <- 0 until CommitWidth) {
       val skip = (cm(i).inst === Instructions.PUTCH) ||
-                 (cm(i).fu_code === Constant.FU_SYS && cm(i).inst(31, 20) === Csrs.mcycle) ||
+                 (cm(i).fu_code === s"b${Constant.FU_SYS}".U && cm(i).inst(31, 20) === Csrs.mcycle) ||
                  cm_mmio(i)
 
       val dt_ic = Module(new DifftestInstrCommit)

@@ -4,18 +4,6 @@ import chisel3._
 import chisel3.util._
 import chisel3.util.experimental._
 
-class InstPacket extends Bundle {
-  val pc = UInt(32.W)
-  val inst = UInt(32.W)
-  val pred_br = Bool()
-  val pred_bpc = UInt(32.W)
-  val valid = Bool()
-}
-
-class InstPacketVec(vec_width: Int) extends Bundle with ZhoushanConfig {
-  val vec = Vec(vec_width, Output(new InstPacket))
-}
-
 class InstBuffer extends Module with ZhoushanConfig {
   val entries = InstBufferSize
   val enq_width = FetchWidth

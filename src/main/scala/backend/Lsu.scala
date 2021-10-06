@@ -28,9 +28,9 @@ class Lsu extends Module {
     completed := false.B
   }
 
-  val is_mem = (uop.fu_code === FU_MEM)
-  val is_load = (uop.mem_code === MEM_LD || uop.mem_code === MEM_LDU)
-  val is_store = (uop.mem_code === MEM_ST)
+  val is_mem = (uop.fu_code === s"b$FU_MEM".U)
+  val is_load = (uop.mem_code === s"b$MEM_LD".U || uop.mem_code === s"b$MEM_LDU".U)
+  val is_store = (uop.mem_code === s"b$MEM_ST".U)
 
   val s_idle :: s_wait_r :: s_wait_w :: Nil = Enum(3)
   val state = RegInit(s_idle)
@@ -48,31 +48,30 @@ class Lsu extends Module {
 
   val mask = ("b11111111".U << addr_offset)(7, 0)
   val wmask = MuxLookup(uop.mem_size, 0.U, Array(
-    MEM_BYTE  -> "b00000001".U(8.W),
-    MEM_HALF  -> "b00000011".U(8.W),
-    MEM_WORD  -> "b00001111".U(8.W),
-    MEM_DWORD -> "b11111111".U(8.W)
+    s"b$MEM_BYTE".U  -> "b00000001".U(8.W),
+    s"b$MEM_HALF".U  -> "b00000011".U(8.W),
+    s"b$MEM_WORD".U  -> "b00001111".U(8.W),
+    s"b$MEM_DWORD".U -> "b11111111".U(8.W)
   ))
 
   // memory address unaligned
   //    half  -> offset = 111
   //    word  -> offset = 101/110/111
   //    dword -> offset != 000
-  val addr_unaligned = Mux(uop.fu_code === FU_MEM,
+  val addr_unaligned = Mux(uop.fu_code === s"b$FU_MEM".U,
     MuxLookup(uop.mem_size, false.B, Array(
-      MEM_HALF  -> (addr_offset === "b111".U),
-      MEM_WORD  -> (addr_offset.asUInt() > "b100".U),
-      MEM_DWORD -> (addr_offset =/= "b000".U)
+      s"b$MEM_HALF".U  -> (addr_offset === "b111".U),
+      s"b$MEM_WORD".U  -> (addr_offset.asUInt() > "b100".U),
+      s"b$MEM_DWORD".U -> (addr_offset =/= "b000".U)
     )), false.B)
   // currently we just skip the memory access with unaligned address
   // todo: add this exception in CSR unit in the future
 
   st_req.bits.addr  := Mux(mmio, addr, Cat(addr(31, 3), Fill(3, 0.U)))
-  st_req.bits.ren   := false.B
   st_req.bits.wdata := (wdata << (addr_offset << 3))(63, 0)
   st_req.bits.wmask := mask & ((wmask << addr_offset)(7, 0))
   st_req.bits.wen   := true.B
-  st_req.bits.size  := Mux(mmio, uop.mem_size, Constant.MEM_DWORD)
+  st_req.bits.size  := Mux(mmio, uop.mem_size, s"b$MEM_DWORD".U)
   st_req.bits.user  := 0.U
   st_req.bits.id    := 0.U
   st_req.valid      := uop.valid && (state === s_idle) && !addr_unaligned &&
@@ -81,11 +80,10 @@ class Lsu extends Module {
   st_resp.ready     := st_resp.valid
 
   ld_req.bits.addr  := Mux(mmio, addr, Cat(addr(31, 3), Fill(3, 0.U)))
-  ld_req.bits.ren   := true.B
   ld_req.bits.wdata := 0.U
   ld_req.bits.wmask := 0.U
   ld_req.bits.wen   := false.B
-  ld_req.bits.size  := Mux(mmio, uop.mem_size, Constant.MEM_DWORD)
+  ld_req.bits.size  := Mux(mmio, uop.mem_size, s"b$MEM_DWORD".U)
   ld_req.bits.user  := 0.U
   ld_req.bits.id    := 0.U
   ld_req.valid      := uop.valid && (state === s_idle) && !addr_unaligned &&
@@ -142,23 +140,23 @@ class Lsu extends Module {
   val ldu_out = Wire(UInt(64.W))
   val load_out = Wire(UInt(64.W))
 
-  ld_out := Mux(uop.mem_code === MEM_LD, MuxLookup(uop.mem_size, 0.U, Array(
-    MEM_BYTE  -> Cat(Fill(56, load_data(7)), load_data(7, 0)),
-    MEM_HALF  -> Cat(Fill(48, load_data(15)), load_data(15, 0)),
-    MEM_WORD  -> Cat(Fill(32, load_data(31)), load_data(31, 0)),
-    MEM_DWORD -> load_data
+  ld_out := Mux(uop.mem_code === s"b$MEM_LD".U, MuxLookup(uop.mem_size, 0.U, Array(
+    s"b$MEM_BYTE".U  -> Cat(Fill(56, load_data(7)), load_data(7, 0)),
+    s"b$MEM_HALF".U  -> Cat(Fill(48, load_data(15)), load_data(15, 0)),
+    s"b$MEM_WORD".U  -> Cat(Fill(32, load_data(31)), load_data(31, 0)),
+    s"b$MEM_DWORD".U -> load_data
   )), 0.U)
 
-  ldu_out := Mux(uop.mem_code === MEM_LDU, MuxLookup(uop.mem_size, 0.U, Array(
-    MEM_BYTE  -> Cat(Fill(56, 0.U), load_data(7, 0)),
-    MEM_HALF  -> Cat(Fill(48, 0.U), load_data(15, 0)),
-    MEM_WORD  -> Cat(Fill(32, 0.U), load_data(31, 0)),
-    MEM_DWORD -> load_data
+  ldu_out := Mux(uop.mem_code === s"b$MEM_LDU".U, MuxLookup(uop.mem_size, 0.U, Array(
+    s"b$MEM_BYTE".U  -> Cat(Fill(56, 0.U), load_data(7, 0)),
+    s"b$MEM_HALF".U  -> Cat(Fill(48, 0.U), load_data(15, 0)),
+    s"b$MEM_WORD".U  -> Cat(Fill(32, 0.U), load_data(31, 0)),
+    s"b$MEM_DWORD".U -> load_data
   )), 0.U)
 
   load_out := MuxLookup(uop.mem_code, 0.U, Array(
-    MEM_LD  -> ld_out,
-    MEM_LDU -> ldu_out
+    s"b$MEM_LD".U  -> ld_out,
+    s"b$MEM_LDU".U -> ldu_out
   ))
 
   io.ecp := 0.U.asTypeOf(new ExCommitPacket)
