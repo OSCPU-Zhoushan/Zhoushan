@@ -89,7 +89,7 @@ class Rename extends Module with ZhoushanConfig {
     for (i <- 0 until DecodeWidth) {
       val u = io.out.bits.vec(i)
       when (u.valid) {
-        printf("%d: [RR %d ] pc=%x inst=%x rs1=%d->%d rs2=%d->%d rd(en=%x)=%d->%d\n", DebugTimer(), i.U, 
+        printf("%d: [RR %d ] pc=%x inst=%x rs1=%d->%d rs2=%d->%d rd(en=%x)=%d->%d\n", DebugTimer(), i.U,
                 u.pc, u.inst, u.rs1_addr, u.rs1_paddr, u.rs2_addr, u.rs2_paddr, u.rd_en, u.rd_addr, u.rd_paddr)
       }
     }

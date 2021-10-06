@@ -42,10 +42,11 @@ class MicroOp extends Bundle with ZhoushanConfig{
   // re-order buffer related
   val rob_addr  = UInt(log2Up(RobSize).W)
 
-  def from_decoder(in: UInt): Unit = {
+  def from_decoder(in: UInt, rd_addr: UInt): Unit = {
+    val rd_en_tmp = WireInit(false.B)
     val imm_type = WireInit(0.U(IMM_X.length.W))
     val entries = Seq(valid, fu_code, alu_code, jmp_code, mem_code, mem_size,
-                      sys_code, w_type, rs1_src, rs2_src, rd_en, imm_type)
+                      sys_code, w_type, rs1_src, rs2_src, rd_en_tmp, imm_type)
     var i = 0
     for (entry <- entries.reverse) {
       val entry_width = entry.getWidth
@@ -56,6 +57,8 @@ class MicroOp extends Bundle with ZhoushanConfig{
       }
       i += entry_width
     }
+
+    rd_en := rd_en_tmp && (rd_addr =/= 0.U)
 
     val imm_i = Cat(Fill(21, inst(31)), inst(30, 20))
     val imm_s = Cat(Fill(21, inst(31)), inst(30, 25), inst(11, 7))

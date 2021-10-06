@@ -74,8 +74,7 @@ class Decoder extends Module {
                               input = inst,
                               truthTable = DecodeConfig.decode_table)
 
-  uop.from_decoder(decode_result)
+  uop.from_decoder(decode_result, inst(11, 7))
 
   io.out := Mux(io.in_valid, uop, 0.U.asTypeOf(new MicroOp))
-
 }
