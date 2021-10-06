@@ -14,7 +14,7 @@ class Clint extends Module {
 
   // Suppose the unit of mtime is us, core frequency is 100 MHz.
   // 1 us / 100 MHz = 100
-  val clint_freq = RegInit(UInt(64.W), 100.U)
+  val clint_freq = RegInit(UInt(64.W), 1.U)
   val clint_step = RegInit(UInt(64.W), 1.U)
 
   val counter = RegInit(UInt(64.W), 0.U)

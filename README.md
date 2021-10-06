@@ -14,6 +14,8 @@ Main developer: Li Shi (SJTU/CMU ECE)
 
 1. [NEMU](https://github.com/OpenXiangShan/NEMU), branch: master
 
+1. [ESPRESSO](https://github.com/classabbyamp/espresso-logic), branch: master
+
 ## Getting Started
 
 First, download all the dependency repositories and set the environment variables as follows.
@@ -25,7 +27,7 @@ export AM_HOME=<...>/abstract-machine
 export DRAMSIM3_HOME=<...>/Zhoushan/DRAMsim3
 ```
 
-Then, config and make `NEMU` and `DRAMsim3`.
+Then, config and make `NEMU` and `DRAMsim3`, and install `ESPRESSO`.
 
 To generate Verilog:
 
