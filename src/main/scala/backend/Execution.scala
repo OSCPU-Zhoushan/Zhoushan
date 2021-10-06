@@ -140,23 +140,28 @@ class ExPipe0 extends Module {
   })
 
   val alu = Module(new Alu)
-  alu.io.uop := io.uop
   alu.io.in1 := io.in1
   alu.io.in2 := io.in2
 
   val csr = Module(new Csr)
-  csr.io.uop := io.uop
   csr.io.in1 := io.in1
 
   val fence = Module(new Fence)
-  fence.io.uop := io.uop
 
+  // default input and output
+  alu.io.uop := 0.U.asTypeOf(new MicroOp)
+  csr.io.uop := 0.U.asTypeOf(new MicroOp)
+  fence.io.uop := 0.U.asTypeOf(new MicroOp)
   io.ecp := 0.U.asTypeOf(new ExCommitPacket)
+
   when (io.uop.fu_code === s"b$FU_ALU".U || io.uop.fu_code === s"b$FU_JMP".U) {
+    alu.io.uop := io.uop
     io.ecp := alu.io.ecp
   } .elsewhen (io.uop.fu_code === s"b$FU_SYS".U && io.uop.sys_code =/= s"b$SYS_FENCE".U && io.uop.sys_code =/= s"b$SYS_FENCEI".U) {
+    csr.io.uop := io.uop
     io.ecp := csr.io.ecp
   } .otherwise {
+    fence.io.uop := io.uop
     io.ecp := fence.io.ecp
   }
 }

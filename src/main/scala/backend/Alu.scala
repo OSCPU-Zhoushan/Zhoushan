@@ -65,5 +65,5 @@ class Alu extends Module {
   io.ecp.mis := Mux(jmp,
                     (uop.pred_br && (jmp_pc =/= uop.pred_bpc)) || !uop.pred_br,
                     uop.pred_br)
-  io.ecp.rd_data := alu_out | npc_to_rd
+  io.ecp.rd_data := Mux(uop.fu_code === s"b$FU_ALU".U, alu_out, npc_to_rd)
 }
