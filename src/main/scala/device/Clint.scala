@@ -14,7 +14,7 @@ class Clint extends Module {
 
   // Suppose the unit of mtime is us, core frequency is 100 MHz.
   // 1 us / 100 MHz = 100
-  val clint_freq = RegInit(UInt(64.W), 100.U)
+  val clint_freq = RegInit(UInt(64.W), 1.U)
   val clint_step = RegInit(UInt(64.W), 1.U)
 
   val counter = RegInit(UInt(64.W), 0.U)
@@ -34,7 +34,7 @@ class Clint extends Module {
 
   val addr = io.in.req.bits.addr(15, 0)
   val rdata = WireInit(UInt(64.W), 0.U)
-  val ren = io.in.req.bits.ren & io.in.req.fire()
+  val ren = !io.in.req.bits.wen & io.in.req.fire()
   val wdata = io.in.req.bits.wdata
   val wmask = MaskExpand(io.in.req.bits.wmask)
   val wen = io.in.req.bits.wen & io.in.req.fire()
@@ -72,7 +72,6 @@ class Clint extends Module {
   io.in.req.ready := (state === s_idle)
   io.in.resp.valid := (state =/= s_idle)
   io.in.resp.bits.rdata := reg_rdata
-  io.in.resp.bits.user := 0.U
   io.in.resp.bits.id := reg_id
 
   val mtip = WireInit(UInt(1.W), 0.U)

@@ -34,7 +34,7 @@ class BranchTargetBufferDirectMapped extends AbstractBranchTargetBuffer {
   val btb_target = SyncReadMem(BtbSize, UInt(32.W), SyncReadMem.WriteFirst)
   val btb_ras_type = SyncReadMem(BtbSize, UInt(2.W), SyncReadMem.WriteFirst)
 
-  val valid = RegInit(VecInit(Seq.fill(BtbSize)(false.B)))
+  val valid = Mem(BtbSize, Bool())
 
   for (i <- 0 until FetchWidth) {
     val rdata = WireInit(0.U.asTypeOf(new BtbEntry))
@@ -69,6 +69,12 @@ class BranchTargetBufferDirectMapped extends AbstractBranchTargetBuffer {
     }
   }
 
+  when (reset.asBool()) {
+    for (i <- 0 until BtbSize) {
+      valid(i) := false.B
+    }
+  }
+
 }
 
 class BranchTargetBuffer4WayAssociative extends AbstractBranchTargetBuffer {
@@ -88,8 +94,10 @@ class BranchTargetBuffer4WayAssociative extends AbstractBranchTargetBuffer {
     val btb_ras_type = SyncReadMem(BtbSize / 4, UInt(2.W), SyncReadMem.WriteFirst)
     btb_ras_type
   }
-
-  val valid = RegInit(VecInit(Seq.fill(4)(VecInit(Seq.fill(BtbSize / 4)(false.B)))))
+  val valid = for (i <- 0 until 4) yield {
+    val valid = Mem(BtbSize / 4, Bool())
+    valid
+  }
 
   // plru0 == 0 --> way 0/1, == 1 --> way 2/3
   val plru0 = RegInit(VecInit(Seq.fill(BtbSize / 4)(0.U)))
@@ -190,6 +198,14 @@ class BranchTargetBuffer4WayAssociative extends AbstractBranchTargetBuffer {
     if (DebugBranchPredictorRas) {
       when (wentry.ras_type =/= RAS_X) {
         printf("%d: [BTB-R] pc=%x ras_type=%x\n", DebugTimer(), io.wpc, io.wras_type)
+      }
+    }
+  }
+
+  when (reset.asBool()) {
+    for (i <- 0 until 4) {
+      for (j <- 0 until BtbSize / 4) {
+        valid(i)(j) := false.B
       }
     }
   }

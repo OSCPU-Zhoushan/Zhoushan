@@ -19,31 +19,6 @@ object Csrs {
   val minstret = "hb02".U
 }
 
-abstract class CsrSpecial extends Bundle {
-  val addr: UInt
-  val romask: UInt
-  def apply(): UInt
-  def apply(x: Int): UInt
-  def access(addr: UInt, rdata: UInt, ren: Bool, wdata: UInt,
-             wmask: UInt, wen: Bool): Unit
-}
-
-class CsrMip extends CsrSpecial {
-  val addr = Csrs.mip
-  val romask = "h080".U(64.W)
-  val mtip = WireInit(UInt(1.W), 0.U)
-  BoringUtils.addSink(mtip, "csr_mip_mtip")
-  def apply(): UInt = Cat(Fill(56, 0.U), mtip, Fill(7, 0.U))(63, 0)
-  def apply(x: Int): UInt = if (x == 7) mtip else 0.U
-  def access(a: UInt, rdata: UInt, ren: Bool, wdata: UInt,
-             wmask: UInt, wen: Bool): Unit = {
-    when (addr === a && ren) {
-      rdata := 0.U // apply()
-    }
-    when (addr === a && wen) { }
-  }
-}
-
 class Csr extends Module {
   val io = IO(new Bundle {
     val uop = Input(new MicroOp())
@@ -55,7 +30,9 @@ class Csr extends Module {
 
   val in1 = io.in1
   val sys_code = uop.sys_code
-  val csr_rw = (sys_code === SYS_CSRRW) || (sys_code === SYS_CSRRS) || (sys_code === SYS_CSRRC)
+  val csr_rw = (sys_code === s"b$SYS_CSRRW".U) ||
+               (sys_code === s"b$SYS_CSRRS".U) ||
+               (sys_code === s"b$SYS_CSRRC".U)
   val csr_jmp = WireInit(Bool(), false.B)
   val csr_jmp_pc = WireInit(UInt(32.W), 0.U)
 
@@ -68,12 +45,15 @@ class Csr extends Module {
   val mscratch  = RegInit(UInt(64.W), 0.U)
   val mepc      = RegInit(UInt(64.W), 0.U)
   val mcause    = RegInit(UInt(64.W), 0.U)
-  val mip       = new CsrMip
 
   BoringUtils.addSource(mstatus, "csr_mstatus")
   BoringUtils.addSource(mie(7).asBool(), "csr_mie_mtie")
   BoringUtils.addSource(mtvec(31, 2), "csr_mtvec_idx")
-  BoringUtils.addSource(mip(7).asBool(), "csr_mip_mtip_intr")
+
+  // interrupt for mip
+  val mtip      = WireInit(UInt(1.W), 0.U)
+  BoringUtils.addSink(mtip, "csr_mip_mtip")
+  BoringUtils.addSource(mtip, "csr_mip_mtip_intr")
 
   val mcycle    = WireInit(UInt(64.W), 0.U)
   val minstret  = WireInit(UInt(64.W), 0.U)
@@ -92,7 +72,7 @@ class Csr extends Module {
   }
 
   // ECALL
-  when (sys_code === SYS_ECALL) {
+  when (sys_code === s"b$SYS_ECALL".U) {
     mepc := uop.pc
     mcause := 11.U  // env call from M-mode
     mstatus := Cat(mstatus(63, 8), mstatus(3), mstatus(6, 4), 0.U, mstatus(2, 0))
@@ -101,7 +81,7 @@ class Csr extends Module {
   }
 
   // MRET
-  when (sys_code === SYS_MRET) {
+  when (sys_code === s"b$SYS_MRET".U) {
     mstatus := Cat(mstatus(63, 8), 1.U, mstatus(6, 4), mstatus(7), mstatus(2, 0))
     csr_jmp := true.B
     csr_jmp_pc := mepc(31, 0)
@@ -149,13 +129,17 @@ class Csr extends Module {
   val wen = csr_rw // && (in1 =/= 0.U)
 
   wdata := MuxLookup(uop.sys_code, 0.U, Array(
-    SYS_CSRRW -> in1,
-    SYS_CSRRS -> (rdata | in1),
-    SYS_CSRRC -> (rdata & ~in1)
+    s"b$SYS_CSRRW".U -> in1,
+    s"b$SYS_CSRRS".U -> (rdata | in1),
+    s"b$SYS_CSRRC".U -> (rdata & ~in1)
   ))
 
   RegMap.access(csr_map, addr, rdata, ren, wdata, wmask, wen)
-  mip.access(addr, rdata, ren, wdata, wmask, wen)
+
+  // mip access
+  when (Csrs.mip === addr && ren) {
+    rdata := 0.U
+  }
 
   io.ecp.store_valid := false.B
   io.ecp.mmio := false.B
@@ -185,7 +169,7 @@ class Csr extends Module {
     dt_cs.io.mcause         := mcause
     dt_cs.io.scause         := 0.U
     dt_cs.io.satp           := 0.U
-    dt_cs.io.mip            := 0.U // mip()
+    dt_cs.io.mip            := 0.U
     dt_cs.io.mie            := mie
     dt_cs.io.mscratch       := mscratch
     dt_cs.io.sscratch       := 0.U

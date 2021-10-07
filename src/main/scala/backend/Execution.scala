@@ -4,39 +4,6 @@ import chisel3._
 import chisel3.util._
 import zhoushan.Constant._
 
-object RasConstant {
-  val RAS_X             = 0.asUInt(2.W)
-  val RAS_PUSH          = 1.asUInt(2.W)
-  val RAS_POP           = 2.asUInt(2.W)
-  val RAS_POP_THEN_PUSH = 3.asUInt(2.W)
-
-  def isRasPush(x: UInt): Bool = x(0) === 1.U
-  def isRasPop(x: UInt): Bool = x(1) === 1.U
-}
-
-class JmpPacket extends Bundle {
-  val valid = Bool()
-  val inst_pc = UInt(32.W)
-  val jmp = Bool()
-  val jmp_pc = UInt(32.W)
-  val mis = Bool()
-  val sys = Bool()
-  val ras_type = UInt(2.W)
-  // debug info
-  val pred_br = Bool()
-  val pred_bpc = UInt(32.W)
-}
-
-class ExCommitPacket extends Bundle {
-  val store_valid = Bool()
-  val mmio = Bool()
-  val jmp_valid = Bool()
-  val jmp = Bool()
-  val jmp_pc = UInt(32.W)
-  val mis = Bool()
-  val rd_data = UInt(64.W)
-}
-
 class Execution extends Module with ZhoushanConfig {
   val io = IO(new Bundle {
     // input
@@ -74,20 +41,22 @@ class Execution extends Module with ZhoushanConfig {
 
   for (i <- 0 until IssueWidth) {
     in1_0(i) := MuxLookup(uop(i).rs1_src, 0.U, Array(
-      RS_FROM_RF  -> io.rs1_data(i),
-      RS_FROM_IMM -> SignExt32_64(uop(i).imm),
-      RS_FROM_PC  -> ZeroExt32_64(uop(i).pc),
-      RS_FROM_NPC -> ZeroExt32_64(uop(i).npc)
+      s"b$RS_FROM_RF".U  -> io.rs1_data(i),
+      s"b$RS_FROM_IMM".U -> SignExt32_64(uop(i).imm),
+      s"b$RS_FROM_PC".U  -> ZeroExt32_64(uop(i).pc)
     ))(63, 0)
 
     in2_0(i) := MuxLookup(uop(i).rs2_src, 0.U, Array(
-      RS_FROM_RF  -> io.rs2_data(i),
-      RS_FROM_IMM -> SignExt32_64(uop(i).imm),
-      RS_FROM_PC  -> ZeroExt32_64(uop(i).pc),
-      RS_FROM_NPC -> ZeroExt32_64(uop(i).npc)
+      s"b$RS_FROM_RF".U  -> io.rs2_data(i),
+      s"b$RS_FROM_IMM".U -> SignExt32_64(uop(i).imm),
+      s"b$RS_FROM_PC".U  -> ZeroExt32_64(uop(i).pc)
     ))(63, 0)
 
-    in1(i) := Mux(uop(i).w_type, Mux(uop(i).alu_code === ALU_SRL, ZeroExt32_64(in1_0(i)(31, 0)), SignExt32_64(in1_0(i)(31, 0))), in1_0(i))
+    in1(i) := Mux(uop(i).w_type,
+                  Mux(uop(i).alu_code === s"b$ALU_SRL".U,
+                      ZeroExt32_64(in1_0(i)(31, 0)),
+                      SignExt32_64(in1_0(i)(31, 0))),
+                  in1_0(i))
     in2(i) := Mux(uop(i).w_type, SignExt32_64(in2_0(i)(31, 0)), in2_0(i))
   }
 
@@ -171,23 +140,28 @@ class ExPipe0 extends Module {
   })
 
   val alu = Module(new Alu)
-  alu.io.uop := io.uop
   alu.io.in1 := io.in1
   alu.io.in2 := io.in2
 
   val csr = Module(new Csr)
-  csr.io.uop := io.uop
   csr.io.in1 := io.in1
 
   val fence = Module(new Fence)
-  fence.io.uop := io.uop
 
+  // default input and output
+  alu.io.uop := 0.U.asTypeOf(new MicroOp)
+  csr.io.uop := 0.U.asTypeOf(new MicroOp)
+  fence.io.uop := 0.U.asTypeOf(new MicroOp)
   io.ecp := 0.U.asTypeOf(new ExCommitPacket)
-  when (io.uop.fu_code === FU_ALU || io.uop.fu_code === FU_JMP) {
+
+  when (io.uop.fu_code === s"b$FU_ALU".U || io.uop.fu_code === s"b$FU_JMP".U) {
+    alu.io.uop := io.uop
     io.ecp := alu.io.ecp
-  } .elsewhen (io.uop.fu_code === FU_SYS && io.uop.sys_code =/= SYS_FENCE && io.uop.sys_code =/= SYS_FENCEI) {
+  } .elsewhen (io.uop.fu_code === s"b$FU_SYS".U && io.uop.sys_code =/= s"b$SYS_FENCE".U && io.uop.sys_code =/= s"b$SYS_FENCEI".U) {
+    csr.io.uop := io.uop
     io.ecp := csr.io.ecp
   } .otherwise {
+    fence.io.uop := io.uop
     io.ecp := fence.io.ecp
   }
 }

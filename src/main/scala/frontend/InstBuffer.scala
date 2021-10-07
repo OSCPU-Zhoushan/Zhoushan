@@ -4,18 +4,6 @@ import chisel3._
 import chisel3.util._
 import chisel3.util.experimental._
 
-class InstPacket extends Bundle {
-  val pc = UInt(32.W)
-  val inst = UInt(32.W)
-  val pred_br = Bool()
-  val pred_bpc = UInt(32.W)
-  val valid = Bool()
-}
-
-class InstPacketVec(vec_width: Int) extends Bundle with ZhoushanConfig {
-  val vec = Vec(vec_width, Output(new InstPacket))
-}
-
 class InstBuffer extends Module with ZhoushanConfig {
   val entries = InstBufferSize
   val enq_width = FetchWidth
@@ -111,7 +99,7 @@ class InstBuffer extends Module with ZhoushanConfig {
 
   // deq
 
-  val valid_vec = Mux(count >= deq_width.U, ((1 << deq_width) - 1).U, UIntToOH(count)(deq_width - 1, 0) - 1.U)
+  val valid_vec = Mux(count >= deq_width.U, ((1 << deq_width) - 1).U, UIntToOH(count, deq_width) - 1.U)
   val next_deq_vec = VecInit(deq_vec.map(_ + num_deq))
   deq_vec := next_deq_vec
 

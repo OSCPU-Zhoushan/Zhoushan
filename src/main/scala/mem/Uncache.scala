@@ -3,9 +3,9 @@ package zhoushan
 import chisel3._
 import chisel3.util._
 
-class Uncache(id: Int) extends Module with ZhoushanConfig {
+class Uncache[BT <: CacheBusIO](bus_type: BT, id: Int) extends Module with ZhoushanConfig {
   val io = IO(new Bundle {
-    val in = Flipped(new CacheBusIO)
+    val in = Flipped(bus_type)
     val out = new CoreBusIO
   })
 
@@ -18,7 +18,6 @@ class Uncache(id: Int) extends Module with ZhoushanConfig {
 
   // registers for req
   val addr  = RegInit(0.U(32.W))
-  val ren   = RegInit(false.B)
   val wdata = RegInit(0.U(64.W))
   val wmask = RegInit(0.U(8.W))
   val wen   = RegInit(false.B)
@@ -38,13 +37,15 @@ class Uncache(id: Int) extends Module with ZhoushanConfig {
     is (s_idle) {
       when (in.req.fire()) {
         addr  := in.req.bits.addr
-        ren   := in.req.bits.ren
         wdata := in.req.bits.wdata
         wmask := in.req.bits.wmask
         wen   := in.req.bits.wen
         size  := in.req.bits.size
         in_id := in.req.bits.id
-        in_user := in.req.bits.user
+        if (bus_type.getClass == classOf[CacheBusWithUserIO]) {
+          val in_with_user = in.asInstanceOf[CacheBusWithUserIO]
+          in_user := in_with_user.req.bits.user
+        }
 
         rdata_1 := 0.U
         rdata_2 := 0.U
@@ -97,7 +98,6 @@ class Uncache(id: Int) extends Module with ZhoushanConfig {
   out.req.valid        := (state === s_req_1 || state === s_req_2)
   out.req.bits.id      := id.U
   out.req.bits.aen     := true.B
-  out.req.bits.ren     := ren
   out.req.bits.wlast   := true.B
   out.req.bits.wen     := wen
   out.req.bits.len     := 0.U
@@ -106,7 +106,10 @@ class Uncache(id: Int) extends Module with ZhoushanConfig {
   in.resp.valid        := (state === s_complete)
   in.resp.bits.rdata   := Cat(rdata_2, rdata_1)
   in.resp.bits.id      := in_id
-  in.resp.bits.user    := in_user
+  if (bus_type.getClass == classOf[CacheBusWithUserIO]) {
+    val in_with_user = in.asInstanceOf[CacheBusWithUserIO]
+    in_with_user.resp.bits.user := in_user
+  }
 
   if (TargetOscpuSoc) {
     out.req.bits.addr  := Mux(req_split && (state === s_req_2), addr + 4.U, addr)

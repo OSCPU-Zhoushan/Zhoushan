@@ -2,94 +2,25 @@ package zhoushan
 
 import chisel3._
 import chisel3.util._
+import zhoushan.Constant._
 
-trait Constant {
-  val Y = true.B
-  val N = false.B
-
-  val RS_X          = 0.asUInt(3.W)
-  val RS_FROM_RF    = 1.asUInt(3.W)
-  val RS_FROM_IMM   = 2.asUInt(3.W)
-  val RS_FROM_ZERO  = 3.asUInt(3.W)
-  val RS_FROM_PC    = 4.asUInt(3.W)
-  val RS_FROM_NPC   = 5.asUInt(3.W)
-
-  val IMM_X     = 0.asUInt(3.W)
-  val IMM_I     = 1.asUInt(3.W)
-  val IMM_S     = 2.asUInt(3.W)
-  val IMM_B     = 3.asUInt(3.W)
-  val IMM_U     = 4.asUInt(3.W)
-  val IMM_J     = 5.asUInt(3.W)
-  val IMM_SHAMT = 6.asUInt(3.W)
-  val IMM_CSR   = 7.asUInt(3.W)
-
-  val FU_X      = 0.asUInt(3.W)
-  val FU_ALU    = 1.asUInt(3.W)
-  val FU_JMP    = 2.asUInt(3.W)
-  val FU_SYS    = 3.asUInt(3.W)
-  val FU_MEM    = 4.asUInt(3.W)
-
-  val ALU_X     = 0.asUInt(4.W)
-  val ALU_ADD   = 1.asUInt(4.W)
-  val ALU_SUB   = 2.asUInt(4.W)
-  val ALU_SLT   = 3.asUInt(4.W)
-  val ALU_SLTU  = 4.asUInt(4.W)
-  val ALU_XOR   = 5.asUInt(4.W)
-  val ALU_OR    = 6.asUInt(4.W)
-  val ALU_AND   = 7.asUInt(4.W)
-  val ALU_SLL   = 8.asUInt(4.W)
-  val ALU_SRL   = 9.asUInt(4.W)
-  val ALU_SRA   = 10.asUInt(4.W)
-
-  val JMP_X     = 0.asUInt(4.W)
-  val JMP_JAL   = 1.asUInt(4.W)
-  val JMP_JALR  = 2.asUInt(4.W)
-  val JMP_BEQ   = 3.asUInt(4.W)
-  val JMP_BNE   = 4.asUInt(4.W)
-  val JMP_BLT   = 5.asUInt(4.W)
-  val JMP_BGE   = 6.asUInt(4.W)
-  val JMP_BLTU  = 7.asUInt(4.W)
-  val JMP_BGEU  = 8.asUInt(4.W)
-
-  val MEM_X     = 0.asUInt(2.W)
-  val MEM_LD    = 1.asUInt(2.W)
-  val MEM_LDU   = 2.asUInt(2.W)
-  val MEM_ST    = 3.asUInt(2.W)
-
-  val MEM_BYTE  = 0.asUInt(2.W)
-  val MEM_HALF  = 1.asUInt(2.W)
-  val MEM_WORD  = 2.asUInt(2.W)
-  val MEM_DWORD = 3.asUInt(2.W)
-
-  val SYS_X      = 0.asUInt(3.W)
-  val SYS_CSRRW  = 1.asUInt(3.W)
-  val SYS_CSRRS  = 2.asUInt(3.W)
-  val SYS_CSRRC  = 3.asUInt(3.W)
-  val SYS_ECALL  = 4.asUInt(3.W)
-  val SYS_MRET   = 5.asUInt(3.W)
-  val SYS_FENCE  = 6.asUInt(3.W)
-  val SYS_FENCEI = 7.asUInt(3.W)
-}
-
-object Constant extends Constant { }
-
-class MicroOp extends Bundle {
+class MicroOp extends Bundle with ZhoushanConfig{
   val valid     = Bool()
 
   val pc        = UInt(32.W)
   val npc       = UInt(32.W)
   val inst      = UInt(32.W)
 
-  val fu_code   = UInt(3.W)
-  val alu_code  = UInt(4.W)
-  val jmp_code  = UInt(4.W)
-  val mem_code  = UInt(2.W)
-  val mem_size  = UInt(2.W)
-  val sys_code  = UInt(3.W)
+  val fu_code   = UInt(FU_X.length.W)
+  val alu_code  = UInt(ALU_X.length.W)
+  val jmp_code  = UInt(JMP_X.length.W)
+  val mem_code  = UInt(MEM_X.length.W)
+  val mem_size  = UInt(MEM_X.length.W)
+  val sys_code  = UInt(SYS_X.length.W)
   val w_type    = Bool()
 
-  val rs1_src   = UInt(3.W)
-  val rs2_src   = UInt(3.W)
+  val rs1_src   = UInt(RS_X.length.W)
+  val rs2_src   = UInt(RS_X.length.W)
 
   val rs1_addr  = UInt(5.W)
   val rs2_addr  = UInt(5.W)
@@ -103,11 +34,48 @@ class MicroOp extends Bundle {
   val pred_bpc  = UInt(32.W)
 
   // register renaming related
-  val rs1_paddr = UInt(log2Up(ZhoushanConfig.PrfSize).W)   // rs1 prf addr
-  val rs2_paddr = UInt(log2Up(ZhoushanConfig.PrfSize).W)   // rs2 prf addr
-  val rd_paddr  = UInt(log2Up(ZhoushanConfig.PrfSize).W)   // rd prf addr
-  val rd_ppaddr = UInt(log2Up(ZhoushanConfig.PrfSize).W)   // rd prev prf addr
+  val rs1_paddr = UInt(log2Up(PrfSize).W)   // rs1 prf addr
+  val rs2_paddr = UInt(log2Up(PrfSize).W)   // rs2 prf addr
+  val rd_paddr  = UInt(log2Up(PrfSize).W)   // rd prf addr
+  val rd_ppaddr = UInt(log2Up(PrfSize).W)   // rd prev prf addr
 
   // re-order buffer related
-  val rob_addr  = UInt(log2Up(ZhoushanConfig.RobSize).W)
+  val rob_addr  = UInt(log2Up(RobSize).W)
+
+  def from_decoder(in: UInt, rd_addr: UInt): Unit = {
+    val rd_en_tmp = WireInit(false.B)
+    val imm_type = WireInit(0.U(IMM_X.length.W))
+    val entries = Seq(valid, fu_code, alu_code, jmp_code, mem_code, mem_size,
+                      sys_code, w_type, rs1_src, rs2_src, rd_en_tmp, imm_type)
+    var i = 0
+    for (entry <- entries.reverse) {
+      val entry_width = entry.getWidth
+      if (entry_width == 1) {
+        entry := in(i)
+      } else {
+        entry := in(i + entry_width - 1, i)
+      }
+      i += entry_width
+    }
+
+    rd_en := rd_en_tmp && (rd_addr =/= 0.U)
+
+    val imm_i = Cat(Fill(21, inst(31)), inst(30, 20))
+    val imm_s = Cat(Fill(21, inst(31)), inst(30, 25), inst(11, 7))
+    val imm_b = Cat(Fill(20, inst(31)), inst(7), inst(30, 25), inst(11, 8), 0.U)
+    val imm_u = Cat(inst(31, 12), Fill(12, 0.U))
+    val imm_j = Cat(Fill(12, inst(31)), inst(19, 12), inst(20), inst(30, 21), 0.U)
+    val imm_shamt = Mux(w_type, Cat(Fill(27, 0.U), inst(24, 20)), Cat(Fill(26, 0.U), inst(25, 20)))
+    val imm_csr = Cat(Fill(27, 0.U), inst(19, 15))
+
+    imm := MuxLookup(imm_type, 0.U(32.W), Array(
+      s"b$IMM_I".U     -> imm_i,
+      s"b$IMM_S".U     -> imm_s,
+      s"b$IMM_B".U     -> imm_b,
+      s"b$IMM_U".U     -> imm_u,
+      s"b$IMM_J".U     -> imm_j,
+      s"b$IMM_SHAMT".U -> imm_shamt,
+      s"b$IMM_CSR".U   -> imm_csr
+    ))
+  }
 }

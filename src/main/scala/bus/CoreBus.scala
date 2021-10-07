@@ -14,7 +14,6 @@ trait CoreBusId extends Bundle with AxiParameters {
 class CoreBusReq extends Bundle with CoreBusId with AxiParameters {
   val addr = Output(UInt(AxiAddrWidth.W))
   val aen = Output(Bool())  // ar/aw enable
-  val ren = Output(Bool())
   val wdata = Output(UInt(AxiDataWidth.W))
   val wmask = Output(UInt((AxiDataWidth / 8).W))
   val wlast = Output(Bool())
@@ -65,7 +64,7 @@ class CoreBus2Axi[OT <: OscpuSocAxiIO](out_type: OT) extends Module with AxiPara
   out.w.bits.strb   := in.req.bits.wmask
   out.w.bits.last   := in.req.bits.wlast
 
-  out.ar.valid      := in.req.valid && in.req.bits.aen && in.req.bits.ren
+  out.ar.valid      := in.req.valid && in.req.bits.aen && !in.req.bits.wen
   out.ar.bits.addr  := in.req.bits.addr
   out.ar.bits.id    := in.req.bits.id
   out.ar.bits.len   := in.req.bits.len
@@ -122,8 +121,8 @@ class CoreBus2Axi[OT <: OscpuSocAxiIO](out_type: OT) extends Module with AxiPara
   if (ZhoushanConfig.DebugCoreBus) {
     when (in.req.fire()) {
       val r = in.req.bits
-      printf("%d: [CoreB] [REQ ] addr=%x aen=%x ren=%x wdata=%x wmask=%x wlast=%x wen=%x len=%x size=%x id=%x\n", DebugTimer(),
-             r.addr, r.aen, r.ren, r.wdata, r.wmask, r.wlast, r.wen, r.len, r.size, r.id)
+      printf("%d: [CoreB] [REQ ] addr=%x aen=%x wdata=%x wmask=%x wlast=%x wen=%x len=%x size=%x id=%x\n", DebugTimer(),
+             r.addr, r.aen, r.wdata, r.wmask, r.wlast, r.wen, r.len, r.size, r.id)
     }
     when (in.resp.fire()) {
       val r = in.resp.bits

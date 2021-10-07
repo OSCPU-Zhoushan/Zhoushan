@@ -5,7 +5,7 @@ import chisel3.util._
 
 class InstFetch extends Module with ZhoushanConfig {
   val io = IO(new Bundle {
-    val imem = new CacheBusIO
+    val imem = new CacheBusWithUserIO
     // JmpPackek defined in MicroOp.scala, used for pc redirection
     val jmp_packet = Input(new JmpPacket)
     val out = Decoupled(new InstPacketVec(FetchWidth))  // to instruction buffer
@@ -81,11 +81,10 @@ class InstFetch extends Module with ZhoushanConfig {
   // store pc_base, npc, pc_valid, pred_br info in user field
   // restore the info when resp, and send to instruction buffer
   req.bits.addr  := pc_base
-  req.bits.ren   := true.B
   req.bits.wdata := 0.U
   req.bits.wmask := 0.U
   req.bits.wen   := false.B
-  req.bits.size  := Constant.MEM_DWORD
+  req.bits.size  := s"b${Constant.MEM_DWORD}".U
   req.bits.user  := Cat(pred_br, pc_valid, npc, pc_base)
   req.bits.id    := 0.U
   req.valid      := io.out.ready

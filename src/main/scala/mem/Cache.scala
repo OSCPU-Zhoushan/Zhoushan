@@ -18,15 +18,12 @@ class Meta extends Module {
     val tag_r = Output(UInt(21.W))
     val tag_w = Input(UInt(21.W))
     val tag_wen = Input(Bool())
-    val dirty_r = Output(Bool())
+    val dirty_r_async = Output(Bool())
     val dirty_w = Input(Bool())
     val dirty_wen = Input(Bool())
-    val valid_r = Output(Bool())
+    val valid_r_async = Output(Bool())
     // I$/D$ fence.I cache invalidate input
     val invalidate = Input(Bool())
-    // D$ dirty check output
-    val dirty_r_async = Output(Bool())
-    val valid_r_async = Output(Bool())
   })
 
   // tag = addr(30, 10)
@@ -43,23 +40,23 @@ class Meta extends Module {
 
   val idx = io.idx
 
+  // sync write & read
   when (io.tag_wen) {
     tags.write(idx, io.tag_w)
     valid(idx) := true.B
   }
   io.tag_r := tags.read(idx)
 
-  // sync read
-  val dirty_r = RegNext(dirty(idx))
-  io.dirty_r := dirty_r
+  // async read
+  io.dirty_r_async := dirty(idx)
+  io.valid_r_async := valid(idx)
 
+  // sync write
   when (io.dirty_wen) {
     dirty(idx) := io.dirty_w
   }
 
-  val valid_r = RegNext(valid(idx))
-  io.valid_r := valid_r
-
+  // invalidate for fence.i
   when (io.invalidate) {
     for (i <- 0 until 64) {
       dirty(i) := false.B
@@ -67,16 +64,12 @@ class Meta extends Module {
     }
   }
 
-  // async read
-  io.dirty_r_async := dirty(idx)
-  io.valid_r_async := valid(idx)
-
 }
 
 // 2-stage pipeline 4KB cache
-class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
+class Cache[BT <: CacheBusIO](bus_type: BT, id: Int) extends Module with SramParameters with ZhoushanConfig {
   val io = IO(new Bundle {
-    val in = Flipped(new CacheBusIO)
+    val in = Flipped(bus_type)
     val out = new CoreBusIO
   })
 
@@ -120,8 +113,8 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
 
   (sram_out  zip sram).map { case (o, s) => { o := s.io.rdata }}
   (tag_out   zip meta).map { case (t, m) => { t := m.io.tag_r }}
-  (valid_out zip meta).map { case (v, m) => { v := m.io.valid_r }}
-  (dirty_out zip meta).map { case (d, m) => { d := m.io.dirty_r }}
+  (valid_out zip meta).map { case (v, m) => { v := RegNext(m.io.valid_r_async) }}
+  (dirty_out zip meta).map { case (d, m) => { d := RegNext(m.io.dirty_r_async) }}
 
   /* ----- PLRU replacement ---------- */
 
@@ -172,9 +165,14 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
   val s1_wen   = in.req.bits.wen
   val s1_wdata = in.req.bits.wdata
   val s1_wmask = in.req.bits.wmask
-  val s1_user  = in.req.bits.user
   val s1_id    = in.req.bits.id
   val s1_valid = in.req.valid
+
+  val s1_user  = WireInit(0.U(CacheBusParameters.CacheBusUserWidth.W))
+  if (bus_type.getClass == classOf[CacheBusWithUserIO]) {
+    val in_with_user = in.asInstanceOf[CacheBusWithUserIO]
+    s1_user := in_with_user.req.bits.user
+  }
 
   // when pipeline fire, read the data in SRAM and meta data array
   // the data will be returned at the next clock cycle, and passed to stage 2
@@ -214,7 +212,7 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
   val s2_wen   = RegInit(false.B)
   val s2_wdata = RegInit(0.U(64.W))
   val s2_wmask = RegInit(0.U(8.W))
-  val s2_user  = RegInit(0.U(s1_user.getWidth.W))
+  val s2_user  = RegInit(0.U(CacheBusParameters.CacheBusUserWidth.W))
   val s2_id    = RegInit(0.U(s1_id.getWidth.W))
 
   // 4-bit hit check vector, with one-hot encoding
@@ -244,7 +242,9 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
     s2_wen   := s1_wen
     s2_wdata := s1_wdata
     s2_wmask := s1_wmask
-    s2_user  := s1_user
+    if (bus_type.getClass == classOf[CacheBusWithUserIO]) {
+      s2_user := s1_user
+    }
     s2_id    := s1_id
   } .elsewhen (!pipeline_fire && RegNext(pipeline_fire)) {
     // meanwhile, when the FSM is triggered in stage 2, we need to temporarily
@@ -280,7 +280,10 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
   in.req.ready := pipeline_ready && !fi_valid
   in.resp.valid := ((s2_hit_real && !s2_wen && (state =/= s_invalid)) || (state === s_complete))
   in.resp.bits.rdata := 0.U
-  in.resp.bits.user := s2_user
+  if (bus_type.getClass == classOf[CacheBusWithUserIO]) {
+    val in_with_user = in.asInstanceOf[CacheBusWithUserIO]
+    in_with_user.resp.bits.user := s2_user
+  }
   in.resp.bits.id := s2_id
 
   /* ----- Debug Info ---------------- */
@@ -548,7 +551,6 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
   out.req.bits.aen := (state === s_miss_req_r) ||
                       (state === s_miss_req_w1) ||
                       (fi_state === fi_req_w1)
-  out.req.bits.ren := (state === s_miss_req_r)
   out.req.bits.wdata := 0.U
   when (state === s_miss_req_w1) {
     out.req.bits.wdata := s2_reg_dat_w(63, 0)
@@ -570,7 +572,7 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
                       (fi_state === fi_req_w1) ||
                       (fi_state === fi_req_w2)
   out.req.bits.len := 1.U
-  out.req.bits.size := Constant.MEM_DWORD
+  out.req.bits.size := s"b${Constant.MEM_DWORD}".U
   out.resp.ready := (state === s_miss_wait_r) ||
                     (state === s_miss_wait_w) ||
                     (fi_state === fi_wait_w)

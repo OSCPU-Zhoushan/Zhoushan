@@ -186,34 +186,28 @@ class StoreQueue extends Module with ZhoushanConfig {
 
   io.in_st.resp.valid      := (enq_state === enq_wait)
   io.in_st.resp.bits.rdata := 0.U
-  io.in_st.resp.bits.user  := 0.U
   io.in_st.resp.bits.id    := 0.U
 
   io.in_ld.resp.valid      := io.out_ld.resp.valid
   io.in_ld.resp.bits.rdata := io.out_ld.resp.bits.rdata
-  io.in_ld.resp.bits.user  := 0.U
   io.in_ld.resp.bits.id    := 0.U
 
   io.out_st.req.valid      := deq_valid && (deq_state === deq_idle)
   io.out_st.req.bits.addr  := sq(deq_ptr.value).addr
   io.out_st.req.bits.wdata := sq(deq_ptr.value).wdata
   io.out_st.req.bits.wmask := sq(deq_ptr.value).wmask
-  io.out_st.req.bits.ren   := false.B
   io.out_st.req.bits.wen   := true.B
   io.out_st.req.bits.size  := sq(deq_ptr.value).wsize
-  io.out_st.req.bits.user  := 0.U
   io.out_st.req.bits.id    := SqStoreId.U
 
   io.out_st.resp.ready     := (deq_state === deq_wait)
 
-  io.out_ld.req.valid      := io.in_ld.req.valid && io.in_ld.req.bits.ren && !load_hit && (flush_state === flush_idle)
+  io.out_ld.req.valid      := io.in_ld.req.valid && !io.in_ld.req.bits.wen && !load_hit && (flush_state === flush_idle)
   io.out_ld.req.bits.addr  := io.in_ld.req.bits.addr
   io.out_ld.req.bits.wdata := 0.U
   io.out_ld.req.bits.wmask := 0.U
-  io.out_ld.req.bits.ren   := true.B
   io.out_ld.req.bits.wen   := false.B
   io.out_ld.req.bits.size  := io.in_ld.req.bits.size
-  io.out_ld.req.bits.user  := 0.U
   io.out_ld.req.bits.id    := SqLoadId.U
 
   io.out_ld.resp.ready     := io.in_ld.resp.ready

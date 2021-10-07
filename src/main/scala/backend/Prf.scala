@@ -17,7 +17,7 @@ class Prf extends Module with ZhoushanConfig {
     val flush = Input(Bool())
   })
 
-  val prf = RegInit(VecInit(Seq.fill(PrfSize)(0.U(64.W))))
+  val prf = Mem(PrfSize, UInt(64.W))
 
   for (i <- 0 until IssueWidth) {
     when (io.rd_en(i) && (io.rd_paddr(i) =/= 0.U)) {
@@ -46,6 +46,12 @@ class Prf extends Module with ZhoushanConfig {
           rs2_data(i) := io.rd_data(j)
         }
       }
+    }
+  }
+
+  when (reset.asBool()) {
+    for (i <- 0 until PrfSize) {
+      prf(i) := 0.U
     }
   }
 
