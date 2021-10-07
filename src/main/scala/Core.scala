@@ -67,17 +67,17 @@ class Core extends Module with ZhoushanConfig {
 
   /* ----- Stage 5 - Register File (RF) ---------- */
 
-  val prf = Module(new Prf)
-  prf.io.in := isu.io.out
-  prf.io.flush := flush
+  val rf = Module(new Prf)
+  rf.io.in := isu.io.out
+  rf.io.flush := flush
 
   /* ----- Stage 6 - Execution (EX) -------------- */
 
   val execution = Module(new Execution)
-  execution.io.in <> prf.io.out
+  execution.io.in <> rf.io.out
   execution.io.flush := flush
-  execution.io.rs1_data := prf.io.rs1_data
-  execution.io.rs2_data := prf.io.rs2_data
+  execution.io.rs1_data := rf.io.rs1_data
+  execution.io.rs2_data := rf.io.rs2_data
 
   for (i <- 0 until IssueWidth) {
     if (i < IssueWidth - 1) {
@@ -119,9 +119,9 @@ class Core extends Module with ZhoushanConfig {
 
   /* ----- Stage 7 - Commit (CM) ----------------- */
 
-  prf.io.rd_en := execution.io.rd_en
-  prf.io.rd_paddr := execution.io.rd_paddr
-  prf.io.rd_data := execution.io.rd_data
+  rf.io.rd_en := execution.io.rd_en
+  rf.io.rd_paddr := execution.io.rd_paddr
+  rf.io.rd_data := execution.io.rd_data
 
   val cm = rob.io.cm
   val cm_rd_data = rob.io.cm_rd_data
