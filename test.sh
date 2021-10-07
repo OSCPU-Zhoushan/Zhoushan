@@ -21,7 +21,7 @@ function tests {
   wait
 }
 
-while getopts 'crt:w:l' OPT; do
+while getopts 'crt:w:ls' OPT; do
   case $OPT in
     c)
       tests $cpu_tests_dir;;
@@ -35,6 +35,8 @@ while getopts 'crt:w:l' OPT; do
       ./build/emu -i ${cpu_tests_dir}/${example}-riscv64-mycpu.bin -b 0 --dump-wave --wave-path=./build/wave.vcd;;
     l)
       python3 script/lint.py;;
+    s)
+      python3 script/lint.py --soc;;
     ?)
       echo "Error: unknown arguments"
   esac

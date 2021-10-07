@@ -1,3 +1,4 @@
+import sys
 
 remove = [
   'pht_1_0_MPORT_en',
@@ -102,7 +103,7 @@ remove = [
   '_T_6 = mtvec[31:2]'
 ]
 
-replace_name = [
+replace_name_soc = [
   ['io_master_aw_ready', 'io_master_awready'],
   ['io_master_aw_valid', 'io_master_awvalid'],
   ['io_master_aw_bits_', 'io_master_aw'],
@@ -134,6 +135,14 @@ replace_name = [
   ['io_slave_r_valid', 'io_slave_rvalid'],
   ['io_slave_r_bits_', 'io_slave_r'],
   ['ysyx_000000_RealTop', 'ysyx_000000']
+]
+
+replace_name_sim = [
+  ['io_memAXI_0_w_bits_data,', 'io_memAXI_0_w_bits_data[3:0],'],
+  ['io_memAXI_0_r_bits_data,', 'io_memAXI_0_r_bits_data[3:0],'],
+  ['io_memAXI_0_w_bits_data =', 'io_memAXI_0_w_bits_data[0] ='],
+  ['io_memAXI_0_r_bits_data;', 'io_memAXI_0_r_bits_data[0];'],
+  ['$fwrite', '$fflush; $fwrite']
 ]
 
 # currently we do not use replace_width array
@@ -168,15 +177,33 @@ replace_width = [
 
 
 if __name__ == '__main__':
-  f = open('./build/RealTop.v', 'r')
-  w = open('./build/ysyx_000000.v', 'w')
+  target_soc = False
+  if len(sys.argv) > 1:
+    if sys.argv[1] == '--soc':
+      target_soc = True
+
+  old_file = './build/SimTop.v'
+  new_file = './build/SimTopNew.v'
+  if target_soc:
+    old_file = './build/RealTop.v'
+    new_file = './build/ysyx_000000.v'
+
+  f = open(old_file, 'r')
+  w = open(new_file, 'w')
+
   for line in f.readlines():
     for signal in remove:
       if signal in line:
         line = '// ' + line
-    for signal in replace_name:
-      if signal[0] in line:
-        line = line.replace(signal[0], signal[1])
+    if target_soc:
+      for signal in replace_name_soc:
+        if signal[0] in line:
+          line = line.replace(signal[0], signal[1])
+    else:
+      for signal in replace_name_sim:
+        if signal[0] in line:
+          line = line.replace(signal[0], signal[1])
     w.write(line)
+
   f.close()
   w.close()
