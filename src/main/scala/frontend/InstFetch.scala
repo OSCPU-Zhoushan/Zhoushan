@@ -5,7 +5,7 @@ import chisel3.util._
 
 class InstFetch extends Module with ZhoushanConfig {
   val io = IO(new Bundle {
-    val imem = new CacheBusIO
+    val imem = new CacheBusWithUserIO
     // JmpPackek defined in MicroOp.scala, used for pc redirection
     val jmp_packet = Input(new JmpPacket)
     val out = Decoupled(new InstPacketVec(FetchWidth))  // to instruction buffer

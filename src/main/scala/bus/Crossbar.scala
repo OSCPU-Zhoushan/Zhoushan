@@ -40,13 +40,13 @@ class CoreBusCrossbarNto1(n: Int) extends Module {
 
 }
 
-class CacheBusCrossbarNto1(n: Int) extends Module {
+class CacheBusCrossbarNto1[RT <: CacheBusReq, BT <: CacheBusIO](req_type: RT, bus_type: BT, n: Int) extends Module {
   val io = IO(new Bundle {
-    val in = Flipped(Vec(n, new CacheBusIO))
-    val out = new CacheBusIO
+    val in = Flipped(Vec(n, bus_type))
+    val out = Flipped(Flipped(bus_type))
   })
 
-  val arbiter = Module(new RRArbiter(new CacheBusReq, n))
+  val arbiter = Module(new RRArbiter(req_type, n))
   val chosen = RegInit(UInt(log2Up(n).W), 0.U)
   for (i <- 0 until n) {
     arbiter.io.in(i) <> io.in(i).req
@@ -77,10 +77,10 @@ class CacheBusCrossbarNto1(n: Int) extends Module {
 
 }
 
-class CacheBusCrossbar1to2 extends Module {
+class CacheBusCrossbar1to2[BT <: CacheBusIO](bus_type: BT) extends Module {
   val io = IO(new Bundle {
-    val in = Flipped(new CacheBusIO)
-    val out = Vec(2, new CacheBusIO)
+    val in = Flipped(bus_type)
+    val out = Vec(2, bus_type)
     val to_1 = Input(Bool())
   })
 
@@ -120,7 +120,10 @@ class CacheBusCrossbar1to2 extends Module {
   io.out(0).resp.ready  := io.in.resp.ready && (channel === 0.U)
   io.out(1).resp.ready  := io.in.resp.ready && (channel === 1.U)
   io.in.resp.bits.id    := 0.U
-  io.in.resp.bits.user  := 0.U
+  if (bus_type.getClass == classOf[CacheBusWithUserIO]) {
+    val in = io.in.asInstanceOf[CacheBusWithUserIO]
+    in.resp.bits.user   := 0.U
+  }
   io.in.resp.bits.rdata := 0.U
   io.in.resp.valid      := false.B
   for (i <- 0 until 2) {

@@ -72,7 +72,6 @@ class Lsu extends Module {
   st_req.bits.wmask := mask & ((wmask << addr_offset)(7, 0))
   st_req.bits.wen   := true.B
   st_req.bits.size  := Mux(mmio, uop.mem_size, s"b$MEM_DWORD".U)
-  st_req.bits.user  := 0.U
   st_req.bits.id    := 0.U
   st_req.valid      := uop.valid && (state === s_idle) && !addr_unaligned &&
                        is_store && (lsu_update || !completed)
@@ -84,7 +83,6 @@ class Lsu extends Module {
   ld_req.bits.wmask := 0.U
   ld_req.bits.wen   := false.B
   ld_req.bits.size  := Mux(mmio, uop.mem_size, s"b$MEM_DWORD".U)
-  ld_req.bits.user  := 0.U
   ld_req.bits.id    := 0.U
   ld_req.valid      := uop.valid && (state === s_idle) && !addr_unaligned &&
                        is_load && (lsu_update || !completed)

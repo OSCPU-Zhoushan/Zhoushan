@@ -72,7 +72,6 @@ class Clint extends Module {
   io.in.req.ready := (state === s_idle)
   io.in.resp.valid := (state =/= s_idle)
   io.in.resp.bits.rdata := reg_rdata
-  io.in.resp.bits.user := 0.U
   io.in.resp.bits.id := reg_id
 
   val mtip = WireInit(UInt(1.W), 0.U)

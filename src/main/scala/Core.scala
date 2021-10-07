@@ -16,7 +16,7 @@ class Core extends Module with ZhoushanConfig {
 
   val fetch = Module(new InstFetch)
 
-  val icache = Module(new CacheController(id_cache = InstCacheId, id_uncache = InstUncacheId))
+  val icache = Module(new CacheController(new CacheBusWithUserIO, InstCacheId, InstUncacheId))
   icache.io.in <> fetch.io.imem
   icache.io.out_cache <> io.core_bus(InstCacheId - 1)
   icache.io.out_uncache <> io.core_bus(InstUncacheId - 1)
@@ -98,18 +98,18 @@ class Core extends Module with ZhoushanConfig {
   sq.io.in_ld <> execution.io.dmem_ld
   sq.io.deq_req := rob.io.sq_deq_req
 
-  val crossbar2to1 = Module(new CacheBusCrossbarNto1(2))
+  val crossbar2to1 = Module(new CacheBusCrossbarNto1(new CacheBusReq, new CacheBusIO, 2))
   crossbar2to1.io.in(0) <> sq.io.out_st
   crossbar2to1.io.in(1) <> sq.io.out_ld
 
-  val crossbar1to2 = Module(new CacheBusCrossbar1to2)
+  val crossbar1to2 = Module(new CacheBusCrossbar1to2(new CacheBusIO))
   crossbar1to2.io.in <> crossbar2to1.io.out
 
   val cb1to2_addr = crossbar1to2.io.in.req.bits.addr
   val cb1to2_to_clint = (cb1to2_addr >= ClintAddrBase.U && cb1to2_addr < ClintAddrBase.U + ClintAddrSize.U)
   crossbar1to2.io.to_1 := cb1to2_to_clint
 
-  val dcache = Module(new CacheController(id_cache = DataCacheId, id_uncache = DataUncacheId))
+  val dcache = Module(new CacheController(new CacheBusIO, DataCacheId, DataUncacheId))
   dcache.io.in <> crossbar1to2.io.out(0)
   dcache.io.out_cache <> io.core_bus(DataCacheId - 1)
   dcache.io.out_uncache <> io.core_bus(DataUncacheId - 1)
