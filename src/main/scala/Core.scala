@@ -16,7 +16,7 @@ class Core extends Module with ZhoushanConfig {
 
   val fetch = Module(new InstFetch)
 
-  val icache = Module(new CacheController(id_cache = InstCacheId, id_uncache = InstUncacheId))
+  val icache = Module(new CacheController(new CacheBusWithUserIO, InstCacheId, InstUncacheId))
   icache.io.in <> fetch.io.imem
   icache.io.out_cache <> io.core_bus(InstCacheId - 1)
   icache.io.out_uncache <> io.core_bus(InstUncacheId - 1)
@@ -67,17 +67,17 @@ class Core extends Module with ZhoushanConfig {
 
   /* ----- Stage 5 - Register File (RF) ---------- */
 
-  val prf = Module(new Prf)
-  prf.io.in := isu.io.out
-  prf.io.flush := flush
+  val rf = Module(new Prf)
+  rf.io.in := isu.io.out
+  rf.io.flush := flush
 
   /* ----- Stage 6 - Execution (EX) -------------- */
 
   val execution = Module(new Execution)
-  execution.io.in <> prf.io.out
+  execution.io.in <> rf.io.out
   execution.io.flush := flush
-  execution.io.rs1_data := prf.io.rs1_data
-  execution.io.rs2_data := prf.io.rs2_data
+  execution.io.rs1_data := rf.io.rs1_data
+  execution.io.rs2_data := rf.io.rs2_data
 
   for (i <- 0 until IssueWidth) {
     if (i < IssueWidth - 1) {
@@ -98,18 +98,18 @@ class Core extends Module with ZhoushanConfig {
   sq.io.in_ld <> execution.io.dmem_ld
   sq.io.deq_req := rob.io.sq_deq_req
 
-  val crossbar2to1 = Module(new CacheBusCrossbarNto1(2))
+  val crossbar2to1 = Module(new CacheBusCrossbarNto1(new CacheBusReq, new CacheBusIO, 2))
   crossbar2to1.io.in(0) <> sq.io.out_st
   crossbar2to1.io.in(1) <> sq.io.out_ld
 
-  val crossbar1to2 = Module(new CacheBusCrossbar1to2)
+  val crossbar1to2 = Module(new CacheBusCrossbar1to2(new CacheBusIO))
   crossbar1to2.io.in <> crossbar2to1.io.out
 
   val cb1to2_addr = crossbar1to2.io.in.req.bits.addr
   val cb1to2_to_clint = (cb1to2_addr >= ClintAddrBase.U && cb1to2_addr < ClintAddrBase.U + ClintAddrSize.U)
   crossbar1to2.io.to_1 := cb1to2_to_clint
 
-  val dcache = Module(new CacheController(id_cache = DataCacheId, id_uncache = DataUncacheId))
+  val dcache = Module(new CacheController(new CacheBusIO, DataCacheId, DataUncacheId))
   dcache.io.in <> crossbar1to2.io.out(0)
   dcache.io.out_cache <> io.core_bus(DataCacheId - 1)
   dcache.io.out_uncache <> io.core_bus(DataUncacheId - 1)
@@ -119,9 +119,9 @@ class Core extends Module with ZhoushanConfig {
 
   /* ----- Stage 7 - Commit (CM) ----------------- */
 
-  prf.io.rd_en := execution.io.rd_en
-  prf.io.rd_paddr := execution.io.rd_paddr
-  prf.io.rd_data := execution.io.rd_data
+  rf.io.rd_en := execution.io.rd_en
+  rf.io.rd_paddr := execution.io.rd_paddr
+  rf.io.rd_data := execution.io.rd_data
 
   val cm = rob.io.cm
   val cm_rd_data = rob.io.cm_rd_data

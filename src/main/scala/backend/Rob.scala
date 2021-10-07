@@ -118,7 +118,7 @@ class Rob extends Module with ZhoushanConfig {
 
   /* --------------- deq ----------------- */
 
-  val valid_vec = Mux(count >= deq_width.U, ((1 << deq_width) - 1).U, UIntToOH(count)(deq_width - 1, 0) - 1.U)
+  val valid_vec = Mux(count >= deq_width.U, ((1 << deq_width) - 1).U, UIntToOH(count, deq_width) - 1.U)
   val next_deq_vec = VecInit(deq_vec.map(_ + num_deq))
   deq_vec := next_deq_vec
 

@@ -186,12 +186,10 @@ class StoreQueue extends Module with ZhoushanConfig {
 
   io.in_st.resp.valid      := (enq_state === enq_wait)
   io.in_st.resp.bits.rdata := 0.U
-  io.in_st.resp.bits.user  := 0.U
   io.in_st.resp.bits.id    := 0.U
 
   io.in_ld.resp.valid      := io.out_ld.resp.valid
   io.in_ld.resp.bits.rdata := io.out_ld.resp.bits.rdata
-  io.in_ld.resp.bits.user  := 0.U
   io.in_ld.resp.bits.id    := 0.U
 
   io.out_st.req.valid      := deq_valid && (deq_state === deq_idle)
@@ -200,7 +198,6 @@ class StoreQueue extends Module with ZhoushanConfig {
   io.out_st.req.bits.wmask := sq(deq_ptr.value).wmask
   io.out_st.req.bits.wen   := true.B
   io.out_st.req.bits.size  := sq(deq_ptr.value).wsize
-  io.out_st.req.bits.user  := 0.U
   io.out_st.req.bits.id    := SqStoreId.U
 
   io.out_st.resp.ready     := (deq_state === deq_wait)
@@ -211,7 +208,6 @@ class StoreQueue extends Module with ZhoushanConfig {
   io.out_ld.req.bits.wmask := 0.U
   io.out_ld.req.bits.wen   := false.B
   io.out_ld.req.bits.size  := io.in_ld.req.bits.size
-  io.out_ld.req.bits.user  := 0.U
   io.out_ld.req.bits.id    := SqLoadId.U
 
   io.out_ld.resp.ready     := io.in_ld.resp.ready

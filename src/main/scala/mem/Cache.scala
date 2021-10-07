@@ -67,9 +67,9 @@ class Meta extends Module {
 }
 
 // 2-stage pipeline 4KB cache
-class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
+class Cache[BT <: CacheBusIO](bus_type: BT, id: Int) extends Module with SramParameters with ZhoushanConfig {
   val io = IO(new Bundle {
-    val in = Flipped(new CacheBusIO)
+    val in = Flipped(bus_type)
     val out = new CoreBusIO
   })
 
@@ -165,9 +165,14 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
   val s1_wen   = in.req.bits.wen
   val s1_wdata = in.req.bits.wdata
   val s1_wmask = in.req.bits.wmask
-  val s1_user  = in.req.bits.user
   val s1_id    = in.req.bits.id
   val s1_valid = in.req.valid
+
+  val s1_user  = WireInit(0.U(CacheBusParameters.CacheBusUserWidth.W))
+  if (bus_type.getClass == classOf[CacheBusWithUserIO]) {
+    val in_with_user = in.asInstanceOf[CacheBusWithUserIO]
+    s1_user := in_with_user.req.bits.user
+  }
 
   // when pipeline fire, read the data in SRAM and meta data array
   // the data will be returned at the next clock cycle, and passed to stage 2
@@ -207,7 +212,7 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
   val s2_wen   = RegInit(false.B)
   val s2_wdata = RegInit(0.U(64.W))
   val s2_wmask = RegInit(0.U(8.W))
-  val s2_user  = RegInit(0.U(s1_user.getWidth.W))
+  val s2_user  = RegInit(0.U(CacheBusParameters.CacheBusUserWidth.W))
   val s2_id    = RegInit(0.U(s1_id.getWidth.W))
 
   // 4-bit hit check vector, with one-hot encoding
@@ -237,7 +242,9 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
     s2_wen   := s1_wen
     s2_wdata := s1_wdata
     s2_wmask := s1_wmask
-    s2_user  := s1_user
+    if (bus_type.getClass == classOf[CacheBusWithUserIO]) {
+      s2_user := s1_user
+    }
     s2_id    := s1_id
   } .elsewhen (!pipeline_fire && RegNext(pipeline_fire)) {
     // meanwhile, when the FSM is triggered in stage 2, we need to temporarily
@@ -273,7 +280,10 @@ class Cache(id: Int) extends Module with SramParameters with ZhoushanConfig {
   in.req.ready := pipeline_ready && !fi_valid
   in.resp.valid := ((s2_hit_real && !s2_wen && (state =/= s_invalid)) || (state === s_complete))
   in.resp.bits.rdata := 0.U
-  in.resp.bits.user := s2_user
+  if (bus_type.getClass == classOf[CacheBusWithUserIO]) {
+    val in_with_user = in.asInstanceOf[CacheBusWithUserIO]
+    in_with_user.resp.bits.user := s2_user
+  }
   in.resp.bits.id := s2_id
 
   /* ----- Debug Info ---------------- */
