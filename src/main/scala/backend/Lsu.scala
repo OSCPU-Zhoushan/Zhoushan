@@ -40,7 +40,7 @@ class Lsu extends Module {
   val ld_req = io.dmem_ld.req
   val ld_resp = io.dmem_ld.resp
 
-  val addr = (in1 + SignExt32_64(uop.imm))(31, 0)
+  val addr = (in1(31, 0) + uop.imm)(31, 0)
   val addr_offset = addr(2, 0)
   val wdata = in2
 
