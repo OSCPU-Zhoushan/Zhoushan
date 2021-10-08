@@ -107,26 +107,24 @@ class Csr extends Module {
   // CSR register map
 
   val csr_map = Map(
-    RegMap(Csrs.mhartid , mhartid ),
-    RegMap(Csrs.mstatus , mstatus , mstatusWriteFunction),
-    RegMap(Csrs.mie     , mie     ),
-    RegMap(Csrs.mtvec   , mtvec   ),
-    RegMap(Csrs.mscratch, mscratch),
-    RegMap(Csrs.mepc    , mepc    ),
-    RegMap(Csrs.mcause  , mcause  ),
+    MaskedRegMap(Csrs.mhartid , mhartid ),
+    MaskedRegMap(Csrs.mstatus , mstatus , "hffffffffffffffff".U, mstatusWriteFunction),
+    MaskedRegMap(Csrs.mie     , mie     ),
+    MaskedRegMap(Csrs.mtvec   , mtvec   ),
+    MaskedRegMap(Csrs.mscratch, mscratch),
+    MaskedRegMap(Csrs.mepc    , mepc    ),
+    MaskedRegMap(Csrs.mcause  , mcause  ),
     // skip mip
-    RegMap(Csrs.mcycle  , mcycle  ),
-    RegMap(Csrs.minstret, minstret)
+    MaskedRegMap(Csrs.mcycle  , mcycle  ),
+    MaskedRegMap(Csrs.minstret, minstret)
   )
 
   // CSR register read/write
 
   val addr = uop.inst(31, 20)
   val rdata = WireInit(UInt(64.W), 0.U)
-  val ren = csr_rw
   val wdata = Wire(UInt(64.W))
-  val wmask = "hffffffffffffffff".U
-  val wen = csr_rw // && (in1 =/= 0.U)
+  val wen = csr_rw
 
   wdata := MuxLookup(uop.sys_code, 0.U, Array(
     s"b$SYS_CSRRW".U -> in1,
@@ -134,10 +132,10 @@ class Csr extends Module {
     s"b$SYS_CSRRC".U -> (rdata & ~in1)
   ))
 
-  RegMap.access(csr_map, addr, rdata, ren, wdata, wmask, wen)
+  MaskedRegMap.access(csr_map, addr, rdata, wdata, wen)
 
   // mip access
-  when (Csrs.mip === addr && ren) {
+  when (Csrs.mip === addr) {
     rdata := 0.U
   }
 
