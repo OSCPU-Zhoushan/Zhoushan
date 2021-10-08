@@ -15,6 +15,7 @@ class Lsu extends Module {
     val dmem_st = new CacheBusIO
     val dmem_ld = new CacheBusIO
     val flush = Input(Bool())
+    val wakeup = Output(Bool())
   })
 
   val lsu_update = io.uop.valid
@@ -92,6 +93,8 @@ class Lsu extends Module {
   val load_data = WireInit(UInt(64.W), 0.U)
   val store_valid = RegInit(false.B)
 
+  io.wakeup := false.B
+
   switch (state) {
     is (s_idle) {
       when (ld_req.fire()) {
@@ -112,6 +115,7 @@ class Lsu extends Module {
           printf("%d: [LOAD ] pc=%x addr=%x rdata=%x -> %x\n", DebugTimer(),
                  uop.pc, addr, ld_resp.bits.rdata, ld_resp.bits.rdata >> (addr_offset << 3))
         }
+        io.wakeup := true.B
         completed := true.B
         state := s_idle
       }
