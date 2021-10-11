@@ -23,6 +23,8 @@ class Execution extends Module with ZhoushanConfig {
     // dmem
     val dmem_st = new CacheBusIO
     val dmem_ld = new CacheBusIO
+    // lsu early wakeup uop output
+    val lsu_wakeup_uop = Output(new MicroOp)
   })
 
   val uop = io.in
@@ -78,6 +80,12 @@ class Execution extends Module with ZhoushanConfig {
   pipe2.io.dmem_st <> io.dmem_st
   pipe2.io.dmem_ld <> io.dmem_ld
   pipe2.io.flush := io.flush
+
+  // early wakeup signal for issue unit
+  io.lsu_wakeup_uop := 0.U.asTypeOf(new MicroOp)
+  when (pipe2.io.wakeup) {
+    io.lsu_wakeup_uop := reg_uop_lsu
+  }
 
   // pipeline registers
 
@@ -202,6 +210,8 @@ class ExPipe2 extends Module {
     val dmem_ld = new CacheBusIO
     // flush signal
     val flush = Input(Bool())
+    // early wakeup for issue unit
+    val wakeup = Output(Bool())
   })
 
   val lsu = Module(new Lsu)
@@ -214,4 +224,5 @@ class ExPipe2 extends Module {
 
   io.ecp := lsu.io.ecp
   io.ready := !lsu.io.busy
+  io.wakeup := lsu.io.wakeup
 }

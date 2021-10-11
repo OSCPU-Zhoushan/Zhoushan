@@ -83,7 +83,7 @@ class Core extends Module with ZhoushanConfig {
     if (i < IssueWidth - 1) {
       rename.io.exe(i) := isu.io.out(i)
     } else {
-      rename.io.exe(i) := execution.io.out(i)
+      rename.io.exe(i) := execution.io.lsu_wakeup_uop
     }
   }
 
