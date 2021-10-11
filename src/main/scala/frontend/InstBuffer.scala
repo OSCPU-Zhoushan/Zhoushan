@@ -119,6 +119,14 @@ class InstBuffer extends Module with ZhoushanConfig {
     deq_vec := VecInit((0 until deq_width).map(_.U(addr_width.W)))
   }
 
+  // reset
+
+  when (reset.asBool()) {
+    for (i <- 0 until entries) {
+      buf.write(i.U, 0.U.asTypeOf(new InstPacket))
+    }
+  }
+
   // debug
 
   if (EnableDifftest && EnableQueueAnalyzer) {

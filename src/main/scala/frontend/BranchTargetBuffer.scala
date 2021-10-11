@@ -69,9 +69,13 @@ class BranchTargetBufferDirectMapped extends AbstractBranchTargetBuffer {
     }
   }
 
+  // sync reset
   when (reset.asBool()) {
     for (i <- 0 until BtbSize) {
       valid(i) := false.B
+      btb_tag.write(i.U, 0.U)
+      btb_target.write(i.U, 0.U)
+      btb_ras_type.write(i.U, 0.U)
     }
   }
 
@@ -202,9 +206,13 @@ class BranchTargetBuffer4WayAssociative extends AbstractBranchTargetBuffer {
     }
   }
 
+  // sync reset
   when (reset.asBool()) {
     for (i <- 0 until 4) {
       for (j <- 0 until BtbSize / 4) {
+        btb_tag(i).write(j.U, 0.U)
+        btb_target(i).write(j.U, 0.U)
+        btb_ras_type(i).write(j.U, 0.U)
         valid(i)(j) := false.B
       }
     }

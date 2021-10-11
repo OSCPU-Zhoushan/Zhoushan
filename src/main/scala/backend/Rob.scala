@@ -337,6 +337,14 @@ class Rob extends Module with ZhoushanConfig {
     deq_vec := VecInit((0 until deq_width).map(_.U(addr_width.W)))
   }
 
+  /* --------------- reset --------------- */
+
+  when (reset.asBool()) {
+    for (i <- 0 until entries) {
+      rob.write(i.U, 0.U.asTypeOf(new MicroOp))
+    }
+  }
+
   /* --------------- output -------------- */
 
   io.cm := cm
