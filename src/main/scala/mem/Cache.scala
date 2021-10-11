@@ -64,6 +64,13 @@ class Meta extends Module {
     }
   }
 
+  // sync reset
+  when (reset.asBool()) {
+    for (i <- 0 until 64) {
+      tags.write(i.U, 0.U)
+    }
+  }
+
 }
 
 // 2-stage pipeline 4KB cache
