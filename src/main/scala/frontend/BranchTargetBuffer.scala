@@ -1,3 +1,18 @@
+/**************************************************************************************
+* Copyright (c) 2021 Li Shi
+*
+* Zhoushan is licensed under Mulan PSL v2.
+* You can use this software according to the terms and conditions of the Mulan PSL v2.
+* You may obtain a copy of Mulan PSL v2 at:
+*             http://license.coscl.org.cn/MulanPSL2
+*
+* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR
+* FIT FOR A PARTICULAR PURPOSE.
+*
+* See the Mulan PSL v2 for more details.
+***************************************************************************************/
+
 package zhoushan
 
 import chisel3._
@@ -69,9 +84,13 @@ class BranchTargetBufferDirectMapped extends AbstractBranchTargetBuffer {
     }
   }
 
+  // sync reset
   when (reset.asBool()) {
     for (i <- 0 until BtbSize) {
       valid(i) := false.B
+      btb_tag.write(i.U, 0.U)
+      btb_target.write(i.U, 0.U)
+      btb_ras_type.write(i.U, 0.U)
     }
   }
 
@@ -202,9 +221,13 @@ class BranchTargetBuffer4WayAssociative extends AbstractBranchTargetBuffer {
     }
   }
 
+  // sync reset
   when (reset.asBool()) {
     for (i <- 0 until 4) {
       for (j <- 0 until BtbSize / 4) {
+        btb_tag(i).write(j.U, 0.U)
+        btb_target(i).write(j.U, 0.U)
+        btb_ras_type(i).write(j.U, 0.U)
         valid(i)(j) := false.B
       }
     }

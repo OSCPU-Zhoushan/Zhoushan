@@ -1,3 +1,18 @@
+/**************************************************************************************
+* Copyright (c) 2021 Li Shi
+*
+* Zhoushan is licensed under Mulan PSL v2.
+* You can use this software according to the terms and conditions of the Mulan PSL v2.
+* You may obtain a copy of Mulan PSL v2 at:
+*             http://license.coscl.org.cn/MulanPSL2
+*
+* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR
+* FIT FOR A PARTICULAR PURPOSE.
+*
+* See the Mulan PSL v2 for more details.
+***************************************************************************************/
+
 package zhoushan
 
 import chisel3._
@@ -78,6 +93,16 @@ class PatternHistoryTableLocal extends AbstractPatternHistoryTable {
     }
   }
 
+  // sync reset
+  when (reset.asBool()) {
+    for (i <- 0 until PhtWidth) {
+      for (j <- 0 until PhtSize) {
+        pht_1(i).write(j.U, 0.U)
+        pht_0(i).write(j.U, 0.U)
+      }
+    }
+  }
+
 }
 
 class PatternHistoryTableGlobal extends AbstractPatternHistoryTable {
@@ -117,6 +142,14 @@ class PatternHistoryTableGlobal extends AbstractPatternHistoryTable {
   when (RegNext(io.wen)) {
     pht_1.write(RegNext(io.waddr), pht_wdata_w(1))
     pht_0.write(RegNext(io.waddr), pht_wdata_w(0))
+  }
+
+  // sync reset
+  when (reset.asBool()) {
+    for (i <- 0 until PhtSize) {
+      pht_1.write(i.U, 0.U)
+      pht_0.write(i.U, 0.U)
+    }
   }
 
 }

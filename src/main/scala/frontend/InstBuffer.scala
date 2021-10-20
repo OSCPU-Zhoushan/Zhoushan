@@ -1,3 +1,18 @@
+/**************************************************************************************
+* Copyright (c) 2021 Li Shi
+*
+* Zhoushan is licensed under Mulan PSL v2.
+* You can use this software according to the terms and conditions of the Mulan PSL v2.
+* You may obtain a copy of Mulan PSL v2 at:
+*             http://license.coscl.org.cn/MulanPSL2
+*
+* THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND, EITHER
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT, MERCHANTABILITY OR
+* FIT FOR A PARTICULAR PURPOSE.
+*
+* See the Mulan PSL v2 for more details.
+***************************************************************************************/
+
 package zhoushan
 
 import chisel3._
@@ -117,6 +132,14 @@ class InstBuffer extends Module with ZhoushanConfig {
     enq_ready := true.B
     enq_vec := VecInit((0 until enq_width).map(_.U(addr_width.W)))
     deq_vec := VecInit((0 until deq_width).map(_.U(addr_width.W)))
+  }
+
+  // reset
+
+  when (reset.asBool()) {
+    for (i <- 0 until entries) {
+      buf.write(i.U, 0.U.asTypeOf(new InstPacket))
+    }
   }
 
   // debug
