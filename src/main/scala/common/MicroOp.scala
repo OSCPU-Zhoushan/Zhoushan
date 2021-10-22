@@ -19,11 +19,10 @@ import chisel3._
 import chisel3.util._
 import zhoushan.Constant._
 
-class MicroOp extends Bundle with ZhoushanConfig{
+class MicroOp extends Bundle with ZhoushanConfig {
   val valid     = Bool()
 
   val pc        = UInt(32.W)
-  val npc       = UInt(32.W)
   val inst      = UInt(32.W)
 
   val fu_code   = UInt(FU_X.length.W)
@@ -47,15 +46,6 @@ class MicroOp extends Bundle with ZhoushanConfig{
   // branch prediction related
   val pred_br   = Bool()
   val pred_bpc  = UInt(32.W)
-
-  // register renaming related
-  val rs1_paddr = UInt(log2Up(PrfSize).W)   // rs1 prf addr
-  val rs2_paddr = UInt(log2Up(PrfSize).W)   // rs2 prf addr
-  val rd_paddr  = UInt(log2Up(PrfSize).W)   // rd prf addr
-  val rd_ppaddr = UInt(log2Up(PrfSize).W)   // rd prev prf addr
-
-  // re-order buffer related
-  val rob_addr  = UInt(log2Up(RobSize).W)
 
   def from_decoder(in: UInt, rd_addr: UInt): Unit = {
     val rd_en_tmp = WireInit(false.B)
