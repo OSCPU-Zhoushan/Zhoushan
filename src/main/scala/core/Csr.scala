@@ -40,27 +40,30 @@ class Csr extends Module with ZhoushanConfig {
     val in1 = Input(UInt(64.W))
     val out = Output(UInt(64.W))
     val jmp_packet = Output(new JmpPacket)
+    val intr = Output(Bool())
   })
 
   val uop = io.uop
+  val is_sys = uop.valid && (uop.fu_code === s"b$FU_SYS".U)
+  val sys_code = uop.sys_code
 
   // when fence.i is commited
   //  1. mark it as a system jump
   //  2. flush the pipeline
   //  3. go to the instruction following fence.i
 
-  val fence_i = uop.valid &&
-                (uop.fu_code === s"b$FU_SYS".U) &&
-                (uop.sys_code === s"b$SYS_FENCEI".U)
+  val fence_i = is_sys && (sys_code === s"b$SYS_FENCEI".U)
   BoringUtils.addSource(fence_i, "fence_i")
 
   val in1 = io.in1
-  val sys_code = uop.sys_code
-  val csr_rw = (sys_code === s"b$SYS_CSRRW".U) ||
-               (sys_code === s"b$SYS_CSRRS".U) ||
-               (sys_code === s"b$SYS_CSRRC".U)
+  val csr_rw = ((sys_code === s"b$SYS_CSRRW".U) ||
+                (sys_code === s"b$SYS_CSRRS".U) ||
+                (sys_code === s"b$SYS_CSRRC".U)) & is_sys
   val csr_jmp = WireInit(Bool(), false.B)
   val csr_jmp_pc = WireInit(UInt(32.W), 0.U)
+
+  val is_ecall = is_sys && (sys_code === s"b$SYS_ECALL".U)
+  val is_mret = is_sys && (sys_code === s"b$SYS_MRET".U)
 
   // CSR register definition
 
@@ -93,7 +96,7 @@ class Csr extends Module with ZhoushanConfig {
   }
 
   // ECALL
-  when (sys_code === s"b$SYS_ECALL".U) {
+  when (is_ecall) {
     mepc := uop.pc
     mcause := 11.U  // env call from M-mode
     mstatus := Cat(mstatus(63, 8), mstatus(3), mstatus(6, 4), 0.U, mstatus(2, 0))
@@ -102,10 +105,41 @@ class Csr extends Module with ZhoushanConfig {
   }
 
   // MRET
-  when (sys_code === s"b$SYS_MRET".U) {
+  when (is_mret) {
     mstatus := Cat(mstatus(63, 8), 1.U, mstatus(6, 4), mstatus(7), mstatus(2, 0))
     csr_jmp := true.B
     csr_jmp_pc := mepc(31, 0)
+  }
+
+  // Interrupt
+  val s_idle :: s_wait :: Nil = Enum(2)
+  val intr_state = RegInit(s_idle)
+
+  val intr = RegInit(Bool(), false.B)
+  val intr_pc = RegInit(UInt(32.W), 0.U)
+  val intr_no = RegInit(UInt(64.W), 0.U)
+
+  val intr_global_en = (mstatus(3) === 1.U)
+  val intr_clint_en = (mie(7) === 1.U && mtip === 1.U)
+
+  intr := false.B
+  switch (intr_state) {
+    is (s_idle) {
+      when (intr_global_en && intr_clint_en) {
+        intr_state := s_wait
+      }
+    }
+    is (s_wait) {
+      when (uop.valid) {
+        mepc := uop.pc
+        mcause := "h8000000000000007".U
+        mstatus := Cat(mstatus(63, 8), mstatus(3), mstatus(6, 4), 0.U, mstatus(2, 0))
+        intr := true.B
+        intr_no := 7.U
+        intr_pc := Cat(mtvec(31, 2), Fill(2, 0.U))
+        intr_state := s_idle
+      }
+    }
   }
 
   // CSR register map
@@ -130,7 +164,7 @@ class Csr extends Module with ZhoushanConfig {
   val wdata = Wire(UInt(64.W))
   val wen = csr_rw
 
-  wdata := MuxLookup(uop.sys_code, 0.U, Array(
+  wdata := MuxLookup(sys_code, 0.U, Array(
     s"b$SYS_CSRRW".U -> in1,
     s"b$SYS_CSRRS".U -> (rdata | in1),
     s"b$SYS_CSRRC".U -> (rdata & ~in1)
@@ -144,16 +178,17 @@ class Csr extends Module with ZhoushanConfig {
   }
 
   io.out := rdata
-  io.jmp_packet.jmp := Mux(fence_i, true.B, csr_jmp)
-  io.jmp_packet.jmp_pc := Mux(fence_i, uop.pc + 4.U, csr_jmp_pc)
+  io.jmp_packet.jmp := Mux(fence_i || intr , true.B, csr_jmp)
+  io.jmp_packet.jmp_pc := Mux(intr, intr_pc, Mux(fence_i, uop.pc + 4.U, csr_jmp_pc))
+  io.intr := intr
 
   if (EnableDifftest) {
     val dt_ae = Module(new DifftestArchEvent)
-    dt_ae.io.clock          := clock
-    dt_ae.io.coreid         := 0.U
-    dt_ae.io.intrNO         := 0.U
-    dt_ae.io.cause          := 0.U
-    dt_ae.io.exceptionPC    := 0.U
+    dt_ae.io.clock        := clock
+    dt_ae.io.coreid       := 0.U
+    dt_ae.io.intrNO       := Mux(intr, intr_no, 0.U)
+    dt_ae.io.cause        := 0.U
+    dt_ae.io.exceptionPC  := Mux(intr, mepc, 0.U)
 
     val dt_cs = Module(new DifftestCSRState)
     dt_cs.io.clock          := clock

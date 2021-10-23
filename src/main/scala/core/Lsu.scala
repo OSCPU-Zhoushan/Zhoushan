@@ -29,6 +29,7 @@ class Lsu extends Module {
     val mmio = Output(Bool())
     val busy = Output(Bool())
     val dmem = new CacheBusIO
+    val intr = Input(Bool())
   })
 
   val lsu_update = io.uop.valid
@@ -85,7 +86,7 @@ class Lsu extends Module {
   req.bits.wen   := is_store
   req.bits.size  := Mux(mmio, uop.mem_size, s"b$MEM_DWORD".U)
   req.valid      := uop.valid && (state === s_idle) && !addr_unaligned &&
-                    is_mem && (lsu_update || !completed)
+                    is_mem && (lsu_update || !completed) && !io.intr
 
   resp.ready     := resp.valid
 
@@ -96,7 +97,7 @@ class Lsu extends Module {
 
   switch (state) {
     is (s_idle) {
-      when (req.fire()) {
+      when (!io.intr && req.fire()) {
         state := s_wait
       }
       when (addr_unaligned) {

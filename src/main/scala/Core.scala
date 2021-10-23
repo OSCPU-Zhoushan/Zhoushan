@@ -86,8 +86,9 @@ class Core extends Module with ZhoushanConfig {
 
   /* ----- Stage 4 - Commit (CM) ----------------- */
 
-  val cm = WireInit(0.U.asTypeOf(new MicroOp))
-  cm := ex_cm.io.out.uop
+  val intr = execution.io.intr
+
+  val cm = Mux(intr, 0.U.asTypeOf(new MicroOp), ex_cm.io.out.uop)
 
   rf.io.rd_addr := execution.io.uop.rd_addr
   rf.io.rd_data := execution.io.rd_data
