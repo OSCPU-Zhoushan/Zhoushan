@@ -22,9 +22,12 @@ import zhoushan.Constant._
 class Execution extends Module with ZhoushanConfig {
   val io = IO(new Bundle {
     // input
-    val in = Flipped(Decoupled(Output(new ExPacket)))
+    val uop = Input(new MicroOp)
+    val rs1_data = Input(UInt(64.W))
+    val rs2_data = Input(UInt(64.W))
     // output
-    val out = Decoupled(Output(new CommitPacket))
+    val rd_data = Output(UInt(64.W))
+    val busy = Output(Bool())
     val jmp_packet = Output(new JmpPacket)
     // dmem
     val dmem = new CacheBusIO
@@ -35,24 +38,24 @@ class Execution extends Module with ZhoushanConfig {
   val in1 = Wire(UInt(64.W))
   val in2 = Wire(UInt(64.W))
 
-  in1_0 := MuxLookup(io.in.bits.uop.rs1_src, 0.U, Array(
-    s"b$RS_FROM_RF".U  -> io.in.bits.rs1_data,
-    s"b$RS_FROM_IMM".U -> SignExt32_64(io.in.bits.uop.imm),
-    s"b$RS_FROM_PC".U  -> ZeroExt32_64(io.in.bits.uop.pc)
+  in1_0 := MuxLookup(io.uop.rs1_src, 0.U, Array(
+    s"b$RS_FROM_RF".U  -> io.rs1_data,
+    s"b$RS_FROM_IMM".U -> SignExt32_64(io.uop.imm),
+    s"b$RS_FROM_PC".U  -> ZeroExt32_64(io.uop.pc)
   ))(63, 0)
 
-  in2_0 := MuxLookup(io.in.bits.uop.rs2_src, 0.U, Array(
-    s"b$RS_FROM_RF".U  -> io.in.bits.rs2_data,
-    s"b$RS_FROM_IMM".U -> SignExt32_64(io.in.bits.uop.imm),
-    s"b$RS_FROM_PC".U  -> ZeroExt32_64(io.in.bits.uop.pc)
+  in2_0 := MuxLookup(io.uop.rs2_src, 0.U, Array(
+    s"b$RS_FROM_RF".U  -> io.rs2_data,
+    s"b$RS_FROM_IMM".U -> SignExt32_64(io.uop.imm),
+    s"b$RS_FROM_PC".U  -> ZeroExt32_64(io.uop.pc)
   ))(63, 0)
 
-  in1 := Mux(io.in.bits.uop.w_type,
-             Mux(io.in.bits.uop.alu_code === s"b$ALU_SRL".U,
+  in1 := Mux(io.uop.w_type,
+             Mux(io.uop.alu_code === s"b$ALU_SRL".U,
                  ZeroExt32_64(in1_0(31, 0)),
                  SignExt32_64(in1_0(31, 0))),
              in1_0)
-  in2 := Mux(io.in.bits.uop.w_type, SignExt32_64(in2_0(31, 0)), in2_0)
+  in2 := Mux(io.uop.w_type, SignExt32_64(in2_0(31, 0)), in2_0)
 
   val alu = Module(new Alu)
   alu.io.in1 := in1
@@ -71,23 +74,21 @@ class Execution extends Module with ZhoushanConfig {
   csr.io.uop := 0.U.asTypeOf(new MicroOp)
   lsu.io.uop := 0.U.asTypeOf(new MicroOp)
 
-  io.in.ready := !lsu.io.busy
-  io.out.valid := false.B
-  io.out.bits.uop := 0.U.asTypeOf(new MicroOp)
-  io.out.bits.rd_data := 0.U
+  io.rd_data := 0.U
+  io.busy := lsu.io.busy
   io.jmp_packet := 0.U.asTypeOf(new JmpPacket)
 
-  when (io.in.bits.uop.fu_code === s"b$FU_ALU".U || io.in.bits.uop.fu_code === s"b$FU_JMP".U) {
-    alu.io.uop := io.in.bits.uop
-    io.out.bits.rd_data := alu.io.out
+  when (io.uop.fu_code === s"b$FU_ALU".U || io.uop.fu_code === s"b$FU_JMP".U) {
+    alu.io.uop := io.uop
+    io.rd_data := alu.io.out
     io.jmp_packet := alu.io.jmp_packet
-  } .elsewhen (io.in.bits.uop.fu_code === s"b$FU_SYS".U) {
-    csr.io.uop := io.in.bits.uop
-    io.out.bits.rd_data := csr.io.out
+  } .elsewhen (io.uop.fu_code === s"b$FU_SYS".U) {
+    csr.io.uop := io.uop
+    io.rd_data := csr.io.out
     io.jmp_packet := csr.io.jmp_packet
-  } .elsewhen (io.in.bits.uop.fu_code === s"b$FU_MEM".U) {
-    lsu.io.uop := io.in.bits.uop
-    io.out.bits.rd_data := lsu.io.out
+  } .elsewhen (io.uop.fu_code === s"b$FU_MEM".U) {
+    lsu.io.uop := io.uop
+    io.rd_data := lsu.io.out
   }
 
 }

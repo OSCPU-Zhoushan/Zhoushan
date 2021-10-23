@@ -23,7 +23,8 @@ class InstFetch extends Module with ZhoushanConfig {
   val io = IO(new Bundle {
     val imem = new CacheBusWithUserIO
     val jmp_packet = Input(new JmpPacket)
-    val out = Decoupled(Output(new InstPacket))
+    val stall = Input(Bool())
+    val out = Output(new InstPacket)
   })
 
   val req = io.imem.req
@@ -39,28 +40,27 @@ class InstFetch extends Module with ZhoushanConfig {
     reg_jmp := false.B
   }
 
-  val pc_init = ResetPc.U
+  val pc_init = "h80000000".U(32.W)
   val pc = RegInit(pc_init)
   val pc_update = jmp || req.fire()
-  val pc_next = Mux(jmp, jmp_pc, pc + 4.U)
+
+  val npc = Mux(jmp, jmp_pc, pc + 4.U)
 
   when (pc_update) {
-    pc := pc_next
+    pc := npc
   }
 
-  req.bits.addr  := pc
+  req.bits.addr := pc
   req.bits.wdata := 0.U
   req.bits.wmask := 0.U
-  req.bits.wen   := false.B
-  req.bits.size  := s"b$MEM_WORD".U
-  req.bits.user  := pc
-  req.valid      := io.out.ready
-  resp.ready     := io.out.ready || jmp
+  req.bits.wen := false.B
+  req.bits.size := s"b$MEM_WORD".U
+  req.bits.user := pc
+  req.valid := !io.stall
+  resp.ready := !io.stall || jmp
 
-  io.out.bits.pc := resp.bits.user(31, 0)
-  io.out.bits.inst := Mux(io.out.bits.pc(2),
-                          resp.bits.rdata(63, 32),
-                          resp.bits.rdata(31, 0))
+  io.out.pc := resp.bits.user(31, 0)
+  io.out.inst := Mux(io.out.pc(2), resp.bits.rdata(63, 32), resp.bits.rdata(31, 0))
   io.out.valid := resp.valid && !jmp && !reg_jmp
 
 }

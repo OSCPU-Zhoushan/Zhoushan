@@ -26,6 +26,7 @@ class Core extends Module with ZhoushanConfig {
     val dmem = new CacheBusIO
   })
 
+  val stall = WireInit(false.B)
   val flush = WireInit(false.B)
 
   /* ----- Stage 1 - Instruction Fetch (IF) ------ */
@@ -35,6 +36,7 @@ class Core extends Module with ZhoushanConfig {
 
   val if_id = Module(new PipelineReg(new InstPacket))
   if_id.io.in <> fetch.io.out
+  if_id.io.stall := stall
   if_id.io.flush := flush
 
   /* ----- Stage 2 - Instruction Decode (ID) ----- */
@@ -47,21 +49,22 @@ class Core extends Module with ZhoushanConfig {
   rf.io.rs2_addr := decode.io.out.rs2_addr
 
   val id_ex = Module(new PipelineReg(new ExPacket))
-  id_ex.io.in.bits.uop := decode.io.out
-  id_ex.io.in.bits.rs1_data := rf.io.rs1_data
-  id_ex.io.in.bits.rs2_data := rf.io.rs2_data
-
-  decode.io.out_ready := id_ex.io.in.ready
-  id_ex.io.in.valid := if_id.io.out.valid
+  id_ex.io.in.uop := decode.io.out
+  id_ex.io.in.rs1_data := rf.io.rs1_data
+  id_ex.io.in.rs2_data := rf.io.rs2_data
+  id_ex.io.stall := stall
   id_ex.io.flush := flush
 
   /* ----- Stage 3 - Execution (EX) -------------- */
 
   val execution = Module(new Execution)
-  execution.io.in <> id_ex.io.out
+  execution.io.uop := id_ex.io.out.uop
 
-  fetch.io.jmp_packet := execution.io.jmp_packet
-  flush := execution.io.jmp_packet.jmp
+  val ex_rs1_data = WireInit(UInt(64.W), 0.U)
+  val ex_rs2_data = WireInit(UInt(64.W), 0.U)
+
+  execution.io.rs1_data := ex_rs1_data
+  execution.io.rs2_data := ex_rs2_data
 
   val crossbar1to2 = Module(new CacheBusCrossbar1to2(new CacheBusIO))
   crossbar1to2.io.in <> execution.io.dmem
@@ -76,19 +79,37 @@ class Core extends Module with ZhoushanConfig {
   crossbar1to2.io.out(1) <> clint.io.in
 
   val ex_cm = Module(new PipelineReg(new CommitPacket))
-  ex_cm.io.in <> execution.io.out
-  ex_cm.io.flush := false.B
+  ex_cm.io.in.uop := execution.io.uop
+  ex_cm.io.in.rd_data := execution.io.rd_data
+  ex_cm.io.stall := false.B
+  ex_cm.io.flush := execution.io.busy
 
   /* ----- Stage 4 - Commit (CM) ----------------- */
 
   val cm = WireInit(0.U.asTypeOf(new MicroOp))
-  ex_cm.io.out.ready := true.B
-  cm := ex_cm.io.out.bits.uop
-  cm.valid := ex_cm.io.out.valid
+  cm := ex_cm.io.out.uop
 
-  rf.io.rd_en := ex_cm.io.out.valid && ex_cm.io.out.bits.uop.rd_en
-  rf.io.rd_addr := ex_cm.io.out.bits.uop.rd_addr
-  rf.io.rd_data := ex_cm.io.out.bits.rd_data
+  rf.io.rd_addr := execution.io.uop.rd_addr
+  rf.io.rd_data := execution.io.rd_data
+  rf.io.rd_en := execution.io.uop.valid && execution.io.uop.rd_en
+
+  /* ----- Forwarding Unit ----------------------- */
+
+  val ex_rs1_from_cm = cm.valid && cm.rd_en &&
+                      (cm.rd_addr =/= 0.U) &&
+                      (cm.rd_addr === id_ex.io.out.uop.rs1_addr)
+  ex_rs1_data := Mux(ex_rs1_from_cm, ex_cm.io.out.rd_data, id_ex.io.out.rs1_data)
+  val ex_rs2_from_cm = cm.valid && cm.rd_en &&
+                      (cm.rd_addr =/= 0.U) &&
+                      (cm.rd_addr === id_ex.io.out.uop.rs2_addr)
+  ex_rs2_data := Mux(ex_rs2_from_cm, ex_cm.io.out.rd_data, id_ex.io.out.rs2_data)
+
+  /* ----- Pipeline Control Signals -------------- */
+
+  fetch.io.jmp_packet := execution.io.jmp_packet
+  fetch.io.stall := stall
+  flush := execution.io.jmp_packet.jmp
+  stall := execution.io.busy
 
   /* ----- CSR & Difftest ------------------------ */
 
@@ -112,15 +133,15 @@ class Core extends Module with ZhoushanConfig {
     dt_ic.io.clock    := clock
     dt_ic.io.coreid   := 0.U
     dt_ic.io.index    := 0.U
-    dt_ic.io.valid    := RegNext(cm.valid)
-    dt_ic.io.pc       := RegNext(cm.pc)
-    dt_ic.io.instr    := RegNext(cm.inst)
-    dt_ic.io.skip     := RegNext(skip)
+    dt_ic.io.valid    := cm.valid
+    dt_ic.io.pc       := cm.pc
+    dt_ic.io.instr    := cm.inst
+    dt_ic.io.skip     := skip
     dt_ic.io.isRVC    := false.B
     dt_ic.io.scFailed := false.B
-    dt_ic.io.wen      := RegNext(cm.rd_en)
-    dt_ic.io.wdata    := RegNext(ex_cm.io.out.bits.rd_data)
-    dt_ic.io.wdest    := RegNext(cm.rd_addr)
+    dt_ic.io.wen      := cm.rd_en
+    dt_ic.io.wdata    := ex_cm.io.out.rd_data
+    dt_ic.io.wdest    := cm.rd_addr
 
     when (dt_ic.io.valid && dt_ic.io.instr === Instructions.PUTCH) {
       printf("%c", rf_a0(7, 0))
@@ -137,10 +158,10 @@ class Core extends Module with ZhoushanConfig {
     val dt_te = Module(new DifftestTrapEvent)
     dt_te.io.clock    := clock
     dt_te.io.coreid   := 0.U
-    dt_te.io.valid    := RegNext(trap.orR)
-    dt_te.io.code     := RegNext(rf_a0(2, 0))
+    dt_te.io.valid    := trap.orR
+    dt_te.io.code     := rf_a0(2, 0)
     dt_te.io.pc       := 0.U
-    dt_te.io.pc       := RegNext(cm.pc)
+    dt_te.io.pc       := cm.pc
     dt_te.io.cycleCnt := cycle_cnt
     dt_te.io.instrCnt := instr_cnt
   }

@@ -65,7 +65,7 @@ class Alu extends Module {
     s"b$JMP_BGE".U  -> (in1.asSInt() >= in2.asSInt()),
     s"b$JMP_BLTU".U -> (in1.asUInt() < in2.asUInt()),
     s"b$JMP_BGEU".U -> (in1.asUInt() >= in2.asUInt())
-  ))
+  )) && (uop.fu_code === s"b$FU_JMP".U)
 
   jmp_pc := Mux(uop.jmp_code === s"b$JMP_JALR".U, in1(31, 0), uop.pc) + uop.imm
 

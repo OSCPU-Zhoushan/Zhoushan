@@ -59,28 +59,8 @@ object BoolStopWatch {
   }
 }
 
-object Delayer {
-  def apply(x: Data, delay: Int): Data = {
-    assert(delay >= 0, "Delayer: negative delay is invalid\n")
-    val r = RegInit(0.U(x.getWidth.W))
-    if (delay == 0) {
-      x
-    } else {
-      r := apply(x, delay - 1)
-      r
-    }
-  }
-}
-
 object HoldUnless {
   def apply[T <: Data](x: T, en: Bool): T = {
     Mux(en, x, RegEnable(x, 0.U.asTypeOf(x), en))
-  }
-}
-
-object HoldUnlessWithFlush {
-  def apply[T <: Data](x: T, en: Bool, flush: Bool, flushAtOnce: Bool = false.B): T = {
-    val x_new = Mux(flush, 0.U.asTypeOf(x), x)
-    Mux(en || flushAtOnce, x_new, RegEnable(x_new, 0.U.asTypeOf(x), en || flush))
   }
 }

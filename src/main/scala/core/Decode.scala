@@ -21,15 +21,14 @@ import chisel3.util.experimental.decode._
 
 class Decode extends Module {
   val io = IO(new Bundle {
-    val in = Flipped(Decoupled(Output(new InstPacket)))
+    val in = Input(new InstPacket)
     val out = Output(new MicroOp)
-    val out_ready = Input(Bool())
   })
 
-  val inst = io.in.bits.inst
+  val inst = io.in.inst
   val uop = WireInit(0.U.asTypeOf(new MicroOp))
 
-  uop.pc := io.in.bits.pc
+  uop.pc := io.in.pc
   uop.inst := inst
 
   uop.rs1_addr := inst(19, 15)
@@ -42,6 +41,5 @@ class Decode extends Module {
 
   uop.from_decoder(decode_result, inst(11, 7))
 
-  io.in.ready := io.out_ready
   io.out := Mux(io.in.valid, uop, 0.U.asTypeOf(new MicroOp))
 }

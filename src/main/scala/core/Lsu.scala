@@ -46,6 +46,9 @@ class Lsu extends Module {
   val is_load = (uop.mem_code === s"b$MEM_LD".U || uop.mem_code === s"b$MEM_LDU".U)
   val is_store = (uop.mem_code === s"b$MEM_ST".U)
 
+  val s_idle :: s_wait :: Nil = Enum(2)
+  val state = RegInit(s_idle)
+
   val req = io.dmem.req
   val resp = io.dmem.resp
 
@@ -53,7 +56,7 @@ class Lsu extends Module {
   val addr_offset = addr(2, 0)
   val wdata = in2
 
-  io.mmio := (addr(31) === 0.U)
+  val mmio = (addr(31) === 0.U)
 
   val mask = ("b11111111".U << addr_offset)(7, 0)
   val wmask = MuxLookup(uop.mem_size, 0.U, Array(
@@ -76,16 +79,13 @@ class Lsu extends Module {
   // currently we just skip the memory access with unaligned address
   // todo: add this exception in CSR unit in the future
 
-  val s_idle :: s_wait :: Nil = Enum(2)
-  val state = RegInit(s_idle)
-
-  req.bits.addr  := Mux(io.mmio, addr, Cat(addr(31, 3), Fill(3, 0.U)))
+  req.bits.addr  := Mux(mmio, addr, Cat(addr(31, 3), Fill(3, 0.U)))
   req.bits.wdata := (wdata << (addr_offset << 3))(63, 0)
   req.bits.wmask := mask & ((wmask << addr_offset)(7, 0))
   req.bits.wen   := is_store
-  req.bits.size  := Mux(io.mmio, uop.mem_size, s"b$MEM_DWORD".U)
+  req.bits.size  := Mux(mmio, uop.mem_size, s"b$MEM_DWORD".U)
   req.valid      := uop.valid && (state === s_idle) && !addr_unaligned &&
-                       is_mem && (lsu_update || !completed)
+                    is_mem && (lsu_update || !completed)
 
   resp.ready     := resp.valid
 
@@ -141,6 +141,7 @@ class Lsu extends Module {
     s"b$MEM_LDU".U -> ldu_out
   ))
 
+  io.mmio := mmio
   io.out := load_out
   io.busy := req.valid || (state === s_wait && !resp.fire())
 
