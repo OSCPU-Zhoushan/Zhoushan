@@ -34,14 +34,25 @@ object Csrs {
   val minstret = "hb02".U
 }
 
-class Csr extends Module {
+class Csr extends Module with ZhoushanConfig {
   val io = IO(new Bundle {
     val uop = Input(new MicroOp())
     val in1 = Input(UInt(64.W))
-    val ecp = Output(new ExCommitPacket)
+    val out = Output(UInt(64.W))
+    val jmp_packet = Output(new JmpPacket)
   })
 
   val uop = io.uop
+
+  // when fence.i is commited
+  //  1. mark it as a system jump
+  //  2. flush the pipeline
+  //  3. go to the instruction following fence.i
+
+  val fence_i = uop.valid &&
+                (uop.fu_code === s"b$FU_SYS".U) &&
+                (uop.sys_code === s"b$SYS_FENCEI".U)
+  BoringUtils.addSource(fence_i, "fence_i")
 
   val in1 = io.in1
   val sys_code = uop.sys_code
@@ -61,14 +72,9 @@ class Csr extends Module {
   val mepc      = RegInit(UInt(64.W), 0.U)
   val mcause    = RegInit(UInt(64.W), 0.U)
 
-  BoringUtils.addSource(mstatus, "csr_mstatus")
-  BoringUtils.addSource(mie(7).asBool(), "csr_mie_mtie")
-  BoringUtils.addSource(mtvec(31, 2), "csr_mtvec_idx")
-
   // interrupt for mip
   val mtip      = WireInit(UInt(1.W), 0.U)
   BoringUtils.addSink(mtip, "csr_mip_mtip")
-  BoringUtils.addSource(mtip, "csr_mip_mtip_intr")
 
   val mcycle    = WireInit(UInt(64.W), 0.U)
   val minstret  = WireInit(UInt(64.W), 0.U)
@@ -100,23 +106,6 @@ class Csr extends Module {
     mstatus := Cat(mstatus(63, 8), 1.U, mstatus(6, 4), mstatus(7), mstatus(2, 0))
     csr_jmp := true.B
     csr_jmp_pc := mepc(31, 0)
-  }
-
-  // interrupt
-  val intr         = WireInit(Bool(), false.B)
-  val intr_mstatus = WireInit(UInt(64.W), "h00001800".U)
-  val intr_mepc    = WireInit(UInt(64.W), 0.U)
-  val intr_mcause  = WireInit(UInt(64.W), 0.U)
-
-  BoringUtils.addSink(intr, "intr")
-  BoringUtils.addSink(intr_mstatus, "intr_mstatus")
-  BoringUtils.addSink(intr_mepc, "intr_mepc")
-  BoringUtils.addSink(intr_mcause, "intr_mcause")
-
-  when (intr) {
-    mstatus := intr_mstatus
-    mepc := intr_mepc
-    mcause := intr_mcause
   }
 
   // CSR register map
@@ -154,23 +143,22 @@ class Csr extends Module {
     rdata := 0.U
   }
 
-  io.ecp.store_valid := false.B
-  io.ecp.mmio := false.B
-  io.ecp.jmp_valid := csr_jmp
-  io.ecp.jmp := csr_jmp
-  io.ecp.jmp_pc := csr_jmp_pc
-  io.ecp.mis := Mux(csr_jmp,
-                    (uop.pred_br && (csr_jmp_pc =/= uop.pred_bpc)) || !uop.pred_br,
-                    uop.pred_br)
-  io.ecp.rd_data := rdata
+  io.out := rdata
+  io.jmp_packet.jmp := Mux(fence_i, true.B, csr_jmp)
+  io.jmp_packet.jmp_pc := Mux(fence_i, uop.pc + 4.U, csr_jmp_pc)
 
-  // difftest for CSR state
+  if (EnableDifftest) {
+    val dt_ae = Module(new DifftestArchEvent)
+    dt_ae.io.clock          := clock
+    dt_ae.io.coreid         := 0.U
+    dt_ae.io.intrNO         := 0.U
+    dt_ae.io.cause          := 0.U
+    dt_ae.io.exceptionPC    := 0.U
 
-  if (ZhoushanConfig.EnableDifftest) {
     val dt_cs = Module(new DifftestCSRState)
     dt_cs.io.clock          := clock
     dt_cs.io.coreid         := 0.U
-    dt_cs.io.priviledgeMode := 3.U        // machine mode
+    dt_cs.io.priviledgeMode := 3.U
     dt_cs.io.mstatus        := mstatus
     dt_cs.io.sstatus        := mstatus & "h80000003000de122".U
     dt_cs.io.mepc           := mepc

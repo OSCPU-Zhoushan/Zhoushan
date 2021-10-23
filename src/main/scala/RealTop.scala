@@ -18,7 +18,7 @@ package zhoushan
 import chisel3._
 import chisel3.util._
 
-class RealTop extends Module {
+class RealTop extends Module with ZhoushanConfig {
   val io = IO(new Bundle {
     val interrupt = Input(Bool())
     val master = new OscpuSocAxiIO
@@ -27,8 +27,17 @@ class RealTop extends Module {
 
   val core = Module(new Core)
 
+  val icache = Module(new CacheController(new CacheBusWithUserIO, InstCacheId, InstUncacheId))
+  icache.io.in <> core.io.imem
+
+  val dcache = Module(new CacheController(new CacheBusIO, DataCacheId, DataUncacheId))
+  dcache.io.in <> core.io.dmem
+
   val crossbar = Module(new CoreBusCrossbarNto1(4))
-  crossbar.io.in <> core.io.core_bus
+  crossbar.io.in(0) <> icache.io.out_cache
+  crossbar.io.in(1) <> dcache.io.out_cache
+  crossbar.io.in(2) <> icache.io.out_uncache
+  crossbar.io.in(3) <> dcache.io.out_uncache
 
   val core2axi = Module(new CoreBus2Axi(new OscpuSocAxiIO))
   core2axi.in <> crossbar.io.out

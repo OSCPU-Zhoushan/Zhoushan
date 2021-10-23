@@ -24,7 +24,8 @@ class Alu extends Module {
     val uop = Input(new MicroOp)
     val in1 = Input(UInt(64.W))
     val in2 = Input(UInt(64.W))
-    val ecp = Output(new ExCommitPacket)
+    val out = Output(UInt(64.W))
+    val jmp_packet = Output(new JmpPacket)
   })
 
   val uop = io.uop
@@ -34,10 +35,11 @@ class Alu extends Module {
   val shamt = Wire(UInt(6.W))
   shamt := Mux(uop.w_type, in2(4, 0).asUInt(), in2(5, 0))
 
-  val alu_out_0, alu_out = Wire(UInt(64.W))
+  val alu_out_0 = Wire(UInt(64.W))
+  val alu_out = Wire(UInt(64.W))
   val jmp = Wire(Bool())
   val jmp_pc = Wire(UInt(32.W))
-  val npc_to_rd = Wire(UInt(64.W))
+  val jmp_out = WireInit(UInt(64.W), 0.U)
 
   alu_out_0 := MuxLookup(uop.alu_code, 0.U, Array(
     s"b$ALU_ADD".U  -> (in1 + in2).asUInt(),
@@ -67,18 +69,11 @@ class Alu extends Module {
 
   jmp_pc := Mux(uop.jmp_code === s"b$JMP_JALR".U, in1(31, 0), uop.pc) + uop.imm
 
-  npc_to_rd := MuxLookup(uop.jmp_code, 0.U, Array(
-    s"b$JMP_JAL".U  -> ZeroExt32_64(uop.npc),
-    s"b$JMP_JALR".U -> ZeroExt32_64(uop.npc)
-  ))
+  when (uop.jmp_code === s"b$JMP_JAL".U || uop.jmp_code === s"b$JMP_JALR".U) {
+    jmp_out := uop.pc + 4.U
+  }
 
-  io.ecp.store_valid := false.B
-  io.ecp.mmio := false.B
-  io.ecp.jmp_valid := (uop.fu_code === s"b$FU_JMP".U)
-  io.ecp.jmp := jmp
-  io.ecp.jmp_pc := jmp_pc
-  io.ecp.mis := Mux(jmp,
-                    (uop.pred_br && (jmp_pc =/= uop.pred_bpc)) || !uop.pred_br,
-                    uop.pred_br)
-  io.ecp.rd_data := Mux(uop.fu_code === s"b$FU_ALU".U, alu_out, npc_to_rd)
+  io.out := Mux(uop.fu_code === s"b$FU_ALU".U, alu_out, jmp_out)
+  io.jmp_packet.jmp := jmp
+  io.jmp_packet.jmp_pc := jmp_pc
 }

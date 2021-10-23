@@ -18,38 +18,23 @@ package zhoushan
 import chisel3._
 import chisel3.util._
 import chisel3.util.experimental.decode._
-import zhoushan.Constant._
 
-class Decode extends Module with ZhoushanConfig {
+class Decode extends Module {
   val io = IO(new Bundle {
-    val in = Input(new InstPacket)
+    val in = Flipped(Decoupled(Output(new InstPacket)))
     val out = Output(new MicroOp)
+    val out_ready = Input(Bool())
   })
 
-  val decoder = Module(new Decoder)
-
-  decoder.io.in := io.in
-  io.out := decoder.io.out
-}
-
-class Decoder extends Module {
-  val io = IO(new Bundle {
-    val in = Input(new InstPacket)
-    val out = Output(new MicroOp)
-  })
-
-  val inst = io.in.inst
+  val inst = io.in.bits.inst
   val uop = WireInit(0.U.asTypeOf(new MicroOp))
 
-  uop.pc := io.in.pc
+  uop.pc := io.in.bits.pc
   uop.inst := inst
 
   uop.rs1_addr := inst(19, 15)
   uop.rs2_addr := inst(24, 20)
   uop.rd_addr := inst(11, 7)
-
-  uop.pred_br := io.in.pred_br
-  uop.pred_bpc := io.in.pred_bpc
 
   val decode_result = decoder(minimizer = EspressoMinimizer,
                               input = inst,
@@ -57,5 +42,6 @@ class Decoder extends Module {
 
   uop.from_decoder(decode_result, inst(11, 7))
 
+  io.in.ready := io.out_ready
   io.out := Mux(io.in.valid, uop, 0.U.asTypeOf(new MicroOp))
 }

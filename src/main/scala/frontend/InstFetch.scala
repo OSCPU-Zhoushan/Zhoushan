@@ -17,109 +17,50 @@ package zhoushan
 
 import chisel3._
 import chisel3.util._
+import zhoushan.Constant._
 
 class InstFetch extends Module with ZhoushanConfig {
   val io = IO(new Bundle {
     val imem = new CacheBusWithUserIO
-    // JmpPackek defined in MicroOp.scala, used for pc redirection
     val jmp_packet = Input(new JmpPacket)
-    val out = Decoupled(new InstPacketVec(FetchWidth))  // to instruction buffer
+    val out = Decoupled(Output(new InstPacket))
   })
 
   val req = io.imem.req
   val resp = io.imem.resp
 
-  val empty = RegInit(false.B)                    // whether IF pipeline is empty
-  when (resp.fire()) {
-    empty := true.B
-  }
-  when (req.fire()) {
-    empty := false.B
-  }
+  val jmp = io.jmp_packet.jmp
+  val jmp_pc = io.jmp_packet.jmp_pc
 
-  val mis = io.jmp_packet.mis                     // branch mis-predict
-  val mis_pc = Mux(io.jmp_packet.jmp, io.jmp_packet.jmp_pc, io.jmp_packet.inst_pc + 4.U)
-
-  val reg_mis = RegInit(false.B)                  // store branch mis-predict status
-  when (mis && (!empty || req.fire())) {
-    reg_mis := true.B
-  } .elsewhen (resp.fire() && !mis) {
-    reg_mis := false.B
-  } .elsewhen (RegNext(resp.fire() && !req.fire() && mis)) {
-    reg_mis := false.B
+  val reg_jmp = RegInit(false.B)
+  when (jmp) {
+    reg_jmp := true.B
+  } .elsewhen (resp.fire() && !jmp) {
+    reg_jmp := false.B
   }
 
-  // branch predictor
-  val bp = Module(new BranchPredictor)
-  val bp_update = req.fire()
-
-  // program counter
-  val pc_init = ResetPc.U(32.W)
+  val pc_init = ResetPc.U
   val pc = RegInit(pc_init)
-  val pc_base = Cat(pc(31, 3), Fill(3, 0.U))  // 64-bit aligned
-  val pc_valid = RegInit("b11".U(2.W))
-
-  // next pc sequential
-  val npc_s = pc_base + (4 * FetchWidth).U
-
-  // next pc predicted
-  val npc_p = HoldUnless(bp.io.pred_bpc, RegNext(bp_update))
-  val pred_br = HoldUnlessWithFlush(Cat(bp.io.pred_br.reverse) & Fill(2, bp.io.pred_valid && !mis).asUInt(), RegNext(bp_update), mis)
-
-  // update pc by npc
-  // priority: redirection > branch prediction = sequential pc
-  val npc = Mux(mis, mis_pc, Mux(pred_br.orR, npc_p, npc_s))
-  val npc_valid = WireInit("b11".U(2.W))
-  when (mis) {
-    when (mis_pc(2) === 1.U) {
-      npc_valid := "b10".U
-    }
-  } .elsewhen (pred_br.orR) {
-    when (npc_p(2) === 1.U) {
-      npc_valid := "b10".U
-    }
-  }
-
-  // branch predictor input
-  bp.io.jmp_packet <> io.jmp_packet
-  bp.io.pc_en := bp_update
-  bp.io.pc := npc
-
-  val pc_update = mis || req.fire()
+  val pc_update = jmp || req.fire()
+  val pc_next = Mux(jmp, jmp_pc, pc + 4.U)
 
   when (pc_update) {
-    pc := npc
-    pc_valid := npc_valid
+    pc := pc_next
   }
 
-  // send the request to I$
-  // store pc_base, npc, pc_valid, pred_br info in user field
-  // restore the info when resp, and send to instruction buffer
-  req.bits.addr  := pc_base
+  req.bits.addr  := pc
   req.bits.wdata := 0.U
   req.bits.wmask := 0.U
   req.bits.wen   := false.B
-  req.bits.size  := s"b${Constant.MEM_DWORD}".U
-  req.bits.user  := Cat(pred_br, pc_valid, npc, pc_base)
-  req.bits.id    := 0.U
+  req.bits.size  := s"b$MEM_WORD".U
+  req.bits.user  := pc
   req.valid      := io.out.ready
+  resp.ready     := io.out.ready || jmp
 
-  resp.ready := io.out.ready || mis
-
-  val out_vec = io.out.bits.vec
-
-  out_vec(1).pc       := resp.bits.user(31, 0) + 4.U
-  out_vec(1).inst     := resp.bits.rdata(63, 32)
-  out_vec(1).pred_br  := resp.bits.user(67)
-  out_vec(1).pred_bpc := Mux(out_vec(1).pred_br, resp.bits.user(63, 32), 0.U)
-  out_vec(1).valid    := !out_vec(0).pred_br && resp.bits.user(65).asBool()
-
-  out_vec(0).pc       := resp.bits.user(31, 0)
-  out_vec(0).inst     := resp.bits.rdata(31, 0)
-  out_vec(0).pred_br  := resp.bits.user(66) && out_vec(0).valid
-  out_vec(0).pred_bpc := Mux(out_vec(0).pred_br, resp.bits.user(63, 32), 0.U)
-  out_vec(0).valid    := resp.bits.user(64).asBool()
-
-  io.out.valid        := resp.valid && !mis && !reg_mis && RegNext(!mis)
+  io.out.bits.pc := resp.bits.user(31, 0)
+  io.out.bits.inst := Mux(io.out.bits.pc(2),
+                          resp.bits.rdata(63, 32),
+                          resp.bits.rdata(31, 0))
+  io.out.valid := resp.valid && !jmp && !reg_jmp
 
 }

@@ -52,44 +52,6 @@ class CoreBusCrossbarNto1(n: Int) extends Module {
       io.in(i).resp.valid := io.out.resp.valid
     }
   }
-
-}
-
-class CacheBusCrossbarNto1[RT <: CacheBusReq, BT <: CacheBusIO](req_type: RT, bus_type: BT, n: Int) extends Module {
-  val io = IO(new Bundle {
-    val in = Flipped(Vec(n, bus_type))
-    val out = Flipped(Flipped(bus_type))
-  })
-
-  val arbiter = Module(new RRArbiter(req_type, n))
-  val chosen = RegInit(UInt(log2Up(n).W), 0.U)
-  for (i <- 0 until n) {
-    arbiter.io.in(i) <> io.in(i).req
-  }
-
-  // req logic
-  for (i <- 0 until n) {
-    io.in(i).req.ready := (arbiter.io.chosen === i.U) && io.out.req.ready
-  }
-  (io.out.req, arbiter.io.out) match { case (l, r) => {
-    l.bits := r.bits
-    l.valid := r.valid
-    r.ready := l.ready
-  }}
-
-  // resp logic - send to corresponding master device
-  for (i <- 0 until n) {
-    io.in(i).resp.bits := io.out.resp.bits
-    io.in(i).resp.valid := false.B
-    io.out.resp.ready := false.B
-  }
-  for (i <- 0 until n) {
-    when (io.out.resp.bits.id === (i + 1).U) {
-      io.out.resp.ready := io.in(i).resp.ready
-      io.in(i).resp.valid := io.out.resp.valid
-    }
-  }
-
 }
 
 class CacheBusCrossbar1to2[BT <: CacheBusIO](bus_type: BT) extends Module {
@@ -134,7 +96,6 @@ class CacheBusCrossbar1to2[BT <: CacheBusIO](bus_type: BT) extends Module {
   // resp logic
   io.out(0).resp.ready  := io.in.resp.ready && (channel === 0.U)
   io.out(1).resp.ready  := io.in.resp.ready && (channel === 1.U)
-  io.in.resp.bits.id    := 0.U
   if (bus_type.getClass == classOf[CacheBusWithUserIO]) {
     val in = io.in.asInstanceOf[CacheBusWithUserIO]
     in.resp.bits.user   := 0.U
@@ -151,24 +112,23 @@ class CacheBusCrossbar1to2[BT <: CacheBusIO](bus_type: BT) extends Module {
   if (ZhoushanConfig.DebugCrossbar1to2) {
     val in = io.in
     when (in.req.fire()) {
-      printf("%d: [CB1-2] [IN ] [REQ ] addr=%x size=%x id=%x wen=%x wdata=%x wmask=%x\n", DebugTimer(),
-             in.req.bits.addr, in.req.bits.size, in.req.bits.id, in.req.bits.wen, in.req.bits.wdata, in.req.bits.wmask)
+      printf("%d: [CB1-2] [IN ] [REQ ] addr=%x size=%x wen=%x wdata=%x wmask=%x\n", DebugTimer(),
+             in.req.bits.addr, in.req.bits.size, in.req.bits.wen, in.req.bits.wdata, in.req.bits.wmask)
     }
     when (in.resp.fire()) {
-      printf("%d: [CB1-2] [IN ] [RESP] rdata=%x id=%x\n", DebugTimer(),
-             in.resp.bits.rdata, in.resp.bits.id)
+      printf("%d: [CB1-2] [IN ] [RESP] rdata=%x\n", DebugTimer(),
+             in.resp.bits.rdata)
     }
     for (i <- 0 until 2) {
       val out = io.out(i)
       when (out.req.fire()) {
-        printf("%d: [CB1-2] [O-%d] [REQ ] addr=%x size=%x id=%x wen=%x wdata=%x wmask=%x\n", DebugTimer(), i.U,
-               out.req.bits.addr, out.req.bits.size, out.req.bits.id, out.req.bits.wen, out.req.bits.wdata, out.req.bits.wmask)
+        printf("%d: [CB1-2] [O-%d] [REQ ] addr=%x size=%x wen=%x wdata=%x wmask=%x\n", DebugTimer(), i.U,
+               out.req.bits.addr, out.req.bits.size, out.req.bits.wen, out.req.bits.wdata, out.req.bits.wmask)
       }
       when (out.resp.fire()) {
-        printf("%d: [CB1-2] [O-%d] [RESP] rdata=%x id=%x\n", DebugTimer(), i.U,
-                  out.resp.bits.rdata, out.resp.bits.id)
+        printf("%d: [CB1-2] [O-%d] [RESP] rdata=%x\n", DebugTimer(), i.U,
+                  out.resp.bits.rdata)
       }
     }
   }
-
 }

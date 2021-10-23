@@ -30,7 +30,7 @@ class RegFile extends Module with ZhoushanConfig {
     val rd_en = Input(Bool())
   })
 
-  val rf = Mem(32, UInt(64.W))
+  val rf = RegInit(VecInit(Seq.fill(32)(0.U(64.W))))
 
   when (io.rd_en && (io.rd_addr =/= 0.U)) {
     rf(io.rd_addr) := io.rd_data;
@@ -49,17 +49,11 @@ class RegFile extends Module with ZhoushanConfig {
     }
   }
 
-  when (reset.asBool()) {
-    for (i <- 0 until PrfSize) {
-      rf(i) := 0.U
-    }
-  }
-
   if (EnableDifftest) {
     val dt_ar = Module(new DifftestArchIntRegState)
-    dt_ar.io.clock  := clock
+    dt_ar.io.clock := clock
     dt_ar.io.coreid := 0.U
-    dt_ar.io.gpr    := rf
+    dt_ar.io.gpr := rf
 
     BoringUtils.addSource(rf(10), "rf_a0")
   }

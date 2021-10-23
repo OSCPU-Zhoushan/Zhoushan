@@ -56,7 +56,6 @@ class Clint extends Module {
   RegMap.access(clint_map, addr, rdata, wdata, wmask, wen && io.in.req.fire())
 
   val reg_rdata = RegInit(UInt(64.W), 0.U)
-  val reg_id = RegInit(UInt(io.in.req.bits.id.getWidth.W), 0.U)
 
   // state machine to handle data req & resp
   val s_idle :: s_wait :: Nil = Enum(2)
@@ -65,12 +64,7 @@ class Clint extends Module {
   switch (state) {
     is (s_idle) {
       when (io.in.req.fire()) {
-        when (wen) {
-          reg_id := io.in.req.bits.id
-        } .otherwise {
-          reg_rdata := rdata
-          reg_id := io.in.req.bits.id
-        }
+        reg_rdata := rdata
         state := s_wait
       }
     }
@@ -84,7 +78,6 @@ class Clint extends Module {
   io.in.req.ready := (state === s_idle)
   io.in.resp.valid := (state === s_wait)
   io.in.resp.bits.rdata := reg_rdata
-  io.in.resp.bits.id := reg_id
 
   val mtip = WireInit(UInt(1.W), 0.U)
   mtip := (mtime >= mtimecmp).asUInt()

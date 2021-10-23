@@ -187,7 +187,6 @@ class Cache[BT <: CacheBusIO](bus_type: BT, id: Int) extends Module with SramPar
   val s1_wen   = in.req.bits.wen
   val s1_wdata = in.req.bits.wdata
   val s1_wmask = in.req.bits.wmask
-  val s1_id    = in.req.bits.id
   val s1_valid = in.req.valid
 
   val s1_user  = WireInit(0.U(CacheBusParameters.CacheBusUserWidth.W))
@@ -235,7 +234,6 @@ class Cache[BT <: CacheBusIO](bus_type: BT, id: Int) extends Module with SramPar
   val s2_wdata = RegInit(0.U(64.W))
   val s2_wmask = RegInit(0.U(8.W))
   val s2_user  = RegInit(0.U(CacheBusParameters.CacheBusUserWidth.W))
-  val s2_id    = RegInit(0.U(s1_id.getWidth.W))
 
   // 4-bit hit check vector, with one-hot encoding
   // Example 1: hit on line 0, hit = (0, 0, 0, 1)
@@ -267,7 +265,6 @@ class Cache[BT <: CacheBusIO](bus_type: BT, id: Int) extends Module with SramPar
     if (bus_type.getClass == classOf[CacheBusWithUserIO]) {
       s2_user := s1_user
     }
-    s2_id    := s1_id
   } .elsewhen (!pipeline_fire && RegNext(pipeline_fire)) {
     // meanwhile, when the FSM is triggered in stage 2, we need to temporarily
     // store the data in registers
@@ -306,7 +303,6 @@ class Cache[BT <: CacheBusIO](bus_type: BT, id: Int) extends Module with SramPar
     val in_with_user = in.asInstanceOf[CacheBusWithUserIO]
     in_with_user.resp.bits.user := s2_user
   }
-  in.resp.bits.id := s2_id
 
   /* ----- Debug Info ---------------- */
 

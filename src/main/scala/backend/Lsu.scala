@@ -25,19 +25,17 @@ class Lsu extends Module {
     val uop = Input(new MicroOp)
     val in1 = Input(UInt(64.W))
     val in2 = Input(UInt(64.W))
-    val ecp = Output(new ExCommitPacket)
+    val out = Output(UInt(64.W))
+    val mmio = Output(Bool())
     val busy = Output(Bool())
-    val dmem_st = new CacheBusIO
-    val dmem_ld = new CacheBusIO
-    val flush = Input(Bool())
-    val wakeup = Output(Bool())
+    val dmem = new CacheBusIO
   })
 
   val lsu_update = io.uop.valid
 
-  val uop = HoldUnlessWithFlush(io.uop, lsu_update, io.flush)
-  val in1 = HoldUnlessWithFlush(io.in1, lsu_update, io.flush)
-  val in2 = HoldUnlessWithFlush(io.in2, lsu_update, io.flush)
+  val uop = HoldUnless(io.uop, lsu_update)
+  val in1 = HoldUnless(io.in1, lsu_update)
+  val in2 = HoldUnless(io.in2, lsu_update)
 
   val completed = RegInit(true.B)
   when (lsu_update) {
@@ -48,19 +46,14 @@ class Lsu extends Module {
   val is_load = (uop.mem_code === s"b$MEM_LD".U || uop.mem_code === s"b$MEM_LDU".U)
   val is_store = (uop.mem_code === s"b$MEM_ST".U)
 
-  val s_idle :: s_wait_r :: s_wait_w :: Nil = Enum(3)
-  val state = RegInit(s_idle)
-
-  val st_req = io.dmem_st.req
-  val st_resp = io.dmem_st.resp
-  val ld_req = io.dmem_ld.req
-  val ld_resp = io.dmem_ld.resp
+  val req = io.dmem.req
+  val resp = io.dmem.resp
 
   val addr = (in1(31, 0) + uop.imm)(31, 0)
   val addr_offset = addr(2, 0)
   val wdata = in2
 
-  val mmio = (addr(31) === 0.U)
+  io.mmio := (addr(31) === 0.U)
 
   val mask = ("b11111111".U << addr_offset)(7, 0)
   val wmask = MuxLookup(uop.mem_size, 0.U, Array(
@@ -83,79 +76,51 @@ class Lsu extends Module {
   // currently we just skip the memory access with unaligned address
   // todo: add this exception in CSR unit in the future
 
-  st_req.bits.addr  := Mux(mmio, addr, Cat(addr(31, 3), Fill(3, 0.U)))
-  st_req.bits.wdata := (wdata << (addr_offset << 3))(63, 0)
-  st_req.bits.wmask := mask & ((wmask << addr_offset)(7, 0))
-  st_req.bits.wen   := true.B
-  st_req.bits.size  := Mux(mmio, uop.mem_size, s"b$MEM_DWORD".U)
-  st_req.bits.id    := 0.U
-  st_req.valid      := uop.valid && (state === s_idle) && !addr_unaligned &&
-                       is_store && (lsu_update || !completed)
+  val s_idle :: s_wait :: Nil = Enum(2)
+  val state = RegInit(s_idle)
 
-  st_resp.ready     := st_resp.valid
+  req.bits.addr  := Mux(io.mmio, addr, Cat(addr(31, 3), Fill(3, 0.U)))
+  req.bits.wdata := (wdata << (addr_offset << 3))(63, 0)
+  req.bits.wmask := mask & ((wmask << addr_offset)(7, 0))
+  req.bits.wen   := is_store
+  req.bits.size  := Mux(io.mmio, uop.mem_size, s"b$MEM_DWORD".U)
+  req.valid      := uop.valid && (state === s_idle) && !addr_unaligned &&
+                       is_mem && (lsu_update || !completed)
 
-  ld_req.bits.addr  := Mux(mmio, addr, Cat(addr(31, 3), Fill(3, 0.U)))
-  ld_req.bits.wdata := 0.U
-  ld_req.bits.wmask := 0.U
-  ld_req.bits.wen   := false.B
-  ld_req.bits.size  := Mux(mmio, uop.mem_size, s"b$MEM_DWORD".U)
-  ld_req.bits.id    := 0.U
-  ld_req.valid      := uop.valid && (state === s_idle) && !addr_unaligned &&
-                       is_load && (lsu_update || !completed)
-
-  ld_resp.ready     := ld_resp.valid
+  resp.ready     := resp.valid
 
   val load_data = WireInit(UInt(64.W), 0.U)
-  val store_valid = RegInit(false.B)
-
-  io.wakeup := false.B
+  val ld_out = Wire(UInt(64.W))
+  val ldu_out = Wire(UInt(64.W))
+  val load_out = Wire(UInt(64.W))
 
   switch (state) {
     is (s_idle) {
-      when (ld_req.fire()) {
-        state := s_wait_r
-        store_valid := false.B
-      } .elsewhen (st_req.fire()) {
-        state := s_wait_w
-        store_valid := true.B
+      when (req.fire()) {
+        state := s_wait
       }
       when (addr_unaligned) {
         completed := true.B
       }
     }
-    is (s_wait_r) {
-      when (ld_resp.fire()) {
-        load_data := ld_resp.bits.rdata >> (addr_offset << 3)
+    is (s_wait) {
+      when (resp.fire()) {
+        load_data := resp.bits.rdata >> (addr_offset << 3)
         if (ZhoushanConfig.DebugLsu) {
-          printf("%d: [LOAD ] pc=%x addr=%x rdata=%x -> %x\n", DebugTimer(),
-                 uop.pc, addr, ld_resp.bits.rdata, ld_resp.bits.rdata >> (addr_offset << 3))
-        }
-        io.wakeup := true.B
-        completed := true.B
-        state := s_idle
-      }
-    }
-    is (s_wait_w) {
-      when (st_resp.fire()) {
-        if (ZhoushanConfig.DebugLsu) {
-          printf("%d: [STORE] pc=%x addr=%x wdata=%x -> %x wmask=%x\n", DebugTimer(),
-                 uop.pc, addr, in2, st_req.bits.wdata, st_req.bits.wmask)
+          when (is_load) {
+            printf("%d: [LOAD ] pc=%x addr=%x rdata=%x -> %x\n", DebugTimer(),
+                   uop.pc, addr, resp.bits.rdata, resp.bits.rdata >> (addr_offset << 3))
+          }
+          when (is_store) {
+            printf("%d: [STORE] pc=%x addr=%x wdata=%x -> %x wmask=%x\n", DebugTimer(),
+                   uop.pc, addr, in2, req.bits.wdata, req.bits.wmask)
+          }
         }
         completed := true.B
         state := s_idle
       }
     }
   }
-
-  // when flush, invalidate the current load/store request
-  when (io.flush) {
-    completed := true.B
-    state := s_idle
-  }
-
-  val ld_out = Wire(UInt(64.W))
-  val ldu_out = Wire(UInt(64.W))
-  val load_out = Wire(UInt(64.W))
 
   ld_out := Mux(uop.mem_code === s"b$MEM_LD".U, MuxLookup(uop.mem_size, 0.U, Array(
     s"b$MEM_BYTE".U  -> Cat(Fill(56, load_data(7)), load_data(7, 0)),
@@ -176,10 +141,7 @@ class Lsu extends Module {
     s"b$MEM_LDU".U -> ldu_out
   ))
 
-  io.ecp := 0.U.asTypeOf(new ExCommitPacket)
-  io.ecp.store_valid := store_valid
-  io.ecp.mmio := mmio
-  io.ecp.rd_data := load_out
-  io.busy := ld_req.valid || st_req.valid || (state === s_wait_r && !ld_resp.fire()) || (state === s_wait_w && !st_resp.fire())
+  io.out := load_out
+  io.busy := req.valid || (state === s_wait && !resp.fire())
 
 }

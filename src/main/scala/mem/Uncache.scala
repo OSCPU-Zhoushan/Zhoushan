@@ -56,7 +56,6 @@ class Uncache[BT <: CacheBusIO](bus_type: BT, id: Int) extends Module with Zhous
         wmask := in.req.bits.wmask
         wen   := in.req.bits.wen
         size  := in.req.bits.size
-        in_id := in.req.bits.id
         if (bus_type.getClass == classOf[CacheBusWithUserIO]) {
           val in_with_user = in.asInstanceOf[CacheBusWithUserIO]
           in_user := in_with_user.req.bits.user
@@ -67,8 +66,8 @@ class Uncache[BT <: CacheBusIO](bus_type: BT, id: Int) extends Module with Zhous
         state := Mux(in.req.bits.addr(2) === 0.U, s_req_1, s_req_2)
 
         if (DebugUncache) {
-          printf("%d: [UN $ ] [REQ ] addr=%x size=%x id=%x\n", DebugTimer(),
-                 in.req.bits.addr, in.req.bits.size, in.req.bits.id)
+          printf("%d: [UN $ ] [REQ ] addr=%x size=%x\n", DebugTimer(),
+                 in.req.bits.addr, in.req.bits.size)
         }
       }
     }
@@ -120,7 +119,6 @@ class Uncache[BT <: CacheBusIO](bus_type: BT, id: Int) extends Module with Zhous
   out.resp.ready       := (state === s_wait_1 || state === s_wait_2)
   in.resp.valid        := (state === s_complete)
   in.resp.bits.rdata   := Cat(rdata_2, rdata_1)
-  in.resp.bits.id      := in_id
   if (bus_type.getClass == classOf[CacheBusWithUserIO]) {
     val in_with_user = in.asInstanceOf[CacheBusWithUserIO]
     in_with_user.resp.bits.user := in_user

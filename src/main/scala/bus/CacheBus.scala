@@ -19,20 +19,16 @@ import chisel3._
 import chisel3.util._
 
 trait CacheBusParameters {
-  val CacheBusUserWidth = 64 + ZhoushanConfig.FetchWidth * 2
+  val CacheBusUserWidth = 32
 }
 
 object CacheBusParameters extends CacheBusParameters { }
-
-trait CacheBusId extends Bundle with AxiParameters {
-  val id = Output(UInt(AxiIdWidth.W))
-}
 
 trait CacheBusUser extends Bundle with CacheBusParameters {
   val user = Output(UInt(CacheBusUserWidth.W))
 }
 
-class CacheBusReq extends Bundle with CacheBusId {
+class CacheBusReq extends Bundle with AxiParameters {
   val addr = Output(UInt(AxiAddrWidth.W))
   val wdata = Output(UInt(AxiDataWidth.W))
   val wmask = Output(UInt((AxiDataWidth / 8).W))
@@ -42,7 +38,7 @@ class CacheBusReq extends Bundle with CacheBusId {
 
 class CacheBusWithUserReq extends CacheBusReq with CacheBusUser { }
 
-class CacheBusResp extends Bundle with CacheBusId {
+class CacheBusResp extends Bundle with AxiParameters {
   val rdata = Output(UInt(AxiDataWidth.W))
 }
 
