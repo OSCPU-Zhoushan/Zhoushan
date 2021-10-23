@@ -57,7 +57,7 @@ class Lsu extends Module {
   val addr_offset = addr(2, 0)
   val wdata = in2
 
-  val mmio = (addr(31) === 0.U)
+  val mmio = is_mem && (addr(31) === 0.U)
 
   val mask = ("b11111111".U << addr_offset)(7, 0)
   val wmask = MuxLookup(uop.mem_size, 0.U, Array(

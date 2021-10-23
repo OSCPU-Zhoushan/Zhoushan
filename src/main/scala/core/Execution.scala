@@ -22,20 +22,20 @@ import zhoushan.Constant._
 class Execution extends Module with ZhoushanConfig {
   val io = IO(new Bundle {
     // input
-    val uop = Input(new MicroOp)
+    val in = Input(new MicroOp)
     val rs1_data = Input(UInt(64.W))
     val rs2_data = Input(UInt(64.W))
     // output
+    val out = Output(new MicroOp)
     val rd_data = Output(UInt(64.W))
     val busy = Output(Bool())
-    val intr = Output(Bool())
     val jmp_packet = Output(new JmpPacket)
     // dmem
     val dmem = new CacheBusIO
   })
 
   val intr = WireInit(false.B)
-  val uop = io.uop
+  val uop = io.in
 
   val in1_0 = Wire(UInt(64.W))
   val in2_0 = Wire(UInt(64.W))
@@ -78,9 +78,10 @@ class Execution extends Module with ZhoushanConfig {
   lsu.io.dmem <> io.dmem
   lsu.io.intr := intr
 
+  io.out := Mux(intr, 0.U.asTypeOf(new MicroOp), io.in)
+  io.out.mmio := lsu.io.mmio
   io.rd_data := 0.U
   io.busy := lsu.io.busy
-  io.intr := intr
   io.jmp_packet := 0.U.asTypeOf(new JmpPacket)
 
   when (uop.fu_code === s"b$FU_SYS".U || intr) {

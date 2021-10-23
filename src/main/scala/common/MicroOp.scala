@@ -43,9 +43,7 @@ class MicroOp extends Bundle with ZhoushanConfig {
 
   val imm       = UInt(32.W)
 
-  // branch prediction related
-  val pred_br   = Bool()
-  val pred_bpc  = UInt(32.W)
+  val mmio      = Bool()
 
   def from_decoder(in: UInt, rd_addr: UInt): Unit = {
     val rd_en_tmp = WireInit(false.B)

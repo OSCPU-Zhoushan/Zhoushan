@@ -58,7 +58,7 @@ class Core extends Module with ZhoushanConfig {
   /* ----- Stage 3 - Execution (EX) -------------- */
 
   val execution = Module(new Execution)
-  execution.io.uop := id_ex.io.out.uop
+  execution.io.in := id_ex.io.out.uop
 
   val ex_rs1_data = WireInit(UInt(64.W), 0.U)
   val ex_rs2_data = WireInit(UInt(64.W), 0.U)
@@ -79,20 +79,18 @@ class Core extends Module with ZhoushanConfig {
   crossbar1to2.io.out(1) <> clint.io.in
 
   val ex_cm = Module(new PipelineReg(new CommitPacket))
-  ex_cm.io.in.uop := execution.io.uop
+  ex_cm.io.in.uop := execution.io.out
   ex_cm.io.in.rd_data := execution.io.rd_data
   ex_cm.io.stall := false.B
   ex_cm.io.flush := execution.io.busy
 
   /* ----- Stage 4 - Commit (CM) ----------------- */
 
-  val intr = execution.io.intr
-
   val cm = ex_cm.io.out.uop
 
-  rf.io.rd_addr := execution.io.uop.rd_addr
+  rf.io.rd_addr := execution.io.out.rd_addr
   rf.io.rd_data := execution.io.rd_data
-  rf.io.rd_en := execution.io.uop.valid && execution.io.uop.rd_en && !intr
+  rf.io.rd_en := execution.io.out.valid && execution.io.out.rd_en
 
   /* ----- Forwarding Unit ----------------------- */
 
@@ -127,7 +125,7 @@ class Core extends Module with ZhoushanConfig {
     val rf_a0 = WireInit(0.U(64.W))
     BoringUtils.addSink(rf_a0, "rf_a0")
 
-    val skip = (cm.inst === Instructions.PUTCH) ||
+    val skip = (cm.inst === Instructions.PUTCH) || cm.mmio ||
                (cm.fu_code === s"b${Constant.FU_SYS}".U && cm.inst(31, 20) === Csrs.mcycle)
 
     val dt_ic = Module(new DifftestInstrCommit)
