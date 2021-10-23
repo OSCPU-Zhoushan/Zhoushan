@@ -35,7 +35,7 @@ class Execution extends Module with ZhoushanConfig {
   })
 
   val intr = WireInit(false.B)
-  val uop = Mux(intr, 0.U.asTypeOf(new MicroOp), io.uop)
+  val uop = io.uop
 
   val in1_0 = Wire(UInt(64.W))
   val in2_0 = Wire(UInt(64.W))

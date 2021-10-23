@@ -88,11 +88,11 @@ class Core extends Module with ZhoushanConfig {
 
   val intr = execution.io.intr
 
-  val cm = Mux(intr, 0.U.asTypeOf(new MicroOp), ex_cm.io.out.uop)
+  val cm = ex_cm.io.out.uop
 
   rf.io.rd_addr := execution.io.uop.rd_addr
   rf.io.rd_data := execution.io.rd_data
-  rf.io.rd_en := execution.io.uop.valid && execution.io.uop.rd_en
+  rf.io.rd_en := execution.io.uop.valid && execution.io.uop.rd_en && !intr
 
   /* ----- Forwarding Unit ----------------------- */
 
