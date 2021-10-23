@@ -30,13 +30,21 @@ class InstFetch extends Module with ZhoushanConfig {
   val req = io.imem.req
   val resp = io.imem.resp
 
+  val empty = RegInit(false.B) // whether IF pipeline is empty
+  when (resp.fire()) {
+    empty := true.B
+  }
+  when (req.fire()) {
+    empty := false.B
+  }
+
   val jmp = io.jmp_packet.jmp
   val jmp_pc = io.jmp_packet.jmp_pc
 
   val reg_jmp = RegInit(false.B)
-  when (jmp) {
+  when (jmp && (!empty || req.fire())) {
     reg_jmp := true.B
-  } .elsewhen (resp.fire() && !jmp) {
+  } .elsewhen ((resp.fire() && !jmp) || (RegNext(resp.fire() && !req.fire() && jmp))) {
     reg_jmp := false.B
   }
 
