@@ -30,7 +30,7 @@ I'm Li Shi. I graduated from Shanghai Jiao Tong University and obtained the B.S.
 
 Zhoushan is a superscalar out-of-order core with 7 pipeline stages, which is divided into frontend and backend. The frontend involves a 2-way instruction fetch unit with a 2-level local branch predictor and an instruction buffer, while the backend includes instruction decode & register renaming, issue units, physical register file, execution units, and a re-order buffer.
 
-舟山是一个7级流水线超标量乱序处理器，可分为前端与后端。前端有两路取指单元、两级局部分支预测器，以及一个指令缓冲。后端有指令解码器、寄存器重命名、发射单元、物理寄存器、执行单元和重排序缓冲。
+Zhoushan是一个7级流水线超标量乱序处理器，可分为前端与后端。前端有两路取指单元、两级局部分支预测器，以及一个指令缓冲。后端有指令解码器、寄存器重命名、发射单元、物理寄存器、执行单元和重排序缓冲。
 
 ### Instruction Fetch & Branch Prediction 取指与分支预测
 
