@@ -78,7 +78,7 @@ We implement distributed issue units, summaried as follows.
 
 - Integer Issue Queue: size = 8, 2 in, 2 out, collapsing
 
-- Memory Issue Queue: size = 8, 2 in, 1 out, collaping
+- Memory Issue Queue: size = 8, 2 in, 1 out, collapsing
 
 For integer issue queue, as CSR registers are not renamed, we must wait for the execution stage to clear all in-flight instructions before issuing CSR access instructions. For memory issue queue, `store` instructions act as instruction barrier, i.e., `load` instructions between 2 `store` instructions can be issued out-of-order, but `store` instructions must be in-order.
 
