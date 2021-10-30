@@ -131,7 +131,7 @@ class Csr extends Module with ZhoushanConfig {
       }
     }
     is (s_wait) {
-      when (uop.valid && mtip === 1.U) {
+      when (uop.valid && (uop.fu_code === s"b$FU_ALU".U || uop.fu_code === s"b$FU_JMP".U) && mtip === 1.U) {
         mepc := uop.pc
         mcause := "h8000000000000007".U
         mstatus := Cat(mstatus(63, 8), mstatus(3), mstatus(6, 4), 0.U, mstatus(2, 0))
@@ -191,6 +191,12 @@ class Csr extends Module with ZhoushanConfig {
     dt_ae.io.intrNO       := Mux(intr_reg, intr_no, 0.U)
     dt_ae.io.cause        := 0.U
     dt_ae.io.exceptionPC  := Mux(intr_reg, mepc, 0.U)
+
+    if (DebugArchEvent) {
+      when (dt_ae.io.intrNO =/= 0.U) {
+        printf("%d: [DT-AE] intrNO=%x ePC=%x\n", DebugTimer(), dt_ae.io.intrNO, dt_ae.io.exceptionPC)
+      }
+    }
 
     val dt_cs = Module(new DifftestCSRState)
     dt_cs.io.clock          := clock
