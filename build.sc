@@ -21,8 +21,28 @@ trait CommonModule extends ScalaModule {
 }
 
 val chisel = Agg(
-  ivy"edu.berkeley.cs::chisel3:3.5-SNAPSHOT"
+  ivy"edu.berkeley.cs::chisel3:3.5.0-RC1"
 )
+
+object `api-config-chipsalliance` extends CommonModule {
+  override def millSourcePath = super.millSourcePath / "design" / "craft"
+}
+
+object hardfloat extends SbtModule with CommonModule {
+  override def millSourcePath = os.pwd / "berkeley-hardfloat"
+  override def ivyDeps = super.ivyDeps() ++ chisel
+}
+
+object `rocket-chip` extends SbtModule with CommonModule {
+  override def ivyDeps = super.ivyDeps() ++ Agg(
+    ivy"${scalaOrganization()}:scala-reflect:${scalaVersion()}",
+    ivy"org.json4s::json4s-jackson:3.6.1"
+  ) ++ chisel
+  object macros extends SbtModule with CommonModule
+  override def moduleDeps = super.moduleDeps ++ Seq(
+    `api-config-chipsalliance`, macros, hardfloat
+  )
+}
 
 object difftest extends SbtModule with CommonModule {
   override def millSourcePath = os.pwd / "difftest"
@@ -33,7 +53,7 @@ object Zhoushan extends SbtModule with CommonModule {
   override def millSourcePath = os.pwd
   override def ivyDeps = super.ivyDeps() ++ chisel
   override def moduleDeps = super.moduleDeps ++ Seq(
-    difftest
+    `rocket-chip`, hardfloat, difftest
   )
 
   object test extends Tests {
