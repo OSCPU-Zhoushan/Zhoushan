@@ -28,6 +28,7 @@ class MicroOp extends Bundle with ZhoushanConfig {
   val fu_code   = UInt(FU_X.length.W)
   val alu_code  = UInt(ALU_X.length.W)
   val jmp_code  = UInt(JMP_X.length.W)
+  val mdu_code  = UInt(MDU_X.length.W)
   val mem_code  = UInt(MEM_X.length.W)
   val mem_size  = UInt(MEM_X.length.W)
   val sys_code  = UInt(SYS_X.length.W)
@@ -48,7 +49,7 @@ class MicroOp extends Bundle with ZhoushanConfig {
   def from_decoder(in: UInt, rd_addr: UInt): Unit = {
     val rd_en_tmp = WireInit(false.B)
     val imm_type = WireInit(0.U(IMM_X.length.W))
-    val entries = Seq(valid, fu_code, alu_code, jmp_code, mem_code, mem_size,
+    val entries = Seq(valid, fu_code, alu_code, jmp_code, mdu_code, mem_code, mem_size,
                       sys_code, w_type, rs1_src, rs2_src, rd_en_tmp, imm_type)
     var i = 0
     for (entry <- entries.reverse) {
