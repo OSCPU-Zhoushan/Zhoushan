@@ -4,3 +4,12 @@
 [submodule "DRAMsim3"]
 	path = DRAMsim3
 	url = https://github.com/OpenXiangShan/DRAMsim3.git
+[submodule "rocket-chip"]
+	path = rocket-chip
+	url = https://github.com/OpenXiangShan/rocket-chip.git
+[submodule "api-config-chipsalliance"]
+	path = api-config-chipsalliance
+	url = https://github.com/chipsalliance/api-config-chipsalliance.git
+[submodule "berkeley-hardfloat"]
+	path = berkeley-hardfloat
+	url = https://github.com/OpenXiangShan/rocket-chip.git

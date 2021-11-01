@@ -71,6 +71,11 @@ class Execution extends Module with ZhoushanConfig {
   csr.io.in1 := in1
   intr := csr.io.intr
 
+  val mdu = Module(new Mdu)
+  mdu.io.uop := uop
+  mdu.io.in1 := in1
+  mdu.io.in2 := in2
+
   val lsu = Module(new Lsu)
   lsu.io.uop := uop
   lsu.io.in1 := in1
@@ -81,7 +86,7 @@ class Execution extends Module with ZhoushanConfig {
   io.out := Mux(intr, 0.U.asTypeOf(new MicroOp), io.in)
   io.out.mmio := lsu.io.mmio
   io.rd_data := 0.U
-  io.busy := lsu.io.busy
+  io.busy := lsu.io.busy || mdu.io.busy
   io.jmp_packet := 0.U.asTypeOf(new JmpPacket)
 
   when (uop.fu_code === s"b$FU_SYS".U || intr) {
@@ -90,6 +95,8 @@ class Execution extends Module with ZhoushanConfig {
   } .elsewhen (uop.fu_code === s"b$FU_ALU".U || uop.fu_code === s"b$FU_JMP".U) {
     io.rd_data := alu.io.out
     io.jmp_packet := alu.io.jmp_packet
+  } .elsewhen (uop.fu_code === s"b$FU_MDU".U) {
+    io.rd_data := mdu.io.out
   } .elsewhen (uop.fu_code === s"b$FU_MEM".U) {
     io.rd_data := lsu.io.out
   }

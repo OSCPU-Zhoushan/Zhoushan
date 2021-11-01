@@ -27,7 +27,8 @@ trait Constant {
   val FU_ALU    = "001"
   val FU_JMP    = "010"
   val FU_SYS    = "011"
-  val FU_MEM    = "100"
+  val FU_MDU    = "100"
+  val FU_MEM    = "101"
 
   val ALU_X     = "????"
   val ALU_ADD   = "0001"
@@ -50,6 +51,16 @@ trait Constant {
   val JMP_BGE   = "1100"
   val JMP_BLTU  = "1001"
   val JMP_BGEU  = "1101"
+
+  val MDU_X      = "????"
+  val MDU_MUL    = "0000"
+  val MDU_MULH   = "0001"
+  val MDU_MULHSU = "0010"
+  val MDU_MULHU  = "0011"
+  val MDU_DIV    = "0100"
+  val MDU_DIVU   = "0101"
+  val MDU_REM    = "0110"
+  val MDU_REMU   = "0111"
 
   val MEM_X     = "??"
   val MEM_LD    = "01"
