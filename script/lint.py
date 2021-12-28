@@ -192,10 +192,10 @@ if __name__ == '__main__':
   w = open(new_file, 'w')
 
   for line in f.readlines():
-    for signal in remove:
-      if signal in line:
-        line = '// ' + line
     if target_soc:
+      for signal in remove:
+        if signal in line:
+          line = '// ' + line
       for signal in replace_name_soc:
         if signal[0] in line:
           line = line.replace(signal[0], signal[1])
