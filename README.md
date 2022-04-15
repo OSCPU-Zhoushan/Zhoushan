@@ -6,6 +6,24 @@ Zhoushan is a 2-way superscalar out-of-order core, compatible with RV64I ISA.
 
 Main developer: Li Shi (SJTU/CMU ECE)
 
+## Zhoushan in 2022
+
+I plan to relaunch this project in 2022 summer or fall, and the future works include
+
+1. [Microarchitecture] Redesign the cache & bus
+
+1. [Microarchitecture] Support fast branch misprediction recovery
+
+1. [Microarchitecture] Develop a non-blocking cache and load & store queue
+
+1. [Physical] Analyze the critical path and optimize the pipeline design
+
+1. [RISC-V ISA] Support S & U privilege modes and MMU (TLB and Sv39 page table)
+
+1. [RISC-V ISA] Boot an OS, e.g., Linux
+
+If you are interested to join, feel free to contact me (lishi@andrew.cmu.edu).
+
 ## Dependency
 
 1. [AM](https://github.com/OSCPU-Zhoushan/abstract-machine), branch: zhoushan
