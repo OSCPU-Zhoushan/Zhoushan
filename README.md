@@ -16,11 +16,13 @@ I plan to relaunch this project in 2022 summer or fall, and the future works inc
 
 1. [Microarchitecture] Develop a non-blocking cache and load & store queue
 
-1. [Physical] Analyze the critical path and optimize the pipeline design
-
 1. [RISC-V ISA] Support S & U privilege modes and MMU (TLB and Sv39 page table)
 
 1. [RISC-V ISA] Boot an OS, e.g., Linux
+
+1. [Physical] Analyze the critical path and optimize the pipeline design
+
+1. [Verification] Port to FPGA
 
 If you are interested to join, feel free to contact me (lishi@andrew.cmu.edu).
 
