@@ -34,11 +34,4 @@ object Zhoushan extends SbtModule with CommonModule {
   override def moduleDeps = super.moduleDeps ++ Seq(
     difftest
   )
-
-  object test extends Tests {
-    override def ivyDeps = super.ivyDeps() ++ Agg(
-      ivys.chiseltest,
-      ivys.scalatest,
-    )
-  }
 }

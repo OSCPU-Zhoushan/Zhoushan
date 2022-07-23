@@ -8,6 +8,7 @@ test_run_dir/
 *.out
 .vscode/
 .metals/
+.bloop/
 build/
 obj_dir/
 logs/
